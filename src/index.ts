@@ -1,13 +1,16 @@
 import express from 'express';
+import * as dotenv from 'dotenv';
 import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import { errorHandler } from './middlewares/errorHandler';
 import { notFoundHandler } from './middlewares/notFoundHandler';
 import apiRoutes from './routes';
 
 // Create Express server
+dotenv.config({ path: '../.env' });
 const app: express.Application = express();
 const port = process.env.PORT || 3000;
 
