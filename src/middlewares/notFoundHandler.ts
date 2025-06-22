@@ -1,7 +1,14 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
+import { ProblemDetails } from '../types/error';
 
-export const notFoundHandler = (req: Request, res: Response, next: NextFunction): void => {
-  const error = new Error(`Not Found - ${req.originalUrl}`);
-  res.status(404);
-  next(error);
+export const notFoundHandler = (req: Request, res: Response): void => {
+  const problem: ProblemDetails = {
+    type: 'https://example.com/problems/not-found',
+    title: 'Resource Not Found',
+    status: 404,
+    detail: `The requested resource ${req.originalUrl} was not found`,
+    instance: req.originalUrl,
+  };
+
+  res.status(404).setHeader('Content-Type', 'application/problem+json').json(problem);
 };

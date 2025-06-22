@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AnyZodObject, ZodError } from 'zod';
+import { ProblemDetails } from '../types/error';
 
 export const validateRequest =
   (schema: AnyZodObject) =>
@@ -13,11 +14,16 @@ export const validateRequest =
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        res.status(400).json({
-          status: 'error',
-          message: 'Validation failed',
+        const problem: ProblemDetails = {
+          type: 'https://example.com/problems/validation-error',
+          title: 'Validation Failed',
+          status: 400,
+          detail: 'The request payload failed validation',
+          instance: req.originalUrl,
           errors: error.errors,
-        });
+        };
+
+        res.status(400).setHeader('Content-Type', 'application/problem+json').json(problem);
       } else {
         next(error);
       }

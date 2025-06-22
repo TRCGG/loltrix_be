@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { ProblemDetails } from '../types/error';
 
 interface AppError extends Error {
   status?: number;
@@ -14,10 +15,13 @@ export const errorHandler = (
 ): void => {
   const statusCode = err.statusCode || err.status || 500;
 
-  res.status(statusCode).json({
-    status: 'error',
-    statusCode,
-    message: err.message || 'Internal Server Error',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-  });
+  const problem: ProblemDetails = {
+    type: `https://example.com/problems/${statusCode}`,
+    title: err.message || 'Internal Server Error',
+    status: statusCode,
+    detail: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    instance: req.originalUrl,
+  };
+
+  res.status(statusCode).setHeader('Content-Type', 'application/problem+json').json(problem);
 };
