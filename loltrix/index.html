@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LOLTRIX - Discord Bot</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+      /* 라이트 모드 (기본) */
+      :root {
+          --primary-color: #5865F2;
+          --secondary-color: #34D1BF;
+          --background-color: #ffffff;
+          --text-color: #1a1a1a;
+          --card-background: #f5f5f5;
+          --border-color: #e0e0e0;
+          --command-bg: #f8f9fa;
+          --button-hover: #f0f0f0;
+      }
+
+      /* 다크 모드 */
+      [data-theme="dark"] {
+          --background-color: #0f0f0f;
+          --text-color: #ffffff;
+          --card-background: #1a1a1a;
+          --border-color: #333333;
+          --command-bg: #1f1f1f;
+          --button-hover: #2a2a2a;
+      }
+
+      * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+      }
+
+      body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          background-color: var(--background-color);
+          color: var(--text-color);
+          line-height: 1.6;
+          transition: all 0.3s ease;
+      }
+
+      .container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 20px;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+      }
+
+      .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 20px 0;
+          margin-bottom: 40px;
+      }
+
+      .logo {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: var(--text-color);
+          text-decoration: none;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+      }
+
+      .nav-buttons {
+          display: flex;
+          gap: 12px;
+      }
+
+      .nav-button {
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: 1px solid var(--border-color);
+          background: var(--card-background);
+          color: var(--text-color);
+          cursor: pointer;
+          font-size: 0.9rem;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s ease;
+      }
+
+      .nav-button:hover {
+          background: var(--button-hover);
+      }
+
+      .discord-button {
+          background: var(--primary-color);
+          color: white;
+          border: none;
+      }
+
+      .discord-button:hover {
+          opacity: 0.9;
+          background: var(--primary-color);
+      }
+
+      .main-content {
+          flex: 1;
+          padding: 20px 0;
+      }
+
+      .section {
+          margin-bottom: 40px;
+      }
+
+      .section-title {
+          font-size: 1.8rem;
+          margin-bottom: 20px;
+          padding-bottom: 10px;
+          border-bottom: 2px solid var(--primary-color);
+      }
+
+      .commands-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 20px;
+          margin-top: 20px;
+      }
+
+      .command-card {
+          background: var(--command-bg);
+          border: 1px solid var(--border-color);
+          border-radius: 10px;
+          padding: 20px;
+          transition: all 0.2s ease;
+      }
+
+      .command-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .command-name {
+          font-size: 1.2rem;
+          font-weight: 600;
+          color: var(--primary-color);
+          margin-bottom: 10px;
+      }
+
+      .command-description {
+          color: var(--text-color);
+          font-size: 0.95rem;
+          margin-bottom: 15px;
+      }
+
+      .command-usage {
+          background: var(--card-background);
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-family: 'Consolas', monospace;
+          font-size: 0.9rem;
+      }
+
+      .features-list {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+          gap: 20px;
+      }
+
+      .feature-item {
+          background: var(--command-bg);
+          padding: 20px;
+          border-radius: 10px;
+          border: 1px solid var(--border-color);
+      }
+
+      .feature-icon {
+          font-size: 1.5rem;
+          color: var(--primary-color);
+          margin-bottom: 10px;
+      }
+
+      .footer {
+          text-align: center;
+          padding: 20px 0;
+          color: #666;
+          font-size: 0.9rem;
+          border-top: 1px solid var(--border-color);
+      }
+
+      .footer a {
+          color: inherit;
+          text-decoration: none;
+      }
+
+      .footer a:hover {
+          text-decoration: underline;
+      }
+
+      @media (max-width: 768px) {
+          .header {
+              flex-direction: column;
+              gap: 20px;
+              text-align: center;
+          }
+
+          .nav-buttons {
+              width: 100%;
+              justify-content: center;
+          }
+
+          .section-title {
+              font-size: 1.5rem;
+          }
+      }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header class="header">
+    <a href="/" class="logo">
+      <i class="fas fa-robot"></i>
+      LOLTRIX Bot
+    </a>
+    <div class="nav-buttons">
+      <button class="nav-button" id="theme-toggle">
+        <i class="fas fa-moon"></i>
+        <span>테마 변경</span>
+      </button>
+      <button class="nav-button discord-button">
+        <i class="fab fa-discord"></i>
+        <span>봇 초대하기</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <section class="section">
+      <h2 class="section-title">주요 기능</h2>
+      <div class="features-list">
+        <div class="feature-item">
+          <div class="feature-icon">
+            <i class="fas fa-users"></i>
+          </div>
+          <h3>커스텀 내전 매칭</h3>
+          <p>자동으로 팀을 나누고 내전을 관리합니다.</p>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">
+            <i class="fas fa-chart-bar"></i>
+          </div>
+          <h3>전적 관리</h3>
+          <p>내전 전적을 자동으로 기록하고 통계를 제공합니다.</p>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">
+            <i class="fas fa-trophy"></i>
+          </div>
+          <h3>랭킹 시스템</h3>
+          <p>서버별 랭킹과 시즌 시스템을 제공합니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">명령어 목록</h2>
+      <div class="commands-grid">
+        <div class="command-card">
+          <div class="command-name">/내전생성</div>
+          <div class="command-description">
+            새로운 내전을 생성합니다. 인원 수와 게임 모드를 설정할 수 있습니다.
+          </div>
+          <div class="command-usage">/내전생성 인원:10 모드:일반</div>
+        </div>
+        <div class="command-card">
+          <div class="command-name">/참가</div>
+          <div class="command-description">
+            현재 진행 중인 내전에 참가합니다.
+          </div>
+          <div class="command-usage">/참가</div>
+        </div>
+        <div class="command-card">
+          <div class="command-name">/팀나누기</div>
+          <div class="command-description">
+            참가자들을 균형있게 두 팀으로 나눕니다.
+          </div>
+          <div class="command-usage">/팀나누기 방식:랜덤</div>
+        </div>
+        <div class="command-card">
+          <div class="command-name">/전적</div>
+          <div class="command-description">
+            자신 또는 특정 유저의 내전 전적을 확인합니다.
+          </div>
+          <div class="command-usage">/전적 유저:@username</div>
+        </div>
+        <div class="command-card">
+          <div class="command-name">/랭킹</div>
+          <div class="command-description">
+            서버의 내전 랭킹을 확인합니다.
+          </div>
+          <div class="command-usage">/랭킹 시즌:현재</div>
+        </div>
+        <div class="command-card">
+          <div class="command-name">/도움말</div>
+          <div class="command-description">
+            봇 사용법과 명령어 목록을 확인합니다.
+          </div>
+          <div class="command-usage">/도움말</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>
+      <!-- TODO 실제 문의메일 받을 주소로 변경 -->
+      <a href="mailto:support@loltrix.gg">문의하기</a> •
+<!--      <a href="/privacy">개인정보처리방침</a> •-->
+      © 2025 LOLTRIX Bot
+    </p>
+  </footer>
+</div>
+
+<script>
+  // 테마 전환 기능
+  const themeToggle = document.getElementById('theme-toggle');
+  const html = document.documentElement;
+  const themeIcon = themeToggle.querySelector('i');
+
+  function setTheme(theme) {
+    html.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    updateThemeUI(theme === 'dark');
+  }
+
+  function updateThemeUI(isDark) {
+    themeIcon.className = isDark ? 'fas fa-moon' : 'fas fa-sun';
+  }
+
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  setTheme(savedTheme);
+
+  themeToggle.addEventListener('click', () => {
+    const currentTheme = html.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+  });
+
+  // Discord 초대 버튼
+  document.querySelector('.discord-button').addEventListener('click', () => {
+    // TODO: 실제 Discord 봇 초대 링크로 변경
+    window.open('https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot&permissions=YOUR_PERMISSIONS', '_blank');
+  });
+</script>
+</body>
+</html>

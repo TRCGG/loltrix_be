@@ -25,13 +25,15 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded request bo
 
 // Static page
 app.use(express.static(path.join(__dirname, '../loltrix')));
+app.set('views', path.join(__dirname, '../views'));
+app.set('view engine', 'pug');
 
 // API routes
 app.use('/api', apiRoutes);
 
 // any other GET request will be redirected to the 404 page
 app.get('*', (req, res) => {
-  res.status(404).sendFile(path.join(__dirname, '../loltrix/404/404page.html'));
+  res.sendFile(path.join(__dirname, '../loltrix/index.html'));
 });
 
 // Error handlers
