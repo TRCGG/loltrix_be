@@ -7,7 +7,6 @@
 - [TypeScript](https://www.typescriptlang.org/) - 정적 타입 지원을 위한 JavaScript 슈퍼셋
 - [Express.js](https://expressjs.com/) - 웹 애플리케이션 프레임워크
 - [Zod](https://zod.dev/) - TypeScript 기반 스키마 검증 라이브러리
-- [Jest](https://jestjs.io/) - JavaScript 테스팅 프레임워크
 - [ESLint](https://eslint.org/) - 코드 린팅 도구 (Airbnb 설정)
 - [Prettier](https://prettier.io/) - 코드 포맷팅 도구
 - [pnpm](https://pnpm.io/) - 빠르고 디스크 효율적인 패키지 매니저
@@ -17,7 +16,6 @@
 ```
 loltrix_be/
 ├── src/                      # 소스 코드
-│   ├── __tests__/            # 테스트 파일
 │   ├── controllers/          # 컨트롤러 (비즈니스 로직)
 │   ├── middlewares/          # 미들웨어
 │   ├── models/               # 데이터 모델
@@ -26,7 +24,6 @@ loltrix_be/
 │   └── index.ts              # 애플리케이션 진입점
 ├── .eslintrc.js              # ESLint 설정
 ├── .prettierrc               # Prettier 설정
-├── jest.config.js            # Jest 설정
 ├── package.json              # 프로젝트 메타데이터 및 의존성
 ├── tsconfig.json             # TypeScript 설정
 └── README.md                 # 프로젝트 문서
@@ -67,9 +64,6 @@ pnpm dev
 - `pnpm dev` - 개발 서버 실행
 - `pnpm build` - 프로덕션용 빌드 생성
 - `pnpm start` - 프로덕션 모드로 서버 실행
-- `pnpm test` - 테스트 실행
-- `pnpm test:watch` - 감시 모드로 테스트 실행
-- `pnpm test:coverage` - 코드 커버리지 리포트와 함께 테스트 실행
 - `pnpm lint` - 린팅 실행
 - `pnpm lint:fix` - 린팅 실행 및 자동 수정
 - `pnpm format` - Prettier를 사용하여 코드 포맷팅
@@ -89,7 +83,7 @@ pnpm dev
 ## 환경 변수 (Environment Variables)
 
 - `PORT` - 서버 포트 (기본값: 3000)
-- `NODE_ENV` - 애플리케이션 환경 (development, production, test)
+- `NODE_ENV` - 애플리케이션 환경 (development, production)
 
 ## 라이센스 (License)
 
