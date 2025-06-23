@@ -6,7 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import session from 'express-session';
-import cookieParser from 'cookie-parser'; // TODO: use it when add "login" or "auth"
+import cookieParser from 'cookie-parser';
 import { errorHandler } from './middlewares/errorHandler';
 import { notFoundHandler } from './middlewares/notFoundHandler';
 import apiRoutes from './routes';
@@ -15,7 +15,6 @@ import apiRoutes from './routes';
 dotenv.config({ path: '../.env' });
 const app: express.Application = express();
 app.set('port', process.env.PORT || 3000);
-app.set('views', path.join(__dirname, '../loltrix'));
 
 // middlewares
 app.use(morgan('dev')); // HTTP request logger
@@ -42,19 +41,17 @@ app.use(cors()); // Enable CORS
 // API routes
 app.use('/api', apiRoutes);
 
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, './loltrix/index.html'));
+});
+
 // Error handlers
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// any other GET request will be redirected to the 404 page
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../loltrix/index.html'));
-});
-
 // Start Express server
 app.listen(app.get('port'), () => {
   console.log(`Server running at http://localhost:${app.get('port')}`);
-  console.log('Press CTRL-C to stop');
 });
 
 export default app;

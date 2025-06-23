@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
+import { getHealth } from '../controllers/health.controller';
 
 const router: Router = Router();
 
@@ -7,12 +8,6 @@ const router: Router = Router();
  * @desc Health check endpoint
  * @access Public
  */
-router.get('/', (req: Request, res: Response) => {
-  res.status(200).json({
-    status: 'success',
-    message: 'Server is healthy',
-    timestamp: new Date().toISOString(),
-  });
-});
+router.get('/', getHealth);
 
 export default router;
