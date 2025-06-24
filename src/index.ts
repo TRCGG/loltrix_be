@@ -7,9 +7,23 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
+import { initConnectionPool } from './init';
 import { errorHandler } from './middlewares/errorHandler';
 import { notFoundHandler } from './middlewares/notFoundHandler';
 import apiRoutes from './routes';
+
+// initialize
+try {
+  // DB Connection Check
+  const isConnected = await initConnectionPool();
+  if (!isConnected) {
+    throw new Error('Database connection failed');
+  }
+  console.log('Database connection successful');
+} catch (error) {
+  console.error(error);
+  process.exit(1);
+}
 
 // Create Express server
 dotenv.config({ path: '../.env' });

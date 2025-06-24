@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import path from 'path';
 import { ProblemDetails } from '../types/error';
 
 export const errorHandler = (
