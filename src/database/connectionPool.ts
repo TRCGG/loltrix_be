@@ -1,6 +1,7 @@
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool, type PoolClient } from 'pg';
 import dotenv from 'dotenv';
+import * as schema from './schema.js';
 
 // Load environment-specific .env file
 const nodeEnv = process.env.NODE_ENV || 'development';
@@ -10,7 +11,7 @@ dotenv.config({ path: envFile });
 class DatabaseConnectionPool {
   private static instance: DatabaseConnectionPool;
   private pool: Pool;
-  private db: NodePgDatabase;
+  private db: NodePgDatabase<typeof schema>;
   private isInitialized: boolean = false;
 
   private constructor() {
@@ -19,7 +20,6 @@ class DatabaseConnectionPool {
     } : false;
 
     this.pool = new Pool({
-      connectionString: process.env.DB_URL,
       host: process.env.DB_HOST,
       port: parseInt(process.env.DB_PORT || '5432'),
       database: process.env.DB_NAME,
@@ -36,7 +36,7 @@ class DatabaseConnectionPool {
       process.exit(-1);
     });
 
-    this.db = drizzle(this.pool);
+    this.db = drizzle(this.pool, { schema });
   }
 
   public static getInstance(): DatabaseConnectionPool {
@@ -46,7 +46,7 @@ class DatabaseConnectionPool {
     return DatabaseConnectionPool.instance;
   }
 
-  public getDB(): NodePgDatabase {
+  public getDB(): NodePgDatabase<typeof schema> {
     return this.db;
   }
 

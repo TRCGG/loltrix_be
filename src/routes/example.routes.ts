@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { validateRequest } from '../middlewares/validateRequest';
-import { createExample, getExampleById, getAllExamples } from '../controllers/example.controller';
+import { validateRequest } from '../middlewares/validateRequest.js';
+import { createExample, getExampleById, getAllExamples } from '../controllers/example.controller.js';
 
 const router: Router = Router();
 
@@ -23,21 +23,21 @@ const getExampleByIdSchema = z.object({
 
 /**
  * @route POST /api/examples
- * @desc Create a new example
+ * @desc 새로운 예제 생성
  * @access Public
  */
 router.post('/', validateRequest(createExampleSchema), createExample);
 
 /**
  * @route GET /api/examples/:id
- * @desc Get example by ID
+ * @desc ID로 예제 조회
  * @access Public
  */
 router.get('/:id', validateRequest(getExampleByIdSchema), getExampleById);
 
 /**
  * @route GET /api/examples
- * @desc Get all examples
+ * @desc 모든 예제 조회
  * @access Public
  */
 router.get('/', getAllExamples);

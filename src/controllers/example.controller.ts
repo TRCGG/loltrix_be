@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 
 /**
- * @desc Create a new example
+ * @desc 새로운 예제 생성
  * @access Public
  */
 export const createExample = (req: Request, res: Response) => {
@@ -14,7 +14,7 @@ export const createExample = (req: Request, res: Response) => {
 };
 
 /**
- * @desc Get example by ID
+ * @desc ID로 예제 조회
  * @access Public
  */
 export const getExampleById = (req: Request, res: Response) => {
@@ -33,7 +33,7 @@ export const getExampleById = (req: Request, res: Response) => {
 };
 
 /**
- * @desc Get all examples
+ * @desc 모든 예제 조회
  * @access Public
  */
 export const getAllExamples = (req: Request, res: Response) => {

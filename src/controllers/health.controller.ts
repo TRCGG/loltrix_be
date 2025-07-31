@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 
 /**
- * @desc Health check endpoint
+ * @desc 헬스 체크 엔드포인트
  * @access Public
  */
 export const getHealth = (req: Request, res: Response) => {

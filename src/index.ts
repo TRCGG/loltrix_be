@@ -1,18 +1,29 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
-import { initConnectionPool } from './init';
-import { errorHandler } from './middlewares/errorHandler';
-import { notFoundHandler } from './middlewares/notFoundHandler';
-import apiRoutes from './routes';
 
-// initialize
+// Define __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+import { initConnectionPool } from './init.js';
+import { errorHandler } from './middlewares/errorHandler.js';
+import { notFoundHandler } from './middlewares/notFoundHandler.js';
+import apiRoutes from './routes/index.js';
+
+// Load environment-specific .env file first
+const nodeEnv = process.env.NODE_ENV || 'development';
+const envFile = `.env.${nodeEnv}`;
+dotenv.config({ path: envFile });
+
+// initialize database connection
 try {
   // DB Connection Check
   const isConnected = await initConnectionPool();
@@ -24,11 +35,6 @@ try {
   console.error(error);
   process.exit(1);
 }
-
-// Load environment-specific .env file
-const nodeEnv = process.env.NODE_ENV || 'development';
-const envFile = `.env.${nodeEnv}`;
-dotenv.config({ path: envFile });
 const app: express.Application = express();
 app.set('port', process.env.PORT || 3000);
 
