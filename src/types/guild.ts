@@ -1,13 +1,15 @@
 import { Guild, InsertGuild } from '../database/schema.js';
 
 export interface CreateGuildRequest {
-  name: string;
-  description?: string;
+  guildId: string;
+  guildName: string;
+  lanId?: string;
 }
 
 export interface UpdateGuildRequest {
-  name?: string;
-  description?: string;
+  guildName?: string;
+  lanId?: string;
+  deleteYn?: string;
 }
 
 export interface GuildResponse {
