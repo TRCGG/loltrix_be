@@ -1,5 +1,5 @@
-import { testConnection } from './database/connectionPool';
+import { initializeDB } from './database/connectionPool';
 
 export const initConnectionPool = async (): Promise<boolean> => {
-  return await testConnection();
+  return await initializeDB();
 };

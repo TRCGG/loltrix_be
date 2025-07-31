@@ -25,8 +25,10 @@ try {
   process.exit(1);
 }
 
-// Create Express server
-dotenv.config({ path: '../.env' });
+// Load environment-specific .env file
+const nodeEnv = process.env.NODE_ENV || 'development';
+const envFile = `.env.${nodeEnv}`;
+dotenv.config({ path: envFile });
 const app: express.Application = express();
 app.set('port', process.env.PORT || 3000);
 

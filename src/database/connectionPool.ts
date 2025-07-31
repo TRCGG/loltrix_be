@@ -1,35 +1,100 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { Pool, type PoolClient } from 'pg';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Load environment-specific .env file
+const nodeEnv = process.env.NODE_ENV || 'development';
+const envFile = `.env.${nodeEnv}`;
+dotenv.config({ path: envFile });
 
-const pool = new Pool({
-  connectionString: process.env.DB_URL,
-  ssl: {
-    rejectUnauthorized: process.env.NODE_ENV === 'production',
-  },
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+class DatabaseConnectionPool {
+  private static instance: DatabaseConnectionPool;
+  private pool: Pool;
+  private db: NodePgDatabase;
+  private isInitialized: boolean = false;
 
-pool.on('error', (err, client) => {
-  console.error('Unexpected error on idle client', err);
-  process.exit(-1);
-});
+  private constructor() {
+    const sslConfig = process.env.DB_SSL === 'true' ? {
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+    } : false;
 
-// drizzle ORM 초기화
-export const db = drizzle(pool);
+    this.pool = new Pool({
+      connectionString: process.env.DB_URL,
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      ssl: sslConfig,
+      max: parseInt(process.env.DB_MAX_CONNECTIONS || '20'),
+      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
+      connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000'),
+    });
 
-// 연결 테스트
-export const testConnection = async () => {
-  try {
-    const result = await pool.query('SELECT NOW()');
-    console.log('Database connection successful:', result.rows[0]);
-    return true;
-  } catch (error) {
-    console.error('Database connection failed:', error);
-    return false;
+    this.pool.on('error', (err: Error) => {
+      console.error('Unexpected error on idle client', err);
+      process.exit(-1);
+    });
+
+    this.db = drizzle(this.pool);
   }
-};
+
+  public static getInstance(): DatabaseConnectionPool {
+    if (!DatabaseConnectionPool.instance) {
+      DatabaseConnectionPool.instance = new DatabaseConnectionPool();
+    }
+    return DatabaseConnectionPool.instance;
+  }
+
+  public getDB(): NodePgDatabase {
+    return this.db;
+  }
+
+  public getPool(): Pool {
+    return this.pool;
+  }
+
+  public async getClient(): Promise<PoolClient> {
+    return await this.pool.connect();
+  }
+
+  public async testConnection(): Promise<boolean> {
+    try {
+      const result = await this.pool.query('SELECT NOW()');
+      console.log('Database connection successful:', result.rows[0]);
+      this.isInitialized = true;
+      return true;
+    } catch (error) {
+      console.error('Database connection failed:', error);
+      return false;
+    }
+  }
+
+  public async initialize(): Promise<boolean> {
+    if (this.isInitialized) {
+      return true;
+    }
+    return await this.testConnection();
+  }
+
+  public async close(): Promise<void> {
+    await this.pool.end();
+    this.isInitialized = false;
+  }
+
+  public isReady(): boolean {
+    return this.isInitialized;
+  }
+}
+
+// 싱글톤 인스턴스 export
+export const dbConnectionPool = DatabaseConnectionPool.getInstance();
+
+// 편의를 위한 alias exports
+export const db = dbConnectionPool.getDB();
+export const getPool = () => dbConnectionPool.getPool();
+export const getClient = () => dbConnectionPool.getClient();
+export const testConnection = () => dbConnectionPool.testConnection();
+export const initializeDB = () => dbConnectionPool.initialize();
+export const closeDB = () => dbConnectionPool.close();
+export const isDBReady = () => dbConnectionPool.isReady();
