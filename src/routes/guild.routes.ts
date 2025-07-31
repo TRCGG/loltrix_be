@@ -1,31 +1,33 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { createGuild, getGuildById, getAllGuilds, updateGuild } from '../controllers/guild.controller.js';
+import { createGuild, getGuildById, getAllGuilds, updateGuild, deleteGuild } from '../controllers/guild.controller.js';
 
 const router: Router = Router();
 
 // Define Zod schemas for validation
 const createGuildSchema = z.object({
   body: z.object({
-    name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
-    description: z.string().max(500, 'Description must be less than 500 characters').optional(),
+    guildId: z.string().min(1, 'Guild ID is required').max(128, 'Guild ID must be less than 128 characters'),
+    guildName: z.string().min(1, 'Guild name is required').max(128, 'Guild name must be less than 128 characters'),
+    lanId: z.string().max(32, 'LAN ID must be less than 32 characters').optional(),
   }),
 });
 
 const updateGuildSchema = z.object({
   body: z.object({
-    name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters').optional(),
-    description: z.string().max(500, 'Description must be less than 500 characters').optional(),
+    guildName: z.string().min(1, 'Guild name is required').max(128, 'Guild name must be less than 128 characters').optional(),
+    lanId: z.string().max(32, 'LAN ID must be less than 32 characters').optional(),
+    deleteYn: z.enum(['Y', 'N'], { errorMap: () => ({ message: 'Delete flag must be Y or N' }) }).optional(),
   }),
   params: z.object({
-    id: z.string().uuid('Invalid guild ID format'),
+    guildId: z.string().min(1, 'Guild ID is required').max(128, 'Guild ID must be less than 128 characters'),
   }),
 });
 
 const getGuildByIdSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid guild ID format'),
+    guildId: z.string().min(1, 'Guild ID is required').max(128, 'Guild ID must be less than 128 characters'),
   }),
 });
 
@@ -33,8 +35,14 @@ const getAllGuildsSchema = z.object({
   query: z.object({
     page: z.string().regex(/^\d+$/, 'Page must be a positive number').transform(Number).optional(),
     limit: z.string().regex(/^\d+$/, 'Limit must be a positive number').transform(Number).optional(),
-    search: z.string().max(100, 'Search term must be less than 100 characters').optional(),
+    search: z.string().max(128, 'Search term must be less than 128 characters').optional(),
   }).optional(),
+});
+
+const deleteGuildSchema = z.object({
+  params: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128, 'Guild ID must be less than 128 characters'),
+  }),
 });
 
 /**
@@ -45,18 +53,18 @@ const getAllGuildsSchema = z.object({
 router.post('/', validateRequest(createGuildSchema), createGuild);
 
 /**
- * @route GET /api/guilds/:id
- * @desc ID로 길드 조회
+ * @route GET /api/guilds/:guildId
+ * @desc Guild ID로 길드 조회
  * @access Public
  */
-router.get('/:id', validateRequest(getGuildByIdSchema), getGuildById);
+router.get('/:guildId', validateRequest(getGuildByIdSchema), getGuildById);
 
 /**
- * @route PUT /api/guilds/:id
- * @desc ID로 길드 수정
+ * @route PUT /api/guilds/:guildId
+ * @desc Guild ID로 길드 수정
  * @access Public
  */
-router.put('/:id', validateRequest(updateGuildSchema), updateGuild);
+router.put('/:guildId', validateRequest(updateGuildSchema), updateGuild);
 
 /**
  * @route GET /api/guilds
@@ -64,5 +72,12 @@ router.put('/:id', validateRequest(updateGuildSchema), updateGuild);
  * @access Public
  */
 router.get('/', validateRequest(getAllGuildsSchema), getAllGuilds);
+
+/**
+ * @route DELETE /api/guilds/:guildId
+ * @desc Guild ID로 길드 삭제 (소프트 삭제)
+ * @access Public
+ */
+router.delete('/:guildId', validateRequest(deleteGuildSchema), deleteGuild);
 
 export default router;
