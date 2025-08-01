@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { createExample, getExampleById, getAllExamples } from '../controllers/example.controller.js';
+import {
+  createExample,
+  getExampleById,
+  getAllExamples,
+} from '../controllers/example.controller.js';
 
 const router: Router = Router();
 

@@ -1,22 +1,21 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import path from 'path';
+import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
-
-// Define __dirname for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 import { initConnectionPool } from './init.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { notFoundHandler } from './middlewares/notFoundHandler.js';
 import apiRoutes from './routes/index.js';
+
+// Define currentDirname for ES modules
+const currentFilename = fileURLToPath(import.meta.url);
+const currentDirname = dirname(currentFilename);
 
 // Load environment-specific .env file first
 const nodeEnv = process.env.NODE_ENV || 'development';
@@ -40,7 +39,7 @@ app.set('port', process.env.PORT || 3000);
 
 // middlewares
 app.use(morgan('dev')); // HTTP request logger
-app.use(express.static(path.join(__dirname, '../loltrix'))); // set static resources
+app.use(express.static(path.join(currentDirname, '../loltrix'))); // set static resources
 app.use(express.json()); // Parse JSON request body
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded request body
 app.use(cookieParser(process.env.COOKIE_SECRET)); // Parse Cookie info
@@ -64,7 +63,7 @@ app.use(cors()); // Enable CORS
 app.use('/api', apiRoutes);
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, './loltrix/index.html'));
+  res.sendFile(path.join(currentDirname, './loltrix/index.html'));
 });
 
 // Error handlers

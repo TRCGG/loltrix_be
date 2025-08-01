@@ -4,5 +4,5 @@ export interface ProblemDetails {
   status: number;
   detail?: string;
   instance?: string;
-  errors?: any[];
+  errors?: Record<string, unknown>[];
 }

@@ -5,7 +5,10 @@ export const guild = pgTable('guild', {
   guildName: varchar('guild_name', { length: 128 }).notNull(),
   lanId: varchar('lan_id', { length: 32 }),
   createDate: timestamp('create_date').defaultNow().notNull(),
-  updateDate: timestamp('update_date').defaultNow().notNull().$onUpdate(() => new Date()),
+  updateDate: timestamp('update_date')
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
   deleteYn: char('delete_yn', { length: 1 }).default('N').notNull(),
 });
 

@@ -10,25 +10,31 @@ dotenv.config({ path: envFile });
 
 class DatabaseConnectionPool {
   private static instance: DatabaseConnectionPool;
+
   private pool: Pool;
+
   private db: NodePgDatabase<typeof schema>;
-  private isInitialized: boolean = false;
+
+  private isInitialized = false;
 
   private constructor() {
-    const sslConfig = process.env.DB_SSL === 'true' ? {
-      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
-    } : false;
+    const sslConfig =
+      process.env.DB_SSL === 'true'
+        ? {
+            rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+          }
+        : false;
 
     this.pool = new Pool({
       host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT || '5432'),
+      port: parseInt(process.env.DB_PORT || '5432', 10),
       database: process.env.DB_NAME,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       ssl: sslConfig,
-      max: parseInt(process.env.DB_MAX_CONNECTIONS || '20'),
-      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
-      connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000'),
+      max: parseInt(process.env.DB_MAX_CONNECTIONS || '20', 10),
+      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10),
+      connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000', 10),
     });
 
     this.pool.on('error', (err: Error) => {
@@ -55,7 +61,7 @@ class DatabaseConnectionPool {
   }
 
   public async getClient(): Promise<PoolClient> {
-    return await this.pool.connect();
+    return this.pool.connect();
   }
 
   public async testConnection(): Promise<boolean> {
@@ -74,7 +80,7 @@ class DatabaseConnectionPool {
     if (this.isInitialized) {
       return true;
     }
-    return await this.testConnection();
+    return this.testConnection();
   }
 
   public async close(): Promise<void> {

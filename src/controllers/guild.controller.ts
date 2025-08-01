@@ -1,23 +1,34 @@
 import { Request, Response } from 'express';
-import { eq, ilike, desc, asc, sql, and } from 'drizzle-orm';
+import { eq, ilike, desc, sql, and } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
 import { guild } from '../database/schema.js';
-import { CreateGuildRequest, UpdateGuildRequest, GetGuildsQuery, GuildResponse } from '../types/guild.js';
+import {
+  CreateGuildRequest,
+  UpdateGuildRequest,
+  GetGuildsQuery,
+  GuildResponse,
+} from '../types/guild.js';
 
 /**
  * @desc 새로운 길드 생성
  * @route POST /api/guilds
  * @access Public
  */
-export const createGuild = async (req: Request<{}, GuildResponse, CreateGuildRequest>, res: Response<GuildResponse>) => {
+export const createGuild = async (
+  req: Request<Record<string, never>, GuildResponse, CreateGuildRequest>,
+  res: Response<GuildResponse>,
+) => {
   try {
     const { guildId, guildName, lanId } = req.body;
 
-    const newGuild = await db.insert(guild).values({
-      guildId,
-      guildName,
-      lanId,
-    }).returning();
+    const newGuild = await db
+      .insert(guild)
+      .values({
+        guildId,
+        guildName,
+        lanId,
+      })
+      .returning();
 
     res.status(201).json({
       status: 'success',
@@ -39,11 +50,18 @@ export const createGuild = async (req: Request<{}, GuildResponse, CreateGuildReq
  * @route GET /api/guilds/:id
  * @access Public
  */
-export const getGuildById = async (req: Request<{ guildId: string }>, res: Response<GuildResponse>) => {
+export const getGuildById = async (
+  req: Request<{ guildId: string }>,
+  res: Response<GuildResponse>,
+) => {
   try {
     const { guildId } = req.params;
 
-    const guildResult = await db.select().from(guild).where(and(eq(guild.guildId, guildId), eq(guild.deleteYn, 'N'))).limit(1);
+    const guildResult = await db
+      .select()
+      .from(guild)
+      .where(and(eq(guild.guildId, guildId), eq(guild.deleteYn, 'N')))
+      .limit(1);
 
     if (guildResult.length === 0) {
       return res.status(404).json({
@@ -53,14 +71,14 @@ export const getGuildById = async (req: Request<{ guildId: string }>, res: Respo
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Guild retrieved successfully',
       data: guildResult[0],
     });
   } catch (error) {
     console.error('Error retrieving guild:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving guild',
       data: null,
@@ -73,14 +91,17 @@ export const getGuildById = async (req: Request<{ guildId: string }>, res: Respo
  * @route GET /api/guilds
  * @access Public
  */
-export const getAllGuilds = async (req: Request<{}, GuildResponse, {}, GetGuildsQuery>, res: Response<GuildResponse>) => {
+export const getAllGuilds = async (
+  req: Request<Record<string, never>, GuildResponse, Record<string, never>, GetGuildsQuery>,
+  res: Response<GuildResponse>,
+) => {
   try {
     const { page = 1, limit = 10, search } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
 
     // Build the query with conditions
     const baseCondition = eq(guild.deleteYn, 'N');
-    const whereCondition = search 
+    const whereCondition = search
       ? and(baseCondition, ilike(guild.guildName, `%${search}%`))
       : baseCondition;
 
@@ -98,7 +119,7 @@ export const getAllGuilds = async (req: Request<{}, GuildResponse, {}, GetGuilds
       .select({ count: sql<number>`count(*)` })
       .from(guild)
       .where(whereCondition);
-    
+
     const totalCount = countResult[0]?.count || 0;
 
     res.status(200).json({
@@ -127,14 +148,21 @@ export const getAllGuilds = async (req: Request<{}, GuildResponse, {}, GetGuilds
  * @route PUT /api/guilds/:id
  * @access Public
  */
-export const updateGuild = async (req: Request<{ guildId: string }, GuildResponse, UpdateGuildRequest>, res: Response<GuildResponse>) => {
+export const updateGuild = async (
+  req: Request<{ guildId: string }, GuildResponse, UpdateGuildRequest>,
+  res: Response<GuildResponse>,
+) => {
   try {
     const { guildId } = req.params;
     const updateData = req.body;
 
     // Check if guild exists
-    const existingGuild = await db.select().from(guild).where(and(eq(guild.guildId, guildId), eq(guild.deleteYn, 'N'))).limit(1);
-    
+    const existingGuild = await db
+      .select()
+      .from(guild)
+      .where(and(eq(guild.guildId, guildId), eq(guild.deleteYn, 'N')))
+      .limit(1);
+
     if (existingGuild.length === 0) {
       return res.status(404).json({
         status: 'error',
@@ -150,14 +178,14 @@ export const updateGuild = async (req: Request<{ guildId: string }, GuildRespons
       .where(eq(guild.guildId, guildId))
       .returning();
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Guild updated successfully',
       data: updatedGuild[0],
     });
   } catch (error) {
     console.error('Error updating guild:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while updating guild',
       data: null,
@@ -170,13 +198,20 @@ export const updateGuild = async (req: Request<{ guildId: string }, GuildRespons
  * @route DELETE /api/guilds/:guildId
  * @access Public
  */
-export const deleteGuild = async (req: Request<{ guildId: string }>, res: Response<GuildResponse>) => {
+export const deleteGuild = async (
+  req: Request<{ guildId: string }>,
+  res: Response<GuildResponse>,
+) => {
   try {
     const { guildId } = req.params;
 
     // Check if guild exists and is not already deleted
-    const existingGuild = await db.select().from(guild).where(and(eq(guild.guildId, guildId), eq(guild.deleteYn, 'N'))).limit(1);
-    
+    const existingGuild = await db
+      .select()
+      .from(guild)
+      .where(and(eq(guild.guildId, guildId), eq(guild.deleteYn, 'N')))
+      .limit(1);
+
     if (existingGuild.length === 0) {
       return res.status(404).json({
         status: 'error',
@@ -192,14 +227,14 @@ export const deleteGuild = async (req: Request<{ guildId: string }>, res: Respon
       .where(eq(guild.guildId, guildId))
       .returning();
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Guild deleted successfully',
       data: deletedGuild[0],
     });
   } catch (error) {
     console.error('Error deleting guild:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while deleting guild',
       data: null,
