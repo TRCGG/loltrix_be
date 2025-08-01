@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "ts-node --esm src/index.ts",
+    "dev": "tsx src/index.ts",
     "build": "tsc && cp -r src/loltrix dist/",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
@@ -54,6 +54,7 @@
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-prettier": "^5.4.1",
     "prettier": "^3.5.3",
+    "tsx": "^4.20.3",
     "typescript": "5.1.6"
   }
 }
