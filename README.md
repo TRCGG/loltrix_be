@@ -29,7 +29,6 @@ loltrix_be/
 │   └── index.ts              # 애플리케이션 진입점
 ├── drizzle/                  # Drizzle ORM 설정 및 마이그레이션
 ├── .env.development          # 개발 환경 변수
-
 ├── .env.production           # 프로덕션 환경 변수
 ├── .eslintrc.js              # ESLint 설정
 ├── .prettierrc               # Prettier 설정
@@ -63,7 +62,7 @@ pnpm install
 
 3. 환경 변수 설정
 
-`.env.example` 파일을 참고하여 `.env.development` 또는 `.env.production` 파일을 생성하고 필요한 환경 변수를 설정합니다.
+`.env.development` 또는 `.env.production` 파일을 생성하고 필요한 환경 변수를 설정합니다.
 
 필수 환경 변수:
 - `DB_URL` - PostgreSQL 데이터베이스 연결 URL
@@ -80,52 +79,29 @@ pnpm dev
 
 ## 사용 가능한 스크립트 (Available Scripts)
 
-- `pnpm dev` - ts-node를 사용한 개발 서버 실행
+- `pnpm dev` - tsx를 사용한 개발 서버 실행
 - `pnpm build` - TypeScript를 JavaScript로 컴파일 (`dist/` 디렉토리)
 - `pnpm start` - 컴파일된 코드로 프로덕션 서버 실행
 - `pnpm lint` - TypeScript 파일에 ESLint 실행
 - `pnpm lint:fix` - ESLint 실행 및 자동 수정
 - `pnpm format` - Prettier를 사용하여 코드 포맷팅
 
-## 아키텍처 (Architecture)
+## API 엔드포인트 (API Endpoints)
 
-### 백엔드 구조
-- **Express.js** 서버 with TypeScript
-- **Drizzle ORM** with PostgreSQL 데이터베이스 연결
-- **Zod**를 사용한 요청 검증
-- ESModules 사용 (`package.json`에 `"type": "module"` 설정)
+### 헬스 체크 (Health Check)
 
-### 데이터베이스
-- PostgreSQL with 연결 풀링 (최대 20개 연결)
-- Drizzle ORM이 `src/database/connectionPool.ts:23`에서 초기화
-- 서버 시작 시 `src/init.ts:4`에서 데이터베이스 연결 테스트 실행
-- `DB_URL` 환경 변수 필요
+- `GET /api/health` - 서버 상태 확인
 
-### 주요 미들웨어 스택
-- morgan (HTTP 로깅)
-- helmet (보안 헤더)
-- cors (교차 출처)
-- compression (gzip)
-- express-session with 쿠키 파싱
-- `src/loltrix/` 디렉토리에서 정적 파일 서빙
+### 예제 API (Example API)
 
-### 환경 설정
-환경별 설정 파일:
-- `.env.development` - 개발 환경
-- `.env.production` - 프로덕션 환경
-- `.env.example` - 모든 변수가 포함된 템플릿 파일
+- `GET /api/examples` - 모든 예제 조회
+- `GET /api/examples/:id` - ID로 예제 조회
+- `POST /api/examples` - 새 예제 생성
 
-`NODE_ENV`에 따라 올바른 .env 파일을 자동으로 로드합니다.
+## 환경 변수 (Environment Variables)
 
-필수 변수: `DB_URL`, `COOKIE_SECRET`, 데이터베이스 연결 세부사항  
-프로덕션 SSL 설정은 `DB_SSL` 및 `DB_SSL_REJECT_UNAUTHORIZED`로 구성 가능
-
-### 에러 처리
-- `src/middlewares/errorHandler.ts`의 커스텀 에러 핸들러 미들웨어
-- `src/middlewares/notFoundHandler.ts`의 404 핸들러
-- 시작 시 데이터베이스 연결 검증
-
-애플리케이션은 API 엔드포인트(`/api/*`)와 정적 프론트엔드 파일을 모두 제공하며, 루트 라우트에서 `src/loltrix/index.html`을 제공합니다.
+- `PORT` - 서버 포트 (기본값: 3000)
+- `NODE_ENV` - 애플리케이션 환경 (development, production)
 
 ## 라이센스 (License)
 
