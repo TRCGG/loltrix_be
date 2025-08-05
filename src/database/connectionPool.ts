@@ -31,7 +31,10 @@ class DatabaseConnectionPool {
       database: process.env.DB_NAME,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
-      ssl: sslConfig,
+      // ssl: sslConfig,
+      ssl: {
+          rejectUnauthorized: false,
+      },
       max: parseInt(process.env.DB_MAX_CONNECTIONS || '20', 10),
       idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10),
       connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000', 10),
