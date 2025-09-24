@@ -22,7 +22,7 @@ const createGuildSchema = z.object({
       .string()
       .min(1, 'Guild name is required')
       .max(128, 'Guild name must be less than 128 characters'),
-    lanId: z.string().max(32, 'LAN ID must be less than 32 characters').optional(),
+    languageCode: z.string().max(10, 'Language code must be less than 10 characters').optional(),
   }),
 });
 
@@ -33,13 +33,11 @@ const updateGuildSchema = z.object({
       .min(1, 'Guild name is required')
       .max(128, 'Guild name must be less than 128 characters')
       .optional(),
-    lanId: z.string().max(32, 'LAN ID must be less than 32 characters').optional(),
-    deleteYn: z
-      .enum(['Y', 'N'], { errorMap: () => ({ message: 'Delete flag must be Y or N' }) })
-      .optional(),
+    languageCode: z.string().max(10, 'Language code must be less than 10 characters').optional(),
+    isDeleted: z.boolean().optional(), 
   }),
   params: z.object({
-    guildId: z
+    id: z
       .string()
       .min(1, 'Guild ID is required')
       .max(128, 'Guild ID must be less than 128 characters'),
@@ -48,7 +46,7 @@ const updateGuildSchema = z.object({
 
 const getGuildByIdSchema = z.object({
   params: z.object({
-    guildId: z
+    id: z
       .string()
       .min(1, 'Guild ID is required')
       .max(128, 'Guild ID must be less than 128 characters'),
@@ -75,7 +73,7 @@ const getAllGuildsSchema = z.object({
 
 const deleteGuildSchema = z.object({
   params: z.object({
-    guildId: z
+    id: z
       .string()
       .min(1, 'Guild ID is required')
       .max(128, 'Guild ID must be less than 128 characters'),
@@ -90,18 +88,18 @@ const deleteGuildSchema = z.object({
 router.post('/', validateRequest(createGuildSchema), createGuild);
 
 /**
- * @route GET /api/guilds/:guildId
+ * @route GET /api/guilds/:id
  * @desc Guild ID로 길드 조회
  * @access Public
  */
-router.get('/:guildId', validateRequest(getGuildByIdSchema), getGuildById);
+router.get('/:id', validateRequest(getGuildByIdSchema), getGuildById);
 
 /**
- * @route PUT /api/guilds/:guildId
+ * @route PUT /api/guilds/:id
  * @desc Guild ID로 길드 수정
  * @access Public
  */
-router.put('/:guildId', validateRequest(updateGuildSchema), updateGuild);
+router.put('/:id', validateRequest(updateGuildSchema), updateGuild);
 
 /**
  * @route GET /api/guilds
@@ -111,10 +109,10 @@ router.put('/:guildId', validateRequest(updateGuildSchema), updateGuild);
 router.get('/', validateRequest(getAllGuildsSchema), getAllGuilds);
 
 /**
- * @route DELETE /api/guilds/:guildId
+ * @route DELETE /api/guilds/:id
  * @desc Guild ID로 길드 삭제 (소프트 삭제)
  * @access Public
  */
-router.delete('/:guildId', validateRequest(deleteGuildSchema), deleteGuild);
+router.delete('/:id', validateRequest(deleteGuildSchema), deleteGuild);
 
 export default router;
