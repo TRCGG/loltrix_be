@@ -1,13 +1,11 @@
 import { Request, Response } from 'express';
-import { eq, ilike, desc, sql, and } from 'drizzle-orm';
-import { db } from '../database/connectionPool.js';
-import { guild } from '../database/schema.js';
 import {
   CreateGuildRequest,
   UpdateGuildRequest,
   GetGuildsQuery,
   GuildResponse,
 } from '../types/guild.js';
+import * as GuildService from '../services/guild.service.js';
 
 /**
  * @desc 새로운 길드 생성
@@ -19,21 +17,18 @@ export const createGuild = async (
   res: Response<GuildResponse>,
 ) => {
   try {
-    const { guildId, guildName, lanId } = req.body;
+    const { guildId, guildName, languageCode } = req.body;
 
-    const newGuild = await db
-      .insert(guild)
-      .values({
-        guildId,
-        guildName,
-        lanId,
-      })
-      .returning();
+    const newGuild = await GuildService.insertGuild({
+      id: guildId,
+      name: guildName,
+      languageCode,
+    });
 
     res.status(201).json({
       status: 'success',
       message: 'Guild created successfully',
-      data: newGuild[0],
+      data: newGuild,
     });
   } catch (error) {
     console.error('Error creating guild:', error);
@@ -51,19 +46,15 @@ export const createGuild = async (
  * @access Public
  */
 export const getGuildById = async (
-  req: Request<{ guildId: string }>,
+  req: Request<{ id: string }>,
   res: Response<GuildResponse>,
 ) => {
   try {
-    const { guildId } = req.params;
+    const { id } = req.params;
 
-    const guildResult = await db
-      .select()
-      .from(guild)
-      .where(and(eq(guild.guildId, guildId), eq(guild.deleteYn, 'N')))
-      .limit(1);
+    const guildResult = await GuildService.findGuildById(id);
 
-    if (guildResult.length === 0) {
+    if (!guildResult) {
       return res.status(404).json({
         status: 'error',
         message: 'Guild not found',
@@ -74,7 +65,7 @@ export const getGuildById = async (
     return res.status(200).json({
       status: 'success',
       message: 'Guild retrieved successfully',
-      data: guildResult[0],
+      data: guildResult,
     });
   } catch (error) {
     console.error('Error retrieving guild:', error);
@@ -96,31 +87,9 @@ export const getAllGuilds = async (
   res: Response<GuildResponse>,
 ) => {
   try {
-    const { page = 1, limit = 10, search } = req.query;
-    const offset = (Number(page) - 1) * Number(limit);
+    const { page, limit, search } = req.query;
 
-    // Build the query with conditions
-    const baseCondition = eq(guild.deleteYn, 'N');
-    const whereCondition = search
-      ? and(baseCondition, ilike(guild.guildName, `%${search}%`))
-      : baseCondition;
-
-    // Execute query with all conditions
-    const result = await db
-      .select()
-      .from(guild)
-      .where(whereCondition)
-      .orderBy(desc(guild.createDate))
-      .limit(Number(limit))
-      .offset(offset);
-
-    // Get total count for pagination info
-    const countResult = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(guild)
-      .where(whereCondition);
-
-    const totalCount = countResult[0]?.count || 0;
+    const { result, totalCount } = await GuildService.findAllGuilds({ page, limit, search });
 
     res.status(200).json({
       status: 'success',
@@ -128,11 +97,10 @@ export const getAllGuilds = async (
       data: result,
     });
 
-    // Add pagination headers
     res.setHeader('X-Total-Count', totalCount.toString());
-    res.setHeader('X-Page', page.toString());
-    res.setHeader('X-Limit', limit.toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / Number(limit)).toString());
+    res.setHeader('X-Page', (page ?? 1).toString());
+    res.setHeader('X-Limit', (limit ?? 10).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 10)).toString());
   } catch (error) {
     console.error('Error retrieving guilds:', error);
     res.status(500).json({
@@ -149,39 +117,27 @@ export const getAllGuilds = async (
  * @access Public
  */
 export const updateGuild = async (
-  req: Request<{ guildId: string }, GuildResponse, UpdateGuildRequest>,
+  req: Request<{ id: string }, GuildResponse, UpdateGuildRequest>,
   res: Response<GuildResponse>,
 ) => {
   try {
-    const { guildId } = req.params;
+    const { id } = req.params;
     const updateData = req.body;
 
-    // Check if guild exists
-    const existingGuild = await db
-      .select()
-      .from(guild)
-      .where(and(eq(guild.guildId, guildId), eq(guild.deleteYn, 'N')))
-      .limit(1);
+    const updatedGuild = await GuildService.updateGuild(id, updateData);
 
-    if (existingGuild.length === 0) {
+    if (!updatedGuild) {
       return res.status(404).json({
         status: 'error',
-        message: 'Guild not found',
+        message: 'Guild not found or not able to be updated',
         data: null,
       });
     }
 
-    // Update the guild
-    const updatedGuild = await db
-      .update(guild)
-      .set(updateData)
-      .where(eq(guild.guildId, guildId))
-      .returning();
-
     return res.status(200).json({
       status: 'success',
       message: 'Guild updated successfully',
-      data: updatedGuild[0],
+      data: updatedGuild,
     });
   } catch (error) {
     console.error('Error updating guild:', error);
@@ -195,42 +151,30 @@ export const updateGuild = async (
 
 /**
  * @desc ID로 길드 삭제 (소프트 삭제)
- * @route DELETE /api/guilds/:guildId
+ * @route DELETE /api/guilds/:id
  * @access Public
  */
 export const deleteGuild = async (
-  req: Request<{ guildId: string }>,
+  req: Request<{ id: string }>,
   res: Response<GuildResponse>,
 ) => {
   try {
-    const { guildId } = req.params;
+    const { id } = req.params;
 
-    // Check if guild exists and is not already deleted
-    const existingGuild = await db
-      .select()
-      .from(guild)
-      .where(and(eq(guild.guildId, guildId), eq(guild.deleteYn, 'N')))
-      .limit(1);
+    const deletedGuild = await GuildService.softDeleteGuild(id);
 
-    if (existingGuild.length === 0) {
+    if (!deletedGuild) {
       return res.status(404).json({
         status: 'error',
-        message: 'Guild not found',
+        message: 'Guild not found or already deleted',
         data: null,
       });
     }
 
-    // Soft delete the guild
-    const deletedGuild = await db
-      .update(guild)
-      .set({ deleteYn: 'Y' })
-      .where(eq(guild.guildId, guildId))
-      .returning();
-
     return res.status(200).json({
       status: 'success',
       message: 'Guild deleted successfully',
-      data: deletedGuild[0],
+      data: deletedGuild,
     });
   } catch (error) {
     console.error('Error deleting guild:', error);
