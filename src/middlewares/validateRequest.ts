@@ -20,7 +20,12 @@ export const validateRequest =
           status: 400,
           detail: 'The request payload failed validation',
           instance: req.originalUrl,
-          errors: error.errors,
+          errors: error.errors.map(err => ({
+            code: err.code,
+            path: err.path.join('.'),
+            message: err.message,
+            value: err.received || undefined,
+          })),
         };
 
         res.status(400).setHeader('Content-Type', 'application/problem+json').json(problem);

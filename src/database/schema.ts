@@ -44,5 +44,22 @@ export type InsertGuild = typeof guild.$inferInsert;
 
 export type Message = typeof message.$inferSelect;
 
+export const errorLog = pgTable('error_log', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  errorCode: varchar('error_code', { length: 50 }).notNull().unique(),
+  error: jsonb('error').notNull(),
+  request: jsonb('request'),
+  userAgent: varchar('user_agent', { length: 512 }),
+  ipAddress: varchar('ip_address', { length: 45 }),
+  userId: varchar('user_id', { length: 255 }),
+  severity: varchar('severity', { length: 20 }).notNull().default('error'),
+  status: integer('status').notNull().default(500),
+  createDate: timestamp('create_date').notNull().defaultNow(),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
 export type Replay = typeof replay.$inferSelect;
 export type InsertReplay = typeof replay.$inferInsert;
+
+export type ErrorLog = typeof errorLog.$inferSelect;
+export type InsertErrorLog = typeof errorLog.$inferInsert;
