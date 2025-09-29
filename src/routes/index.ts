@@ -3,6 +3,7 @@ import healthRouter from './health.routes.js';
 import exampleRouter from './example.routes.js';
 import guildRouter from './guild.routes.js';
 import testRouter from './test.routes.js';
+import replayRouter from './replay.routes.js';
 
 const router: Router = Router();
 
@@ -14,6 +15,9 @@ router.use('/examples', exampleRouter);
 
 // Guild routes with CRUD operations
 router.use('/guilds', guildRouter);
+
+// Replay routes 
+router.use('/replays', replayRouter);
 
 // Test routes for error logging (개발 환경에서만)
 if (process.env.NODE_ENV === 'development') {
