@@ -27,7 +27,8 @@ export const message = pgTable('message', {
 
 export const replay = pgTable('replay', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
-  fileName: varchar('file_name', { length: 255 }).notNull(),
+  replayCode: varchar('replay_code', { length: 255 }).notNull().unique(),
+  fileName: varchar('file_name', { length: 128 }).notNull(),
   fileUrl: varchar('file_url', { length: 255 }).notNull(),
   rawData: jsonb('raw_data').notNull(),
   hashData: varchar('hash_data', { length: 128 }).notNull(),
@@ -59,7 +60,6 @@ export const errorLog = pgTable('error_log', {
 });
 
 export type Replay = typeof replay.$inferSelect;
-export type InsertReplay = typeof replay.$inferInsert;
 
 export type ErrorLog = typeof errorLog.$inferSelect;
 export type InsertErrorLog = typeof errorLog.$inferInsert;

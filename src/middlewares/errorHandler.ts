@@ -43,6 +43,7 @@ export const errorHandler = async (
         value: err.stack,
         message: 'Stack trace (development only)'
       }];
+      console.error(problem);
     }
 
     res.status(status).json(problem);
