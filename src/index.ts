@@ -9,6 +9,7 @@ import morgan from 'morgan';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import { initConnectionPool } from './init.js';
+import { localeHandler } from './middlewares/localeHandler.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { notFoundHandler } from './middlewares/notFoundHandler.js';
 import apiRoutes from './routes/index.js';
@@ -58,6 +59,9 @@ app.use(
 app.use(helmet()); // Set security-related HTTP headers
 app.use(compression()); // Compress all routes
 app.use(cors()); // Enable CORS
+
+// locale handler
+app.use(localeHandler);
 
 // API routes
 app.use('/api', apiRoutes);

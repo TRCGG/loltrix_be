@@ -5,7 +5,8 @@ import {
   GetGuildsQuery,
   GuildResponse,
 } from '../types/guild.js';
-import * as GuildService from '../services/guild.service.js';
+import { guildService } from '../services/guild.service.js';
+import { messageService } from '../services/message.service.js';
 
 /**
  * @desc 새로운 길드 생성
@@ -16,10 +17,11 @@ export const createGuild = async (
   req: Request<Record<string, never>, GuildResponse, CreateGuildRequest>,
   res: Response<GuildResponse>,
 ) => {
+  const locale = req.locale || 'ko';
   try {
     const { guildId, guildName, languageCode } = req.body;
 
-    const newGuild = await GuildService.insertGuild({
+    const newGuild = await guildService.insertGuild({
       id: guildId,
       name: guildName,
       languageCode,
@@ -27,14 +29,18 @@ export const createGuild = async (
 
     res.status(201).json({
       status: 'success',
-      message: 'Guild created successfully',
+      message: 
+      (await messageService.getMessage(locale, 'guild_save_success')) ||
+      'Guild created successfully',
       data: newGuild,
     });
   } catch (error) {
     console.error('Error creating guild:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Internal server error while creating guild',
+      message: 
+      (await messageService.getMessage(locale, 'guild_save_error500')) ||
+      'Internal server error while creating guild',
       data: null,
     });
   }
@@ -49,29 +55,36 @@ export const getGuildById = async (
   req: Request<{ id: string }>,
   res: Response<GuildResponse>,
 ) => {
+  const locale = req.locale || 'ko';
   try {
     const { id } = req.params;
 
-    const guildResult = await GuildService.findGuildById(id);
+    const guildResult = await guildService.findGuildById(id);
 
     if (!guildResult) {
       return res.status(404).json({
         status: 'error',
-        message: 'Guild not found',
+        message: 
+        (await messageService.getMessage(locale, 'guild_common_error404')) ||
+        'Guild not found',
         data: null,
       });
     }
 
     return res.status(200).json({
       status: 'success',
-      message: 'Guild retrieved successfully',
+      message: 
+      (await messageService.getMessage(locale, 'guild_get_success')) ||
+      'Guild retrieved successfully',
       data: guildResult,
     });
   } catch (error) {
     console.error('Error retrieving guild:', error);
     return res.status(500).json({
       status: 'error',
-      message: 'Internal server error while retrieving guild',
+      message: 
+      (await messageService.getMessage(locale, 'guild_get_error500')) ||
+      'Internal server error while retrieving guild',
       data: null,
     });
   }
@@ -86,26 +99,31 @@ export const getAllGuilds = async (
   req: Request<Record<string, never>, GuildResponse, Record<string, never>, GetGuildsQuery>,
   res: Response<GuildResponse>,
 ) => {
+  const locale = req.locale || 'ko';
   try {
     const { page, limit, search } = req.query;
 
-    const { result, totalCount } = await GuildService.findAllGuilds({ page, limit, search });
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Guilds retrieved successfully',
-      data: result,
-    });
+    const { result, totalCount } = await guildService.findAllGuilds({ page, limit, search });
 
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
     res.setHeader('X-Limit', (limit ?? 10).toString());
     res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 10)).toString());
+
+    res.status(200).json({
+      status: 'success',
+      message:
+        (await messageService.getMessage(locale, 'guild_get_success')) ||
+        'Guilds retrieved successfully',
+      data: result,
+    });
   } catch (error) {
     console.error('Error retrieving guilds:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Internal server error while retrieving guilds',
+      message: 
+      (await messageService.getMessage(locale, 'guild_get_error500')) ||
+      'Internal server error while retrieving guilds',
       data: null,
     });
   }
@@ -120,30 +138,37 @@ export const updateGuild = async (
   req: Request<{ id: string }, GuildResponse, UpdateGuildRequest>,
   res: Response<GuildResponse>,
 ) => {
+  const locale = req.locale || 'ko';
   try {
     const { id } = req.params;
     const updateData = req.body;
 
-    const updatedGuild = await GuildService.updateGuild(id, updateData);
+    const updatedGuild = await guildService.updateGuild(id, updateData);
 
     if (!updatedGuild) {
       return res.status(404).json({
         status: 'error',
-        message: 'Guild not found or not able to be updated',
+        message: 
+        (await messageService.getMessage(locale, 'guild_common_error404')) ||
+        'Guild not found or not able to be updated',
         data: null,
       });
     }
 
     return res.status(200).json({
       status: 'success',
-      message: 'Guild updated successfully',
+      message: 
+      (await messageService.getMessage(locale, 'guild_update_success')) ||
+      'Guild updated successfully',
       data: updatedGuild,
     });
   } catch (error) {
     console.error('Error updating guild:', error);
     return res.status(500).json({
       status: 'error',
-      message: 'Internal server error while updating guild',
+      message: 
+      (await messageService.getMessage(locale, 'guild_update_error500')) ||
+      'Internal server error while updating guild',
       data: null,
     });
   }
@@ -158,29 +183,36 @@ export const deleteGuild = async (
   req: Request<{ id: string }>,
   res: Response<GuildResponse>,
 ) => {
+  const locale = req.locale || 'ko';
   try {
     const { id } = req.params;
 
-    const deletedGuild = await GuildService.softDeleteGuild(id);
+    const deletedGuild = await guildService.softDeleteGuild(id);
 
     if (!deletedGuild) {
       return res.status(404).json({
         status: 'error',
-        message: 'Guild not found or already deleted',
+        message: 
+        (await messageService.getMessage(locale, 'guild_common_error404')) ||
+        'Guild not found or already deleted',
         data: null,
       });
     }
 
     return res.status(200).json({
       status: 'success',
-      message: 'Guild deleted successfully',
+      message: 
+      (await messageService.getMessage(locale, 'guild_delete_success')) ||
+      'Guild deleted successfully',
       data: deletedGuild,
     });
   } catch (error) {
     console.error('Error deleting guild:', error);
     return res.status(500).json({
       status: 'error',
-      message: 'Internal server error while deleting guild',
+      message: 
+      (await messageService.getMessage(locale, 'guild_delete_error500')) ||
+      'Internal server error while deleting guild',
       data: null,
     });
   }
