@@ -1,7 +1,8 @@
 import { Request } from 'express';
+import { nanoid } from 'nanoid';
 import { db } from '../database/connectionPool.js';
 import { errorLog } from '../database/schema.js';
-import { desc, like } from 'drizzle-orm';
+import { BusinessError, SystemError } from '../types/error.js';
 
 export interface ErrorLogData {
   error: {
@@ -9,6 +10,7 @@ export interface ErrorLogData {
     stack?: string;
     name?: string;
     code?: string;
+    errorType?: 'business' | 'system' | 'unknown'; // 에러 타입 추가
   };
   request?: {
     method: string;
@@ -27,28 +29,19 @@ export interface ErrorLogData {
 }
 
 /**
- * @desc 고유한 에러 코드 생성 (ERR-YYYYMMDD-XXX 형식)
+ * @desc 고유한 에러 코드 생성 (ERR-YYMMDD-xxxxxx 형식)
+ * - nanoid 6자리 사용으로 충돌 방지
  */
-const generateErrorCode = async (): Promise<string> => {
-  const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
-  const prefix = `ERR-${today}-`;
+const generateErrorCode = (): string => {
+  const today = new Date();
+  const year = today.getFullYear().toString().slice(-2);
+  const month = (today.getMonth() + 1).toString().padStart(2, '0');
+  const day = today.getDate().toString().padStart(2, '0');
 
-  // 오늘 생성된 에러 로그 중 가장 높은 번호 조회
-  const lastError = await db
-    .select({ errorCode: errorLog.errorCode })
-    .from(errorLog)
-    .where(like(errorLog.errorCode, `${prefix}%`))
-    .orderBy(desc(errorLog.errorCode))
-    .limit(1);
+  const dateStr = `${year}${month}${day}`;
+  const uniqueId = nanoid(6);
 
-  let sequenceNumber = 1;
-
-  if (lastError.length > 0) {
-    const lastSequence = lastError[0].errorCode.split('-')[2];
-    sequenceNumber = parseInt(lastSequence, 10) + 1;
-  }
-
-  return `${prefix}${sequenceNumber.toString().padStart(3, '0')}`;
+  return `ERR-${dateStr}-${uniqueId}`;
 };
 
 /**
@@ -73,7 +66,7 @@ export const extractRequestData = (req: Request) => ({
  * @desc 에러를 데이터베이스에 로깅하고 추적 코드 반환
  */
 export const logError = async (errorData: ErrorLogData): Promise<string> => {
-  const errorCode = await generateErrorCode();
+  const errorCode = generateErrorCode();
 
   await db.insert(errorLog).values({
     errorCode,
@@ -100,9 +93,16 @@ export const logErrorFromRequest = async (
 ): Promise<string> => {
   const requestData = extractRequestData(req);
 
+  // 에러 타입 판별
+  let errorType: 'business' | 'system' | 'unknown' = 'unknown';
+  if (error instanceof BusinessError) {
+    errorType = 'business';
+  } else if (error instanceof SystemError) {
+    errorType = 'system';
+  }
+
   // IP 주소 추출
   const ipAddress = req.ip ||
-    req.connection.remoteAddress ||
     req.socket.remoteAddress ||
     (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim();
 
@@ -112,6 +112,7 @@ export const logErrorFromRequest = async (
       stack: error.stack,
       name: error.name,
       code: (error as any).code,
+      errorType, // 에러 타입 추가
     },
     request: requestData,
     userAgent: req.get('user-agent'),
