@@ -3,8 +3,7 @@ import {
   ReplayResponse,
   ReplayFileRequest,
 } from '../types/replay.js';
-import * as ReplayService from '../services/replay.service.js';
-import { CustomError } from '../utils/customError.util.js';
+import { replayService } from '../services/replay.service.js';
 
 /**
  * @route POST /api/replays
@@ -14,32 +13,19 @@ import { CustomError } from '../utils/customError.util.js';
 export const createReplay = async (
   req: Request<Record<string, never>, ReplayResponse, ReplayFileRequest>, 
   res: Response<ReplayResponse>, 
+  next: NextFunction
 ) => {
     const fileData = req.body; 
 
     try {
-        const savedReplay = await ReplayService.save(fileData);
+        const savedReplay = await replayService.save(fileData);
         return res.status(201).json({
             status: 'success',
             message: 'Replay created successfully',
             data: savedReplay
         });
     } catch (error) { 
-      if(error instanceof CustomError) {
-        if(error.status === 409){
-          return res.status(409).json({
-            status: 'error',
-            message: error.message,
-            data: null,
-          })
-        }
-      }
-
-      return res.status(500).json({
-        status: 'error',
-        message: 'Internal server error while creating Replay',
-        data: null,
-      })
+      next(error);
     }
 };
 
@@ -58,7 +44,7 @@ export const softDeleteReplay = async (
       return res.status(400).json({ status: 'error', message: 'Invalid replay ID' });
     }
 
-    const deletedReplay = await ReplayService.softDeleteReplayByCode(replayCode);
+    const deletedReplay = await replayService.softDeleteReplayByCode(replayCode);
     if(!deletedReplay) {
       return res.status(404).json({
         status: 'error',
