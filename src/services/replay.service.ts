@@ -1,16 +1,35 @@
 import { eq, and, like, desc } from 'drizzle-orm';
-import { db } from '../database/connectionPool.js';
+import { db, TransactionType  } from '../database/connectionPool.js';
 import { replay } from '../database/schema.js';
 import { ReplayFileRequest } from '../types/replay.js';
 import { get } from 'https'; // http 또는 https 모듈
 import { createHash } from 'crypto';
 import { BusinessError, SystemError } from '../types/error.js';
 
+import { guildService } from '../services/guild.service.js';
+
 /**
  * @desc 리플레이 파일 서비스
  */
 export class ReplayService {
   constructor() {}
+
+  /**
+   * @desc 리플 업로드로 시작되는 모든 저장 로직 / 하나라도 실패시 전체 rollback
+   */
+  public async allSave (fileData: ReplayFileRequest) {
+    
+    try {
+      const result = await db.transaction(async (tx: TransactionType) => {
+        const guildResult = await guildService.upsertGuild(fileData.guild, tx);
+        const rawData = await this.replaySave(fileData, tx);
+        return "";
+      });
+    } catch (err) {
+      throw err;
+    }
+
+  }
 
   /**
    * @desc 주어진 데이터를 사용하여 SHA-256 해시를 생성
@@ -114,8 +133,9 @@ export class ReplayService {
    * @desc 리플레이 저장 및 처리
    * @param {ReplayFileRequest} fileData
    */
-  public async save(fileData: ReplayFileRequest) {
-    const { fileName, fileUrl, gameType, createUser, guildId } = fileData;
+  public async replaySave(fileData: ReplayFileRequest, tx: TransactionType) {
+    const { fileName, fileUrl, gameType, createUser } = fileData;
+    const guildId = fileData.guild.id;
 
     // 1. 리플레이 파일 데이터 가져오기
     const fileBuffer = await this.getInputStreamDiscordFile(fileUrl);
@@ -134,7 +154,7 @@ export class ReplayService {
 
     const replayCode = await this.generateReplayCode(fileName);
 
-    const newReplay = await db
+    const newReplay = await tx
       .insert(replay)
       .values({
         replayCode,

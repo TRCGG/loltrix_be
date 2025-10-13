@@ -28,10 +28,22 @@ const createReplaySchema = z.object({
       .string()
       .min(1, '생성 유저는 필수 입력 사항입니다.')
       .max(255, '생성 유저는 255자 이하여야 합니다.'),
-    guildId: z
-      .string()
-      .min(1, '길드 ID는 필수 입력 사항입니다.')
-      .max(128, '길드 ID는 128자 이하여야 합니다.'),
+    guild: z
+      .object(
+        {
+          id: z.string()
+          .min(1, 'guild Id is required')
+          .max(128, 'guild Id must be less than 128 characters'),
+          name: z.string()
+          .min(1, 'guild name is required')
+          .max(255, 'guild name must be less than 128 characters'),
+          languageCode: z.string()
+          .max(10, 'languageCode must be less than 10 characters')
+          .default('ko')
+        }
+      )
+      // .min(1, '길드 ID는 필수 입력 사항입니다.')
+      // .max(128, '길드 ID는 128자 이하여야 합니다.'),
   }),
 });
 

@@ -1,11 +1,11 @@
-import { Replay } from '../database/schema.js';
+import { Guild, Replay } from '../database/schema.js';
 
 export interface ReplayFileRequest {
   fileName: string;
   fileUrl: string;
   gameType?: string;
   createUser: string;
-  guildId: string;
+  guild: Guild;
 }
 
 export interface ReplayResponse {

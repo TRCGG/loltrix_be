@@ -18,11 +18,11 @@ export const createReplay = async (
     const fileData = req.body; 
 
     try {
-        const savedReplay = await replayService.save(fileData);
+        const savedReplay = await replayService.allSave(fileData);
         return res.status(201).json({
             status: 'success',
             message: 'Replay created successfully',
-            data: savedReplay
+            // data: savedReplay
         });
     } catch (error) { 
       next(error);
