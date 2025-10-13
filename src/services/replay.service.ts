@@ -66,22 +66,18 @@ export class ReplayService {
     const prefix = `RPY-${YYMMDD}-${fileName}-`;
 
     const lastReplay = await db
-      .select({ replayCode: replay.replayCode })
+      .select({ id: replay.id })
       .from(replay)
-      .where(like(replay.replayCode, `${prefix}%`))
-      .orderBy(desc(replay.replayCode))
+      .orderBy(desc(replay.id))
       .limit(1);
 
     let nextSequence = 1;
 
     if (lastReplay.length > 0) {
-      const lastCode = lastReplay[0].replayCode;
-      const parts = lastCode.split('-');
-      const lastSequenceStr = parts[parts.length - 1];
-      const lastSequence = parseInt(lastSequenceStr, 10);
+      const lastCode = lastReplay[0].id;
 
-      if (!isNaN(lastSequence)) {
-        nextSequence = lastSequence + 1;
+      if (!isNaN(lastCode)) {
+        nextSequence = lastCode + 1;
       }
     }
 
