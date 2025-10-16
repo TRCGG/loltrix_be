@@ -1,12 +1,11 @@
 import { eq, and, like, desc } from 'drizzle-orm';
 import { db, TransactionType  } from '../database/connectionPool.js';
 import { replay } from '../database/schema.js';
-import { ReplayFileRequest } from '../types/replay.js';
+import { ReplayFileRequest, GetRawData } from '../types/replay.js';
 import { get } from 'https'; // http 또는 https 모듈
 import { createHash } from 'crypto';
 import { BusinessError, SystemError } from '../types/error.js';
 
-import { guildService } from '../services/guild.service.js';
 
 // 시즌 
 const season = process.env.LOL_SEASON || 'error_season';
@@ -16,23 +15,6 @@ const season = process.env.LOL_SEASON || 'error_season';
  */
 export class ReplayService {
   constructor() {}
-
-  /**
-   * @desc 리플 업로드로 시작되는 모든 저장 로직 / 하나라도 실패시 전체 rollback
-   */
-  public async allSave (fileData: ReplayFileRequest) {
-    
-    try {
-      const result = await db.transaction(async (tx: TransactionType) => {
-        const guildResult = await guildService.upsertGuild(fileData.guild, tx);
-        const rawData = await this.replaySave(fileData, tx);
-        return "";
-      });
-    } catch (err) {
-      throw err;
-    }
-
-  }
 
   /**
    * @desc 주어진 데이터를 사용하여 SHA-256 해시를 생성
@@ -133,24 +115,33 @@ export class ReplayService {
   }
 
   /**
-   * @desc 리플레이 저장 및 처리
-   * @param {ReplayFileRequest} fileData
+   * @desc get rawdataes
    */
-  public async replaySave(fileData: ReplayFileRequest, tx: TransactionType) {
-    const { fileName, fileUrl, gameType, createUser } = fileData;
-    const guildId = fileData.guild.id;
+  public async getRawDataes(fileData: ReplayFileRequest): Promise<GetRawData[]> {
+    const { fileUrl } = fileData;
 
     // 1. 리플레이 파일 데이터 가져오기
     const fileBuffer = await this.getInputStreamDiscordFile(fileUrl);
 
     // 2. 파일 파싱
     const rawDataString = await this.parseReplayData(fileBuffer);
-    const rawData = JSON.parse(rawDataString);
+    const rawDataes = JSON.parse(rawDataString);
 
-    // 3. 해시 생성
+    return rawDataes;
+  }
+
+  /**
+   * @desc 리플레이 저장
+   * @param {ReplayFileRequest} fileData
+   */
+  public async replaySave(fileData: ReplayFileRequest, rawData: GetRawData[], tx: TransactionType) {
+    const { fileName, fileUrl, gameType, createUser } = fileData;
+    const guildId = fileData.guild.id;
+
+    const rawDataString = JSON.stringify(rawData);
     const hashData = this.generateHash(rawDataString);
 
-    // 4. 중복된 데이터 확인
+    // 1. 중복된 데이터 확인
     if (await this.checkDuplicateByHash(hashData, guildId)) {
       throw new BusinessError("duplicated replay data", 400, {"isLoggable": false});
     }
