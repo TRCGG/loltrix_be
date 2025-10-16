@@ -64,3 +64,19 @@ export type Replay = typeof replay.$inferSelect;
 
 export type ErrorLog = typeof errorLog.$inferSelect;
 export type InsertErrorLog = typeof errorLog.$inferInsert;
+
+export const riotAccount = pgTable('riot_account', {
+  id: varchar('id', { length: 64 }).primaryKey().notNull(),
+  riotName: varchar('riot_name', { length: 128 }).notNull(),
+  riotNameTag: varchar('riot_name_tag', { length: 128 }).notNull(),
+  isMain: boolean('is_main').notNull().default(true),
+  createDate: timestamp('create_date').notNull().defaultNow(),
+  updateDate: timestamp('update_date')
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type RiotAccount = typeof riotAccount.$inferInsert;
+export type InsertRiotAccount = typeof riotAccount.$inferInsert;
