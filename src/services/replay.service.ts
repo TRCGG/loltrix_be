@@ -8,6 +8,9 @@ import { BusinessError, SystemError } from '../types/error.js';
 
 import { guildService } from '../services/guild.service.js';
 
+// 시즌 
+const season = process.env.LOL_SEASON || 'error_season';
+
 /**
  * @desc 리플레이 파일 서비스
  */
@@ -163,6 +166,7 @@ export class ReplayService {
         rawData,
         hashData,
         gameType: gameType ?? '1',
+        season: season,
         createUser,
         guildId,
       })
