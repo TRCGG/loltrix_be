@@ -22,7 +22,6 @@ export class ReplaySaveFacade {
         const guildResult = await guildService.upsertGuild(fileData.guild, tx);
         const savedReplay = await replayService.replaySave(fileData, rawDatas, tx);
         const riotAccountResult = await riotAccountService.upsertRiotAccount(rawDatas, tx);
-        console.log(riotAccountResult);
 
         return "";
       });
