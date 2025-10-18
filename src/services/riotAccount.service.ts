@@ -32,10 +32,12 @@ export class RiotAccountService {
         .onConflictDoUpdate({
           target: riotAccount.id,
           set: {
-            riotName: riotAccount.riotName,
-            riotNameTag: riotAccount.riotNameTag,
+            riotName: sql`excluded.riot_name`,
+            riotNameTag: sql`excluded.riot_name_tag`,
             updateDate: new Date(),
           },
+          where: sql`${riotAccount.riotName} IS DISTINCT FROM excluded.riot_name 
+             OR ${riotAccount.riotNameTag} IS DISTINCT FROM excluded.riot_name_tag`,
         })
         .returning();
 
