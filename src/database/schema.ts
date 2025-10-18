@@ -78,5 +78,5 @@ export const riotAccount = pgTable('riot_account', {
   isDeleted: boolean('is_deleted').notNull().default(false),
 });
 
-export type RiotAccount = typeof riotAccount.$inferInsert;
+export type RiotAccount = typeof riotAccount.$inferSelect;
 export type InsertRiotAccount = typeof riotAccount.$inferInsert;
