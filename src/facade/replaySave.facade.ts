@@ -16,11 +16,11 @@ export class ReplaySaveFacade {
   public async allSave (fileData: ReplayFileRequest): Promise<Replay> {
     try {
       return await db.transaction(async (tx: TransactionType) => {
-        const rawDatas = await replayService.getRawDataes(fileData);
+        const rawData = await replayService.getRawData(fileData);
         
         await guildService.upsertGuild(fileData.guild, tx);
-        const savedReplay = await replayService.replaySave(fileData, rawDatas, tx);
-        await riotAccountService.upsertRiotAccount(rawDatas, tx);
+        const savedReplay = await replayService.replaySave(fileData, rawData, tx);
+        await riotAccountService.upsertRiotAccount(rawData, tx);
 
         return savedReplay;
       });

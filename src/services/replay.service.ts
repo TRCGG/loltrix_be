@@ -1,11 +1,10 @@
 import { eq, and, like, desc } from 'drizzle-orm';
 import { db, TransactionType  } from '../database/connectionPool.js';
 import { replay } from '../database/schema.js';
-import { ReplayFileRequest, GetRawData } from '../types/replay.js';
+import { ReplayFileRequest } from '../types/replay.js';
 import { get } from 'https'; // http 또는 https 모듈
 import { createHash } from 'crypto';
 import { BusinessError, SystemError } from '../types/error.js';
-
 
 // 시즌 
 const season = process.env.LOL_SEASON || 'error_season';
@@ -119,7 +118,7 @@ export class ReplayService {
   /**
    * @desc get rawdataes
    */
-  public async getRawDataes(fileData: ReplayFileRequest): Promise<GetRawData[]> {
+  public async getRawData(fileData: ReplayFileRequest) {
     const { fileUrl } = fileData;
 
     // 1. 리플레이 파일 데이터 가져오기
@@ -136,7 +135,7 @@ export class ReplayService {
    * @desc 리플레이 저장
    * @param {ReplayFileRequest} fileData
    */
-  public async replaySave(fileData: ReplayFileRequest, rawData: GetRawData[], tx: TransactionType) {
+  public async replaySave(fileData: ReplayFileRequest, rawData: any, tx: TransactionType) {
     const { fileName, fileUrl, gameType, createUser } = fileData;
     const guildId = fileData.guild.id;
 

@@ -1,13 +1,16 @@
-import { eq, and, like, desc, sql } from 'drizzle-orm';
-import { db, TransactionType  } from '../database/connectionPool.js';
+import { z } from 'zod';
+import { eq, and, like, desc, sql, is } from 'drizzle-orm';
+import { db, TransactionType } from '../database/connectionPool.js';
 import { riotAccount, InsertRiotAccount } from '../database/schema.js';
 import { BusinessError, SystemError } from '../types/error.js';
 
-export interface riotAccountData {
-  PUUID: string;
-  RIOT_ID_GAME_NAME: string;
-  RIOT_ID_TAG_LINE: string;
-};
+const RiotAccountDataSchema = z.object({
+  PUUID: z.string().min(1, 'PUUID는 필수 항목입니다.'),
+  RIOT_ID_GAME_NAME: z.string().min(1, 'RIOT_ID_GAME_NAME은 필수 항목입니다.'),
+  RIOT_ID_TAG_LINE: z.string().min(1, 'RIOT_ID_TAG_LINE은 필수 항목입니다.'),
+});
+
+const RiotAccountDataArraySchema = z.array(RiotAccountDataSchema);
 
 /**
  * @desc Riot 계정 서비스
@@ -19,13 +22,13 @@ export class RiotAccountService {
    * @desc 라이엇계정 기존 puuid 가 있으면 update // 없으면 insert
    * 트랜잭션
    */
-  public async upsertRiotAccount(rawDatas: riotAccountData[], tx: TransactionType) {
-    const RiotAccountData = await this.parsedRawData(rawDatas);
-
+  public async upsertRiotAccount(rawData: any[], tx: TransactionType) {
     try {
+      const riotAccountData = this.parsedRawData(rawData);
+
       const result = await tx
         .insert(riotAccount)
-        .values(RiotAccountData)
+        .values(riotAccountData)
         .onConflictDoUpdate({
           target: riotAccount.id,
           set: {
@@ -44,22 +47,17 @@ export class RiotAccountService {
   }
 
   /**
-   * @desc rawdataes 에서 riotaccount 추출
+   * @desc rawData 에서 riotAccount 추출 및 Zod 유효성 검사
    */
-  private async parsedRawData(rawDataes: riotAccountData[]): Promise<InsertRiotAccount[]> {
-    const parsedRiotAccounts: InsertRiotAccount[] = [];
+  private parsedRawData(rawData: any): InsertRiotAccount[] {
+    const validatedData = RiotAccountDataArraySchema.parse(rawData);
 
-    for(const rawData of rawDataes) {
-      const puuid = rawData.PUUID;
-      const riotName = rawData.RIOT_ID_GAME_NAME;
-      const riotNameTag = rawData.RIOT_ID_TAG_LINE;
+    const parsedRiotAccounts: InsertRiotAccount[] = validatedData.map((d) => ({
+      id: d.PUUID,
+      riotName: d.RIOT_ID_GAME_NAME,
+      riotNameTag: d.RIOT_ID_TAG_LINE,
+    }));
 
-      parsedRiotAccounts.push({
-        id: puuid,
-        riotName: riotName,
-        riotNameTag: riotNameTag
-      });
-    }
     return parsedRiotAccounts;
   }
 }
