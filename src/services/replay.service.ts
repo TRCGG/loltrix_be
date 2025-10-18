@@ -55,6 +55,7 @@ export class ReplayService {
           resolve(buffer);
         });
       }).on('error', (err) => {
+        console.error('Error getInputStreaming replay file', err);
         throw new SystemError("replay error while getInputStreaming file");
       });
     });
@@ -110,6 +111,7 @@ export class ReplayService {
 
       return JSON.stringify(statsArray);
     } catch (error) {
+      console.error('Error parsing replay data', error);
       throw new SystemError("replay error while parsing data");
     }
   }

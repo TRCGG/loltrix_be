@@ -1,6 +1,7 @@
 import { eq, and, like, desc, sql } from 'drizzle-orm';
 import { db, TransactionType  } from '../database/connectionPool.js';
 import { riotAccount, InsertRiotAccount } from '../database/schema.js';
+import { BusinessError, SystemError } from '../types/error.js';
 
 export interface riotAccountData {
   PUUID: string;
@@ -21,26 +22,31 @@ export class RiotAccountService {
   public async upsertRiotAccount(rawDatas: riotAccountData[], tx: TransactionType) {
     const RiotAccountData = await this.parsedRawData(rawDatas);
 
-    const result = await tx
-    .insert(riotAccount)
-    .values(RiotAccountData)
-    .onConflictDoUpdate({
-      target: riotAccount.id,
-      set: {
-        riotName: riotAccount.riotName,
-        riotNameTag: riotAccount.riotNameTag,
-        updateDate: new Date(),
-      }
-    })
-    .returning();
+    try {
+      const result = await tx
+        .insert(riotAccount)
+        .values(RiotAccountData)
+        .onConflictDoUpdate({
+          target: riotAccount.id,
+          set: {
+            riotName: riotAccount.riotName,
+            riotNameTag: riotAccount.riotNameTag,
+            updateDate: new Date(),
+          },
+        })
+        .returning();
 
-    return result;
+      return result;
+    } catch (error) {
+      console.error('Error upserting RiotAccount', error);
+      throw new SystemError('RiotAccount error while upserting', 500);
+    }
   }
 
   /**
    * @desc rawdataes 에서 riotaccount 추출
    */
-  public async parsedRawData(rawDataes: riotAccountData[]): Promise<InsertRiotAccount[]> {
+  private async parsedRawData(rawDataes: riotAccountData[]): Promise<InsertRiotAccount[]> {
     const parsedRiotAccounts: InsertRiotAccount[] = [];
 
     for(const rawData of rawDataes) {
