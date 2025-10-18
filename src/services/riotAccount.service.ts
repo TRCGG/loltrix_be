@@ -30,7 +30,7 @@ export class RiotAccountService {
         .insert(riotAccount)
         .values(riotAccountData)
         .onConflictDoUpdate({
-          target: riotAccount.id,
+          target: riotAccount.puuid,
           set: {
             riotName: sql`excluded.riot_name`,
             riotNameTag: sql`excluded.riot_name_tag`,
@@ -55,7 +55,7 @@ export class RiotAccountService {
     const validatedData = RiotAccountDataArraySchema.parse(rawData);
 
     const parsedRiotAccounts: InsertRiotAccount[] = validatedData.map((d) => ({
-      id: d.PUUID,
+      puuid: d.PUUID,
       riotName: d.RIOT_ID_GAME_NAME,
       riotNameTag: d.RIOT_ID_TAG_LINE,
     }));

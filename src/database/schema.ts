@@ -1,4 +1,5 @@
 import { pgTable, text, varchar, jsonb, char, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const guild = pgTable('guild', {
   id: varchar('id', { length: 128 }).primaryKey(),
@@ -66,7 +67,11 @@ export type ErrorLog = typeof errorLog.$inferSelect;
 export type InsertErrorLog = typeof errorLog.$inferInsert;
 
 export const riotAccount = pgTable('riot_account', {
-  id: varchar('id', { length: 64 }).primaryKey().notNull(),
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  puuid: varchar('puuid', { length: 128 }).notNull().unique(),
+  playerCode: varchar('player_code', {length: 64 })
+  .generatedAlwaysAs(sql`'PLR_' || lpad(id::text, 6, '0')`, )
+  .notNull().unique(),
   riotName: varchar('riot_name', { length: 128 }).notNull(),
   riotNameTag: varchar('riot_name_tag', { length: 128 }).notNull(),
   isMain: boolean('is_main').notNull().default(true),
