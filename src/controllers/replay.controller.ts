@@ -23,7 +23,7 @@ export const createReplay = async (
         return res.status(201).json({
             status: 'success',
             message: 'Replay created successfully',
-            // data: savedReplay
+            data: savedReplay
         });
     } catch (error) { 
       next(error);

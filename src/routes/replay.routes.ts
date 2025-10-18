@@ -42,8 +42,6 @@ const createReplaySchema = z.object({
           .default('ko')
         }
       )
-      // .min(1, '길드 ID는 필수 입력 사항입니다.')
-      // .max(128, '길드 ID는 128자 이하여야 합니다.'),
   }),
 });
 
@@ -51,7 +49,7 @@ const deleteReplaySchema = z.object({
   params: z.object({
     replayCode: z
       .string()
-      .min(1, 'Replay code is required') // 리플레이 코드는 필수 입력 사항입니다.
+      .min(1, 'Replay code is required')
       .max(255, 'Replay code must be less than 255 characters'),
   }),
 });
