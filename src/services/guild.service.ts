@@ -32,7 +32,9 @@ export class GuildService {
           set: {
             name: newGuildData.name,
             languageCode: newGuildData.languageCode,
+            updateDate: new Date(),
           },
+          where: sql`${guild.name} IS DISTINCT FROM ${newGuildData.name} `
         })
         .returning();
       return result;
