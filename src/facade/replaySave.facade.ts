@@ -2,6 +2,7 @@ import { db, TransactionType  } from '../database/connectionPool.js';
 import { guildService } from'../services/guild.service.js';
 import { replayService } from '../services/replay.service.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
+import { customMatchService } from '../services/customMatch.service.js';
 import { Replay, ReplayFileRequest } from '../types/replay.js';
 
 /**
@@ -18,9 +19,24 @@ export class ReplaySaveFacade {
       return await db.transaction(async (tx: TransactionType) => {
         const rawData = await replayService.getRawData(fileData);
         
+        // 길드 저장
         await guildService.upsertGuild(fileData.guild, tx);
+        
+        // Replay 저장 (원본 데이터)
         const savedReplay = await replayService.replaySave(fileData, rawData, tx);
+
+        // Riot 계정 저장
         await riotAccountService.upsertRiotAccount(rawData, tx);
+
+        const customMatchData = {
+          id: savedReplay.replayCode,
+          gameType: savedReplay.gameType,
+          guildId: savedReplay.guildId,
+          season: savedReplay.season
+        }
+        
+        // 내전 저장
+        await customMatchService.insertCustomMatch(customMatchData, tx);
 
         return savedReplay;
       });

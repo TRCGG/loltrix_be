@@ -85,3 +85,19 @@ export const riotAccount = pgTable('riot_account', {
 
 export type RiotAccount = typeof riotAccount.$inferSelect;
 export type InsertRiotAccount = typeof riotAccount.$inferInsert;
+
+export const customMatch = pgTable('custom_match', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  gameType: char('game_type', { length: 1 }).notNull().default('1'),
+  guildId: varchar('guild_id', { length: 128 }).notNull(),
+  season: varchar('season', { length: 32 }).notNull(),
+  createDate: timestamp('create_date').notNull().defaultNow(),
+  updateDate: timestamp('update_date')
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type CustomMatch = typeof customMatch.$inferSelect;
+export type InsertCustomMatch = typeof customMatch.$inferInsert;
