@@ -101,3 +101,79 @@ export const customMatch = pgTable('custom_match', {
 
 export type CustomMatch = typeof customMatch.$inferSelect;
 export type InsertCustomMatch = typeof customMatch.$inferInsert;
+
+export const matchParticipant = pgTable('match_participant', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  customMatchId: varchar('custom_match_id', { length: 255 })
+    .notNull()
+    .references(() => customMatch.id),
+  puuid: varchar('puuid', { length: 64 })
+    .notNull()
+    .references(() => riotAccount.puuid),
+  championId: varchar('champion_id', { length: 16 })
+    .notNull()
+    .references(() => champion.id),
+  gameTeam: varchar('game_team', { length: 8 }).notNull(),
+  gameResult: varchar('game_result', { length: 8 }).notNull(),
+  position: varchar('position', { length: 16 }).notNull(),
+  kill: integer('kill').notNull(),
+  death: integer('death').notNull(),
+  assist: integer('assist').notNull(),
+  gold: integer('gold').notNull(),
+  ccing: integer('ccing').notNull(),
+  exp: integer('exp').notNull(),
+  timePlayed: integer('time_played').notNull(),
+  totalDamageChampions: integer('total_damage_champions').notNull(),
+  totalDamageDealtToBuildings: integer('total_damage_dealt_to_buildings').notNull(),
+  totalDamageTaken: integer('total_damage_taken').notNull(),
+  visionScore: integer('vision_score').notNull(),
+  visionBought: integer('vision_bought').notNull(),
+  pentaKills: integer('penta_kills'),
+  level: integer('level').notNull(),
+  item0: integer('item0').notNull(),
+  item1: integer('item1').notNull(),
+  item2: integer('item2').notNull(),
+  item3: integer('item3').notNull(),
+  item4: integer('item4').notNull(),
+  item5: integer('item5').notNull(),
+  item6: integer('item6').notNull(),
+  summonerSpell1: integer('summoner_spell_1'),
+  summonerSpell2: integer('summoner_spell_2'),
+  perk0: integer('perk0'),
+  perk1: integer('perk1'),
+  perk2: integer('perk2'),
+  perk3: integer('perk3'),
+  perk4: integer('perk4'),
+  perk5: integer('perk5'),
+  keyStoneId: integer('key_stone_id').notNull(),
+  perkSubStyle: integer('perk_sub_style').notNull(),
+  minionsKilled: integer('minions_killed'),
+  neutralMinionsKilled: integer('neutral_minions_killed'),
+  neutralMinionsKilledYourJungle: integer('neutral_minions_killed_your_jungle'),
+  neutralMinionsKilledEnemyJungle: integer('neutral_minions_killed_enemy_jungle'),
+  createDate: timestamp('create_date', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type MatchParticipant = typeof matchParticipant.$inferSelect;
+export type InsertMatchParticipant = typeof matchParticipant.$inferInsert;
+
+export const champion = pgTable('champion', {
+  id: varchar('id', { length: 16 }).primaryKey(),
+  champName: varchar('champ_name', { length: 128 }),
+  champNameEng: varchar('champ_name_eng', { length: 128 }),
+  createDate: timestamp('create_date', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});

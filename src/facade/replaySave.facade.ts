@@ -3,6 +3,7 @@ import { guildService } from'../services/guild.service.js';
 import { replayService } from '../services/replay.service.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
 import { customMatchService } from '../services/customMatch.service.js';
+import { matchParticipantService } from '../services/matchParticipant.service.js';
 import { Replay, ReplayFileRequest } from '../types/replay.js';
 
 /**
@@ -37,6 +38,9 @@ export class ReplaySaveFacade {
         
         // 내전 저장
         await customMatchService.insertCustomMatch(customMatchData, tx);
+
+        // 내전 참여자 기록 저장 
+        await matchParticipantService.insertMatchParticipants(rawData, customMatchData.id, tx);
 
         return savedReplay;
       });
