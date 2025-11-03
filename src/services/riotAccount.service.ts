@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, like, desc, sql, is } from 'drizzle-orm';
+import { eq, and, like, desc, sql, is, inArray} from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { riotAccount, InsertRiotAccount } from '../database/schema.js';
 import { BusinessError, SystemError } from '../types/error.js';
@@ -46,6 +46,23 @@ export class RiotAccountService {
       console.error('Error upserting RiotAccount', error);
       throw new SystemError('RiotAccount error while upserting', 500);
     }
+  }
+
+  /**
+   * 
+   * @desc RiotAccount player_code 조회
+   */
+  public async findRiotAccountsByPuuids(rawData: any[]) {
+    const riotAccountDatas = this.parsedRawData(rawData);
+
+    const puuids = riotAccountDatas.map(account => account.puuid);
+
+    const result = await db
+      .select()
+      .from(riotAccount)
+      .where(inArray(riotAccount.puuid, puuids));
+    
+    return result;
   }
 
   /**
