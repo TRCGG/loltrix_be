@@ -4,6 +4,7 @@ import {
   ReplayFileRequest,
 } from '../types/replay.js';
 import { replayService } from '../services/replay.service.js';
+import { replaySaveFacade } from '../facade/replaySave.facade.js';
 
 /**
  * @route POST /api/replays
@@ -18,7 +19,7 @@ export const createReplay = async (
     const fileData = req.body; 
 
     try {
-        const savedReplay = await replayService.save(fileData);
+        const savedReplay = await replaySaveFacade.allSave(fileData);
         return res.status(201).json({
             status: 'success',
             message: 'Replay created successfully',

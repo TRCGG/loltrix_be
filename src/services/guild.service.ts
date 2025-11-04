@@ -1,8 +1,9 @@
 // src/services/guild.service.ts
 import { eq, ilike, desc, sql, and } from 'drizzle-orm';
-import { db } from '../database/connectionPool.js';
+import { db, TransactionType } from '../database/connectionPool.js';
 import { guild, InsertGuild } from '../database/schema.js';
 import { GetGuildsQuery, UpdateGuildRequest } from '../types/guild.js';
+import { BusinessError, SystemError } from '../types/error.js';
 
 /**
  * @desc 길드 데이터의 생성, 조회, 수정, 삭제를 담당하는 서비스 클래스
@@ -16,6 +17,31 @@ export class GuildService {
   public async insertGuild(newGuildData: InsertGuild) {
     const result = await db.insert(guild).values(newGuildData).returning();
     return result[0];
+  }
+
+  /**
+   * @desc 새로운 길드가 있으면 생성, 아니면 update
+   */
+  public async upsertGuild(newGuildData: InsertGuild, tx: TransactionType) {
+    try {
+      const result = await tx
+        .insert(guild)
+        .values(newGuildData)
+        .onConflictDoUpdate({
+          target: guild.id,
+          set: {
+            name: newGuildData.name,
+            languageCode: newGuildData.languageCode,
+            updateDate: new Date(),
+          },
+          where: sql`${guild.name} IS DISTINCT FROM ${newGuildData.name} `
+        })
+        .returning();
+      return result;
+    } catch (error) {
+      console.error('Error upserting Guild',error);
+      throw new SystemError('Guild error while upserting', 500);
+    }
   }
 
   /**

@@ -1,0 +1,67 @@
+import { z } from 'zod';
+import { eq, and, like, desc, sql, is } from 'drizzle-orm';
+import { db, TransactionType } from '../database/connectionPool.js';
+import { riotAccount, InsertRiotAccount } from '../database/schema.js';
+import { BusinessError, SystemError } from '../types/error.js';
+
+const RiotAccountDataSchema = z.object({
+  PUUID: z.string().min(1, 'PUUID는 필수 항목입니다.'),
+  RIOT_ID_GAME_NAME: z.string().min(1, 'RIOT_ID_GAME_NAME은 필수 항목입니다.'),
+  RIOT_ID_TAG_LINE: z.string().min(1, 'RIOT_ID_TAG_LINE은 필수 항목입니다.'),
+});
+
+const RiotAccountDataArraySchema = z.array(RiotAccountDataSchema);
+
+/**
+ * @desc Riot 계정 서비스
+ */
+export class RiotAccountService {
+  constructor() {}
+
+  /**
+   * @desc 라이엇계정 기존 puuid 가 있으면 update // 없으면 insert
+   * 트랜잭션
+   */
+  public async upsertRiotAccount(rawData: any[], tx: TransactionType) {
+    try {
+      const riotAccountData = this.parsedRawData(rawData);
+
+      const result = await tx
+        .insert(riotAccount)
+        .values(riotAccountData)
+        .onConflictDoUpdate({
+          target: riotAccount.puuid,
+          set: {
+            riotName: sql`excluded.riot_name`,
+            riotNameTag: sql`excluded.riot_name_tag`,
+            updateDate: new Date(),
+          },
+          where: sql`${riotAccount.riotName} IS DISTINCT FROM excluded.riot_name 
+             OR ${riotAccount.riotNameTag} IS DISTINCT FROM excluded.riot_name_tag`,
+        })
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error('Error upserting RiotAccount', error);
+      throw new SystemError('RiotAccount error while upserting', 500);
+    }
+  }
+
+  /**
+   * @desc rawData 에서 riotAccount 추출 및 Zod 유효성 검사
+   */
+  private parsedRawData(rawData: any): InsertRiotAccount[] {
+    const validatedData = RiotAccountDataArraySchema.parse(rawData);
+
+    const parsedRiotAccounts: InsertRiotAccount[] = validatedData.map((d) => ({
+      puuid: d.PUUID,
+      riotName: d.RIOT_ID_GAME_NAME,
+      riotNameTag: d.RIOT_ID_TAG_LINE,
+    }));
+
+    return parsedRiotAccounts;
+  }
+}
+
+export const riotAccountService = new RiotAccountService();

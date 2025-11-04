@@ -1,4 +1,5 @@
 import { pgTable, text, varchar, jsonb, char, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const guild = pgTable('guild', {
   id: varchar('id', { length: 128 }).primaryKey(),
@@ -33,6 +34,7 @@ export const replay = pgTable('replay', {
   rawData: jsonb('raw_data').notNull(),
   hashData: varchar('hash_data', { length: 128 }).notNull(),
   gameType: char('game_type', { length: 1 }).notNull().default('1'),
+  season: varchar('season', { length: 32 }).notNull(),
   createUser: varchar('create_user', { length: 255 }).notNull(),
   guildId: varchar('guild_id', { length: 128 }).notNull().references(() => guild.id),
   createDate: timestamp('create_date').notNull().defaultNow(),
@@ -63,3 +65,23 @@ export type Replay = typeof replay.$inferSelect;
 
 export type ErrorLog = typeof errorLog.$inferSelect;
 export type InsertErrorLog = typeof errorLog.$inferInsert;
+
+export const riotAccount = pgTable('riot_account', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  puuid: varchar('puuid', { length: 128 }).notNull().unique(),
+  playerCode: varchar('player_code', {length: 64 })
+  .generatedAlwaysAs(sql`'PLR_' || lpad(id::text, 6, '0')`, )
+  .notNull().unique(),
+  riotName: varchar('riot_name', { length: 128 }).notNull(),
+  riotNameTag: varchar('riot_name_tag', { length: 128 }).notNull(),
+  isMain: boolean('is_main').notNull().default(true),
+  createDate: timestamp('create_date').notNull().defaultNow(),
+  updateDate: timestamp('update_date')
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type RiotAccount = typeof riotAccount.$inferSelect;
+export type InsertRiotAccount = typeof riotAccount.$inferInsert;

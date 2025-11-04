@@ -1,0 +1,34 @@
+import { db, TransactionType  } from '../database/connectionPool.js';
+import { guildService } from'../services/guild.service.js';
+import { replayService } from '../services/replay.service.js';
+import { riotAccountService } from '../services/riotAccount.service.js';
+import { Replay, ReplayFileRequest } from '../types/replay.js';
+
+/**
+ * @desc 여러 저장 Service 로직 관리
+ */
+export class ReplaySaveFacade {
+
+  /**
+   * 리플레이 업로드 시작으로 replay, guild, riot_account, custom_match, match_participants, 
+   * guild_member 저장 로직 / 하나라도 실패시 전체 rollback
+   */
+  public async allSave (fileData: ReplayFileRequest): Promise<Replay> {
+    try {
+      return await db.transaction(async (tx: TransactionType) => {
+        const rawData = await replayService.getRawData(fileData);
+        
+        await guildService.upsertGuild(fileData.guild, tx);
+        const savedReplay = await replayService.replaySave(fileData, rawData, tx);
+        await riotAccountService.upsertRiotAccount(rawData, tx);
+
+        return savedReplay;
+      });
+    } catch (err) {
+      throw err;
+    }
+
+  }
+}
+
+export const replaySaveFacade = new ReplaySaveFacade();

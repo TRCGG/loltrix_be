@@ -1,10 +1,13 @@
 import { eq, and, like, desc } from 'drizzle-orm';
-import { db } from '../database/connectionPool.js';
+import { db, TransactionType  } from '../database/connectionPool.js';
 import { replay } from '../database/schema.js';
 import { ReplayFileRequest } from '../types/replay.js';
 import { get } from 'https'; // http 또는 https 모듈
 import { createHash } from 'crypto';
 import { BusinessError, SystemError } from '../types/error.js';
+
+// 시즌 
+const season = process.env.LOL_SEASON || 'error_season';
 
 /**
  * @desc 리플레이 파일 서비스
@@ -51,6 +54,7 @@ export class ReplayService {
           resolve(buffer);
         });
       }).on('error', (err) => {
+        console.error('Error getInputStreaming replay file', err);
         throw new SystemError("replay error while getInputStreaming file");
       });
     });
@@ -66,22 +70,18 @@ export class ReplayService {
     const prefix = `RPY-${YYMMDD}-${fileName}-`;
 
     const lastReplay = await db
-      .select({ replayCode: replay.replayCode })
+      .select({ id: replay.id })
       .from(replay)
-      .where(like(replay.replayCode, `${prefix}%`))
-      .orderBy(desc(replay.replayCode))
+      .orderBy(desc(replay.id))
       .limit(1);
 
     let nextSequence = 1;
 
     if (lastReplay.length > 0) {
-      const lastCode = lastReplay[0].replayCode;
-      const parts = lastCode.split('-');
-      const lastSequenceStr = parts[parts.length - 1];
-      const lastSequence = parseInt(lastSequenceStr, 10);
+      const lastCode = lastReplay[0].id;
 
-      if (!isNaN(lastSequence)) {
-        nextSequence = lastSequence + 1;
+      if (!isNaN(lastCode)) {
+        nextSequence = lastCode + 1;
       }
     }
 
@@ -110,35 +110,46 @@ export class ReplayService {
 
       return JSON.stringify(statsArray);
     } catch (error) {
+      console.error('Error parsing replay data', error);
       throw new SystemError("replay error while parsing data");
     }
   }
 
   /**
-   * @desc 리플레이 저장 및 처리
-   * @param {ReplayFileRequest} fileData
+   * @desc get rawdataes
    */
-  public async save(fileData: ReplayFileRequest) {
-    const { fileName, fileUrl, gameType, createUser, guildId } = fileData;
+  public async getRawData(fileData: ReplayFileRequest) {
+    const { fileUrl } = fileData;
 
     // 1. 리플레이 파일 데이터 가져오기
     const fileBuffer = await this.getInputStreamDiscordFile(fileUrl);
 
     // 2. 파일 파싱
     const rawDataString = await this.parseReplayData(fileBuffer);
-    const rawData = JSON.parse(rawDataString);
+    const rawDataes = JSON.parse(rawDataString);
 
-    // 3. 해시 생성
+    return rawDataes;
+  }
+
+  /**
+   * @desc 리플레이 저장
+   * @param {ReplayFileRequest} fileData
+   */
+  public async replaySave(fileData: ReplayFileRequest, rawData: any, tx: TransactionType) {
+    const { fileName, fileUrl, gameType, createUser } = fileData;
+    const guildId = fileData.guild.id;
+
+    const rawDataString = JSON.stringify(rawData);
     const hashData = this.generateHash(rawDataString);
 
-    // 4. 중복된 데이터 확인
+    // 1. 중복된 데이터 확인
     if (await this.checkDuplicateByHash(hashData, guildId)) {
       throw new BusinessError("duplicated replay data", 400, {"isLoggable": false});
     }
 
     const replayCode = await this.generateReplayCode(fileName);
 
-    const newReplay = await db
+    const newReplay = await tx
       .insert(replay)
       .values({
         replayCode,
@@ -147,6 +158,7 @@ export class ReplayService {
         rawData,
         hashData,
         gameType: gameType ?? '1',
+        season: season,
         createUser,
         guildId,
       })
