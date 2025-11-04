@@ -74,7 +74,6 @@ export const riotAccount = pgTable('riot_account', {
   .notNull().unique(),
   riotName: varchar('riot_name', { length: 128 }).notNull(),
   riotNameTag: varchar('riot_name_tag', { length: 128 }).notNull(),
-  isMain: boolean('is_main').notNull().default(true),
   createDate: timestamp('create_date').notNull().defaultNow(),
   updateDate: timestamp('update_date')
     .defaultNow()
