@@ -35,8 +35,8 @@ export class GuildMemberService {
         .returning();
       return insertedMembers;
     } catch (error) {
-      console.error('Error upserting guild members', error);
-      throw new SystemError('GuildMember error while upserting', 500);
+      console.error('Error inserting guild members', error);
+      throw new SystemError('GuildMember error while inserting', 500);
     }
   }
 }
