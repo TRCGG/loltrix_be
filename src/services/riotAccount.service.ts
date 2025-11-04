@@ -51,18 +51,26 @@ export class RiotAccountService {
   /**
    * 
    * @desc RiotAccount player_code 조회
+   * rawData puuid로 player_code 조회
+   * 트랜잭션
    */
-  public async findRiotAccountsByPuuids(rawData: any[]) {
+  public async findRiotAccountsByPuuids(rawData: any[], tx: TransactionType) {
     const riotAccountDatas = this.parsedRawData(rawData);
 
     const puuids = riotAccountDatas.map(account => account.puuid);
 
-    const result = await db
-      .select()
-      .from(riotAccount)
-      .where(inArray(riotAccount.puuid, puuids));
-    
-    return result;
+    try {
+      const result = await tx
+        .select()
+        .from(riotAccount)
+        .where(inArray(riotAccount.puuid, puuids));
+      
+      return result;
+    } catch (error) {
+      console.error("error while findRiotAccountsByPuuids");
+      throw new SystemError("RiotAccount error while findRiotAccountsByPuuids", 500);
+    }
+
   }
 
   /**

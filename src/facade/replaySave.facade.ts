@@ -31,7 +31,7 @@ export class ReplaySaveFacade {
         await riotAccountService.upsertRiotAccount(rawData, tx);
 
         // puuid로 player_code 조회
-        const riotAccounts = await riotAccountService.findRiotAccountsByPuuids(rawData);
+        const riotAccounts = await riotAccountService.findRiotAccountsByPuuids(rawData, tx);
 
         const customMatchData = {
           id: savedReplay.replayCode,
