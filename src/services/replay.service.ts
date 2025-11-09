@@ -64,7 +64,11 @@ export class ReplayService {
    * @desc replay_code 생성 (RPY-YYMMDD-filename-id) 형식
    */
   private async generateReplayCode(fileName: string): Promise<string> {
-    const datePart = new Date().toISOString().split('T')[0];
+    const seoulDateStr = new Date().toLocaleString('sv-SE', {
+      timeZone: 'Asia/Seoul',
+    });
+
+    const datePart = seoulDateStr.split(' ')[0];
     const YYMMDD = datePart.substring(2).replace(/-/g, '');
 
     const prefix = `RPY-${YYMMDD}-${fileName}-`;
