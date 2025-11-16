@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, jsonb, char, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, varchar, jsonb, char, timestamp, boolean, integer, uuid } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const guild = pgTable('guild', {
@@ -85,6 +85,61 @@ export const riotAccount = pgTable('riot_account', {
 export type RiotAccount = typeof riotAccount.$inferSelect;
 export type InsertRiotAccount = typeof riotAccount.$inferInsert;
 
+/**
+ * Discord 회원 기본 정보
+ */
+export const discordMember = pgTable('discord_member', {
+  id: text('id').primaryKey(), // discord_id
+  displayName: text('display_name'),
+  avatarUrl: text('avatar_url'),
+  createDate: timestamp('create_date', { withTimezone: true }).defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true }).defaultNow(),
+  deleteYn: char('delete_yn', { length: 1 }).default('N'),
+});
+
+export type DiscordMember = typeof discordMember.$inferSelect;
+export type InsertDiscordMember = typeof discordMember.$inferInsert;
+
+/**
+ * Discord OAuth 토큰 정보
+ * discord_member 테이블의 id를 참조합니다.
+ */
+export const discordToken = pgTable('discord_token', {
+  id: text('id')
+    .primaryKey()
+    .references(() => discordMember.id),
+  accessToken: text('access_token').notNull(),
+  acExpiresDate: timestamp('ac_expires_date', { withTimezone: true }).notNull(), 
+  refreshToken: text('refresh_token').notNull(),
+  reExpiresDate: timestamp('re_expires_date', { withTimezone: true }).notNull(), 
+  scope: text('scope').notNull(), 
+  tokenType: text('token_type').notNull(), 
+  rotatedDate: timestamp('rotated_date', { withTimezone: true }), 
+  revokedDate: timestamp('revoked_date', { withTimezone: true }), 
+  createDate: timestamp('create_date', { withTimezone: true }).defaultNow(),
+});
+
+export type DiscordToken = typeof discordToken.$inferSelect;
+export type InsertDiscordToken = typeof discordToken.$inferInsert;
+
+/**
+ * 인증 세션 정보
+ * discord_member 테이블의 id를 참조합니다.
+ */
+export const authSession = pgTable('auth_session', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  discordMemberId: text('discord_member_id').notNull(),
+  sessionUid: uuid('session_uid').defaultRandom().notNull(),
+  userAgent: text('user_agent'),
+  ipAddr: text('ip_addr'),
+  deviceName: text('device_name'),
+  isActive: boolean('is_active').default(true),
+  createDate: timestamp('create_date', { withTimezone: true }).defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true }).defaultNow(),
+});
+
+export type AuthSession = typeof authSession.$inferSelect;
+export type InsertAuthSession = typeof authSession.$inferInsert;
 export const customMatch = pgTable('custom_match', {
   id: varchar('id', { length: 255 }).primaryKey(),
   gameType: char('game_type', { length: 1 }).notNull().default('1'),

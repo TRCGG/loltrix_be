@@ -58,7 +58,25 @@ app.use(
 );
 app.use(helmet()); // Set security-related HTTP headers
 app.use(compression()); // Compress all routes
-app.use(cors()); // Enable CORS
+// Enable CORS
+app.use(cors(
+  {
+    origin: [
+      'https://gmok.kr/',
+      'https://dev.gmok.kr/',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Origin',
+      'X-Requested-With',
+      'Accept',
+      'discord-bot-header'
+    ]
+  }
+)); 
 
 // API routes
 app.use('/api', decodeGuildIdMiddleware, apiRoutes);
