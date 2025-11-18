@@ -236,9 +236,9 @@ export const guildMember = pgTable('guild_member', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   status: char('status', { length: 1}).notNull().default('1'), // 1 가입 2 탈퇴
   account: varchar('account', {length: 64 }).notNull(), // RiotAccount playerCode
-  main_account: varchar('main_account', { length: 64 }),
-  is_main: boolean('is_main').notNull().default(true),
-  guild_id: varchar('guild_id', { length: 128 }).notNull(),
+  mainAccount: varchar('main_account', { length: 64 }),
+  isMain: boolean('is_main').notNull().default(true),
+  guildId: varchar('guild_id', { length: 128 }).notNull(),
   createDate: timestamp('create_date', { withTimezone: true })
     .notNull()
     .defaultNow(),

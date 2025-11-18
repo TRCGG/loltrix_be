@@ -21,9 +21,9 @@ export class GuildMemberService {
     tx: TransactionType,
   ) {
     const membersToInsert: InsertGuildMember[] = riotAccounts.map((acc) => ({
-      guild_id: guildId,
+      guildId: guildId,
       account: acc.playerCode,
-      is_main: true,
+      isMain: true,
       status: '1',
     }));
 
