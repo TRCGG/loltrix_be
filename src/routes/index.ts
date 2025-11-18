@@ -5,6 +5,7 @@ import guildRouter from './guild.routes.js';
 import testRouter from './test.routes.js';
 import replayRouter from './replay.routes.js';
 import authRouter from './discordAuth.routes.js';
+import guildMemberRoutes from './guildMember.routes.js';
 
 const router: Router = Router();
 
@@ -22,6 +23,9 @@ router.use('/replays', replayRouter);
 
 // discord auth routes 
 router.use('/auth', authRouter);
+
+// Guild Meber routes
+router.use('/guildMember', guildMemberRoutes);
 
 // Test routes for error logging (개발 환경에서만)
 if (process.env.NODE_ENV === 'development') {
