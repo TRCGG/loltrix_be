@@ -62,8 +62,8 @@ app.use(compression()); // Compress all routes
 app.use(cors(
   {
     origin: [
-      'https://gmok.kr/',
-      'https://dev.gmok.kr/',
+      'https://gmok.kr',
+      'https://dev.gmok.kr',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
