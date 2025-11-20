@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import {
   searchGuildMembers, 
+  linkSubAccount,
 } from '../controllers/guildMember.controller.js'; // 경로 수정 필요
 
 const router: Router = Router();
@@ -34,6 +35,16 @@ const searchGuildMembersSchema = z.object({
   }),
 });
 
+const linkSubAccountSchema = z.object({
+  body: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128),
+    subRiotName: z.string().min(1, 'Sub Riot Name is required').max(128),
+    subRiotTag: z.string().min(1, 'Sub Riot Tag is required').max(128),
+    mainRiotName: z.string().min(1, 'Main Riot Name is required').max(128),
+    mainRiotTag: z.string().min(1, 'Main Riot Tag is required').max(128),
+  }),
+});
+
 // --- Define Routes ---
 
 /**
@@ -42,5 +53,16 @@ const searchGuildMembersSchema = z.object({
  * @access Public
  */
 router.get('/:guildId/:riotName', validateRequest(searchGuildMembersSchema), searchGuildMembers);
+
+// 2. 부계정 연결 (POST)
+/**
+ * @route POST /api/guildMember/sub-account
+ * @desc 부계정을 본계정에 연결하고 DB 정보 업데이트 (트랜잭션 포함)
+ */
+router.post(
+  '/sub-account', 
+  validateRequest(linkSubAccountSchema),
+  linkSubAccount
+);
 
 export default router;

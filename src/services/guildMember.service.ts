@@ -1,8 +1,12 @@
 import { eq, ilike, desc, sql, and } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
-import { guildMember, InsertGuildMember, riotAccount, RiotAccount } from '../database/schema.js';
-import { GetGuildMemberQuery } from '../types/guildMember.js';
+import { guildMember, InsertGuildMember, matchParticipant, riotAccount, RiotAccount } from '../database/schema.js';
+import { 
+  GetGuildMemberQuery,
+  LinkSubAccountRequest,
+ } from '../types/guildMember.js';
 import { BusinessError, SystemError } from '../types/error.js';
+import { riotAccountService } from '../services/riotAccount.service.js';
 
 /**
  * @desc 길드 멤버 서비스 클래스
@@ -113,6 +117,73 @@ export class GuildMemberService {
 
     const similarResult = await this.findSimilarGuildMember(guildId, params);
     return similarResult;
+  }
+
+  /**
+   *
+   * @desc 부계정 본계정 연결 (!부캐저장)
+   * 1. 부계정 조회, 본계정 조회
+   * 2. 부계정 is_main, main_account 업데이트
+   * 3. 부계정 경기 기록 player_code 본계정으로 변경
+   */
+  public async linkSubAccount({
+    guildId,
+    subRiotName,
+    subRiotTag,
+    mainRiotName,
+    mainRiotTag,
+  }: LinkSubAccountRequest) {
+    return await db.transaction(async (tx) => {
+      // 1. 본계정 및 부계정 RiotAccount 존재 확인 (DB에서 playerCode, puuid 추출)
+      const [priRiot, secRiot] = await Promise.all([
+        // 본계정 조회
+        riotAccountService.findAccountByRiotId(
+          { riotName: mainRiotName, riotNameTag: mainRiotTag },
+          tx,
+        ),
+        // 부계정 조회
+        riotAccountService.findAccountByRiotId(
+          { riotName: subRiotName, riotNameTag: subRiotTag },
+          tx,
+        ),
+      ]);
+
+      if (!priRiot || !secRiot) {
+        throw new BusinessError('Primary or Secondary Riot Account not found in DB.', 404);
+      }
+
+      // 2. 부계정 GuildMember 엔티티 조회 (업데이트 대상)
+      const secMember = await tx.query.guildMember.findFirst({
+        where: and(
+          eq(guildMember.guildId, guildId),
+          eq(guildMember.account, secRiot.playerCode), // 부계정의 playerCode 사용
+        ),
+      });
+
+      if (!secMember) {
+        throw new BusinessError('Secondary account is not registered as a member in this guild.', 403);
+      }
+
+      // 3. GuildMember 테이블 업데이트
+      const result = await tx
+        .update(guildMember)
+        .set({
+          isMain: false,
+          mainAccount: priRiot.playerCode,
+        })
+        .where(eq(guildMember.id, secMember.id))
+        .returning();
+
+      // 4. MatchParticipant 테이블 업데이트 (PUUID 변경)
+      await tx
+        .update(matchParticipant)
+        .set({
+          puuid: priRiot.puuid,
+        })
+        .where(eq(matchParticipant.puuid, secRiot.puuid));
+
+      return result[0];
+    });
   }
 }
 

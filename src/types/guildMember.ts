@@ -14,5 +14,19 @@ export type GuildMemberJoinRiotAccount = {
 export interface GuildMemberResponse {
   status: 'success' | 'error',
   message: string;
+  data?: GuildMember | GuildMember[] | null
+}
+
+export interface GuildMemberWithRiotAccountResponse {
+  status: 'success' | 'error',
+  message: string;
   data?: GuildMemberJoinRiotAccount | GuildMemberJoinRiotAccount[] | null
+}
+
+export interface LinkSubAccountRequest {
+  guildId: string;
+  subRiotName: string;
+  subRiotTag: string;
+  mainRiotName: string;
+  mainRiotTag: string; 
 }

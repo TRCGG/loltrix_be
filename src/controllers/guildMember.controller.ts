@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import {
   GuildMemberResponse, 
+  GuildMemberWithRiotAccountResponse, 
+  LinkSubAccountRequest,
 } from '../types/guildMember.js'; // 타입 경로 수정 필요
 import { guildMemberService } from '../services/guildMember.service.js';
 
@@ -12,11 +14,11 @@ import { guildMemberService } from '../services/guildMember.service.js';
 export const searchGuildMembers = async (
   req: Request<
     { guildId: string, riotName: string },
-    GuildMemberResponse,   
+    GuildMemberWithRiotAccountResponse,   
     Record<string, never>, 
     { riotNameTag?: string, limit?: number}    
   >,
-  res: Response<GuildMemberResponse>,
+  res: Response<GuildMemberWithRiotAccountResponse>,
 ) => {
   try {
     const { guildId, riotName } = req.params;
@@ -46,6 +48,47 @@ export const searchGuildMembers = async (
     res.status(500).json({
       status: 'error',
       message: 'Internal server error while searching guild members',
+      data: null,
+    });
+  }
+};
+
+/**
+ * @desc 부계정을 본계정에 연결하고 DB 정보 업데이트 
+ * @route POST /api/guildMember/sub-account
+ * @access Public
+ */
+export const linkSubAccount = async (
+  req: Request<
+    Record<string, never>, 
+    GuildMemberResponse, 
+    LinkSubAccountRequest,
+    Record<string, never>
+  >,
+  res: Response<GuildMemberResponse>,
+) => {
+  try {
+    const { guildId, subRiotName, subRiotTag, mainRiotName, mainRiotTag } = req.body;
+
+    const resultGuildMember = await guildMemberService.linkSubAccount({
+      guildId,
+      subRiotName,
+      subRiotTag,
+      mainRiotName,
+      mainRiotTag,
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Sub-account linked successfully to primary account.',
+      data: resultGuildMember,
+    });
+
+  } catch (error) {
+    console.error('Error linking sub-account:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while linking sub-account',
       data: null,
     });
   }
