@@ -5,6 +5,7 @@ import {
   searchGuildMembers, 
   linkSubAccount,
   getSubAccounts,
+  removeSubAccount,
 } from '../controllers/guildMember.controller.js'; // 경로 수정 필요
 
 const router: Router = Router();
@@ -55,6 +56,14 @@ const getSubAccountsSchema = z.object({
   }),
 });
 
+const removeSubAccountSchema = z.object({
+  body: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128),
+    riotName: z.string().min(1, 'Riot Name is required').max(128),
+    riotNameTag: z.string().min(1, 'Riot Tag is required').max(128),
+  }),
+});
+
 // --- Define Routes ---
 
 /**
@@ -87,5 +96,14 @@ router.get('/:guildId/:riotName',
   searchGuildMembers
 );
 
+/**
+ * @route DELETE /api/guildMember/sub-account
+ * @desc 부계정 연결 해제 (Hard Delete)
+ */
+router.delete(
+  '/sub-account',
+  validateRequest(removeSubAccountSchema),
+  removeSubAccount
+);
 
 export default router;

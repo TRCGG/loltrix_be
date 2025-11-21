@@ -132,3 +132,49 @@ export const getSubAccounts = async (
     });
   }
 };
+
+/**
+ * @desc 부계정 연결 해제 (Hard Delete)
+ * @route DELETE /api/guildMember/sub-account
+ * @access Public
+ */
+export const removeSubAccount = async (
+  req: Request<
+    Record<string, never>,
+    GuildMemberResponse,
+    { guildId: string; riotName: string; riotNameTag: string }
+  >,
+  res: Response<GuildMemberResponse>,
+) => {
+  try {
+    const { guildId, riotName, riotNameTag } = req.body;
+
+    const deleteSubAccount = await guildMemberService.deleteSubAccountByRiotId(
+      guildId,
+      riotName,
+      riotNameTag
+    );
+
+    if(!deleteSubAccount) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Sub-account not found',
+        data: null,
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Sub-account removed successfully.',
+      data: deleteSubAccount,
+    });
+
+  } catch (error) {
+    console.error('Error removing sub-account:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while removing sub-account',
+      data: null,
+    });
+  }
+};

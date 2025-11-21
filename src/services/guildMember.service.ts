@@ -244,6 +244,33 @@ export class GuildMemberService {
         ),
       );
   }
+
+  /**
+   * @desc 닉네임/태그로 부계정을 찾아 삭제 
+   */
+  public async deleteSubAccountByRiotId(
+    guildId: string, 
+    riotName: string, 
+    riotNameTag: string
+  ) {
+    const targetAccountSubQuery = db
+      .select({ playerCode: riotAccount.playerCode })
+      .from(riotAccount)
+      .where(and(
+        eq(riotAccount.riotName, riotName),
+        eq(riotAccount.riotNameTag, riotNameTag)
+      ));
+
+    const result = await db
+      .delete(guildMember)
+      .where(and(
+        eq(guildMember.guildId, guildId),
+        eq(guildMember.isMain, false),
+        inArray(guildMember.account, targetAccountSubQuery)
+      ))
+      .returning();
+    return result[0];
+  }
 }
 
 export const guildMemberService = new GuildMemberService();
