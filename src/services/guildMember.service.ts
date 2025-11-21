@@ -1,4 +1,4 @@
-import { eq, ilike, desc, sql, and } from 'drizzle-orm';
+import { eq, ilike, desc, sql, and, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { guildMember, InsertGuildMember, matchParticipant, riotAccount, RiotAccount } from '../database/schema.js';
@@ -195,7 +195,7 @@ export class GuildMemberService {
   /**
    * @desc 특정 길드의 모든 부계정 목록 조회
    */
-  public async getSubAccountsByGuildId(guildId: string) {
+  public async findSubAccountsByGuildId(guildId: string) {
     const result = await db
       .select({
         guildId: guildMember.guildId,
@@ -219,6 +219,30 @@ export class GuildMemberService {
       )
       .orderBy(desc(guildMember.id));
     return result;
+  }
+
+  /**
+   * @desc 참여자 목록 중 부캐인 경우 본캐 정보 조회
+   */
+  public async findMainAccountsForSubMembers(
+    playerCodes: string[],
+    guildId: string,
+    tx: TransactionType,
+  ) {
+    return await tx
+      .select({
+        account: guildMember.account,
+        mainAccount: guildMember.mainAccount,
+      })
+      .from(guildMember)
+      .where(
+        and(
+          eq(guildMember.guildId, guildId),
+          inArray(guildMember.account, playerCodes), // 참여자 목록에 있고
+          eq(guildMember.isMain, false), // 부캐이며
+          eq(guildMember.isDeleted, false), // 삭제되지 않은 멤버
+        ),
+      );
   }
 }
 

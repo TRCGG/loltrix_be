@@ -107,7 +107,7 @@ export const getSubAccounts = async (
   try {
     const { guildId } = req.params;
 
-    const members = await guildMemberService.getSubAccountsByGuildId(guildId);
+    const members = await guildMemberService.findSubAccountsByGuildId(guildId);
 
     if (members.length < 1) {
       return res.status(200).json({
