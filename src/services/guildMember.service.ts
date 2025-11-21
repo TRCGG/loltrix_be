@@ -180,13 +180,13 @@ export class GuildMemberService {
         .where(eq(guildMember.id, secMember.id))
         .returning();
 
-      // 4. MatchParticipant 테이블 업데이트 (PUUID 변경)
+      // 4. MatchParticipant 테이블 업데이트 (playerCode 변경)
       await tx
         .update(matchParticipant)
         .set({
-          puuid: priRiot.puuid,
+          playerCode: priRiot.playerCode,
         })
-        .where(eq(matchParticipant.puuid, secRiot.puuid));
+        .where(eq(matchParticipant.playerCode, secRiot.playerCode));
 
       return result[0];
     });
