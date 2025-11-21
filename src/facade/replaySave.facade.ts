@@ -20,10 +20,10 @@ export class ReplaySaveFacade {
     try {
       return await db.transaction(async (tx: TransactionType) => {
         const rawData = await replayService.getRawData(fileData);
-        
+
         // 길드 저장
         await guildService.upsertGuild(fileData.guild, tx);
-        
+
         // Replay 저장 (원본 데이터)
         const savedReplay = await replayService.replaySave(fileData, rawData, tx);
 
@@ -37,21 +37,28 @@ export class ReplaySaveFacade {
           id: savedReplay.replayCode,
           gameType: savedReplay.gameType,
           guildId: savedReplay.guildId,
-          season: savedReplay.season
-        }
-        
+          season: savedReplay.season,
+        };
+
+        // 2. Map<PUUID, PlayerCode> 생성
+        const puuidToPlayerCodeMap = new Map<string, string>();
+        riotAccounts.forEach((acc) => {
+          puuidToPlayerCodeMap.set(acc.puuid, acc.playerCode);
+        });
+
         // 내전 저장
         await customMatchService.insertCustomMatch(customMatchData, tx);
 
-        // 내전 참여자 기록 저장 
-        await matchParticipantService.insertMatchParticipants(rawData, customMatchData.id, tx);
+        // 내전 참여자 기록 저장
+        await matchParticipantService.insertMatchParticipants(
+          rawData, 
+          customMatchData.id, 
+          tx,
+          puuidToPlayerCodeMap
+        );
 
         // 길드 멤버 저장
-        await guildMemberService.insertGuildMember(
-          riotAccounts,
-          savedReplay.guildId,
-          tx
-        );
+        await guildMemberService.insertGuildMember(riotAccounts, savedReplay.guildId, tx);
 
         return savedReplay;
       });

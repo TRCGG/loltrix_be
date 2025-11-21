@@ -97,10 +97,15 @@ export class MatchParticipantService {
    * @param customMatchId - 이 참가자들이 속한 custom_match의 ID
    * @param tx - Drizzle 트랜잭션 객체
    */
-  public async insertMatchParticipants(rawData: any[], customMatchId: string, tx: TransactionType) {
+  public async insertMatchParticipants(
+    rawData: any[], 
+    customMatchId: string, 
+    tx: TransactionType,
+    puuidToPlayerCodeMap: Map<string, string>
+  ) {
     try {
       // 1. rawData를 파싱하고 챔피언 ID로 변환 (await 필요)
-      const newData = await this.parsedMatchParticipant(rawData, customMatchId);
+      const newData = await this.parsedMatchParticipant(rawData, customMatchId, puuidToPlayerCodeMap);
 
       // 2. 변환된 데이터를 삽입
       const result = await tx.insert(matchParticipant).values(newData).returning();
@@ -120,6 +125,7 @@ export class MatchParticipantService {
   private async parsedMatchParticipant(
     rawData: any,
     customMatchId: string,
+    puuidToPlayerCodeMap: Map<string, string>
   ): Promise<InsertMatchParticipant[]> {
     // Zod를 사용하여 원본 데이터 검증
     const validatedData = MatchparticipantArraySchema.parse(rawData);
@@ -154,9 +160,12 @@ export class MatchParticipantService {
       const gameResult = mapResult(d.WIN);
       const position = mapPosition(d.TEAM_POSITION);
 
+      const participantPuuid = d.PUUID;
+      const participantPlayerCode = puuidToPlayerCodeMap.get(participantPuuid) || 'error_player_code';
+
       return {
         customMatchId: customMatchId,
-        puuid: d.PUUID,
+        playerCode: participantPlayerCode,
         championId: championId,
         gameTeam: gameTeam,
         gameResult: gameResult,

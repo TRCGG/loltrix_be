@@ -161,9 +161,9 @@ export const matchParticipant = pgTable('match_participant', {
   customMatchId: varchar('custom_match_id', { length: 255 })
     .notNull()
     .references(() => customMatch.id),
-  puuid: varchar('puuid', { length: 64 })
+  playerCode: varchar('player_code', { length: 64})
     .notNull()
-    .references(() => riotAccount.puuid),
+    .references(() => riotAccount.playerCode),
   championId: varchar('champion_id', { length: 16 })
     .notNull()
     .references(() => champion.id),
