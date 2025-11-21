@@ -1,4 +1,5 @@
 import { eq, ilike, desc, sql, and } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { guildMember, InsertGuildMember, matchParticipant, riotAccount, RiotAccount } from '../database/schema.js';
 import { 
@@ -7,6 +8,8 @@ import {
  } from '../types/guildMember.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
+
+export const primaryRiotAccount = alias(riotAccount, 'primary_riot_account');
 
 /**
  * @desc 길드 멤버 서비스 클래스
@@ -78,7 +81,7 @@ export class GuildMemberService {
    */
   private async findSimilarGuildMember(
     guildId: string,
-    { riotName, riotNameTag, limit=20 }: GetGuildMemberQuery,
+    { riotName, riotNameTag, limit = 20 }: GetGuildMemberQuery,
   ) {
     const cleanName = riotName.replace(/\s+/g, '').toLowerCase();
     const searchPattern = `%${cleanName}%`;
@@ -105,7 +108,7 @@ export class GuildMemberService {
   }
 
   /**
-   * @desc 계정 조회 API 
+   * @desc 계정 조회 API
    * 1. 정확한 계정 검색 2. 비슷한 계정 검색
    */
   public async searchGuildMemberByRiotId(guildId: string, params: GetGuildMemberQuery) {
@@ -161,7 +164,10 @@ export class GuildMemberService {
       });
 
       if (!secMember) {
-        throw new BusinessError('Secondary account is not registered as a member in this guild.', 403);
+        throw new BusinessError(
+          'Secondary account is not registered as a member in this guild.',
+          403,
+        );
       }
 
       // 3. GuildMember 테이블 업데이트
@@ -184,6 +190,35 @@ export class GuildMemberService {
 
       return result[0];
     });
+  }
+
+  /**
+   * @desc 특정 길드의 모든 부계정 목록 조회
+   */
+  public async getSubAccountsByGuildId(guildId: string) {
+    const result = await db
+      .select({
+        guildId: guildMember.guildId,
+
+        subRiotName: riotAccount.riotName,
+        subRiotNameTag: riotAccount.riotNameTag,
+
+        mainRiotName: primaryRiotAccount.riotName,
+        mainRiotNameTag: primaryRiotAccount.riotNameTag,
+      })
+      .from(guildMember)
+      .innerJoin(riotAccount, eq(guildMember.account, riotAccount.playerCode))
+
+      .leftJoin(primaryRiotAccount, eq(guildMember.mainAccount, primaryRiotAccount.playerCode))
+      .where(
+        and(
+          eq(guildMember.guildId, guildId),
+          eq(guildMember.isMain, false),
+          eq(guildMember.isDeleted, false),
+        ),
+      )
+      .orderBy(desc(guildMember.id));
+    return result;
   }
 }
 

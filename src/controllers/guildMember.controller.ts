@@ -3,6 +3,7 @@ import {
   GuildMemberResponse, 
   GuildMemberWithRiotAccountResponse, 
   LinkSubAccountRequest,
+  SubAccountsAPIResponse,
 } from '../types/guildMember.js'; // 타입 경로 수정 필요
 import { guildMemberService } from '../services/guildMember.service.js';
 
@@ -89,6 +90,44 @@ export const linkSubAccount = async (
     res.status(500).json({
       status: 'error',
       message: 'Internal server error while linking sub-account',
+      data: null,
+    });
+  }
+};
+
+/**
+ * @desc 특정 길드의 부계정 목록을 조회
+ * @route GET /api/guildMember/:guildId/sub-accounts
+ * @access Public
+ */
+export const getSubAccounts = async (
+  req: Request<{guildId: string }>,
+  res: Response<SubAccountsAPIResponse>,
+) => {
+  try {
+    const { guildId } = req.params;
+
+    const members = await guildMemberService.getSubAccountsByGuildId(guildId);
+
+    if (members.length < 1) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'No sub-accounts found for this guild.',
+        data: [], 
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Sub-accounts retrieved successfully',
+      data: members,
+    });
+
+  } catch (error) {
+    console.error('Error retrieving sub-accounts:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving sub-accounts',
       data: null,
     });
   }
