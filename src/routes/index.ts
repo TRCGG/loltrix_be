@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { verifyAuth } from '../middlewares/authHandler.js';
 import healthRouter from './health.routes.js';
 import exampleRouter from './example.routes.js';
 import guildRouter from './guild.routes.js';
@@ -11,6 +12,12 @@ const router: Router = Router();
 
 // Health check route
 router.use('/health', healthRouter);
+
+// discord auth routes 
+router.use('/auth', authRouter);
+
+// --- 아래 API 부터는 모두 세션 검증 ---
+router.use(verifyAuth);
 
 // Example routes with Zod validation
 router.use('/examples', exampleRouter);
