@@ -1,5 +1,5 @@
 import { pgTable, text, varchar, jsonb, char, timestamp, boolean, integer, uuid } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { sql, relations } from 'drizzle-orm';
 
 export const guild = pgTable('guild', {
   id: varchar('id', { length: 128 }).primaryKey(),
@@ -235,10 +235,10 @@ export const champion = pgTable('champion', {
 export const guildMember = pgTable('guild_member', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   status: char('status', { length: 1}).notNull().default('1'), // 1 가입 2 탈퇴
-  account: varchar('account', {length: 64 }).notNull(), // RiotAccount playerCode
-  main_account: varchar('main_account', { length: 64 }),
-  is_main: boolean('is_main').notNull().default(true),
-  guild_id: varchar('guild_id', { length: 128 }).notNull(),
+  account: varchar('account', {length: 64 }).notNull().references(() => riotAccount.playerCode), // RiotAccount playerCode
+  mainAccount: varchar('main_account', { length: 64 }),
+  isMain: boolean('is_main').notNull().default(true),
+  guildId: varchar('guild_id', { length: 128 }).notNull(),
   createDate: timestamp('create_date', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -251,3 +251,18 @@ export const guildMember = pgTable('guild_member', {
 
 export type GuildMember = typeof guildMember.$inferSelect;
 export type InsertGuildMember = typeof guildMember.$inferInsert;
+
+// --- relations 정의 --- 
+export const guildMemberRelations = relations(guildMember, ({ one }) => ({
+  // guildMember.account 컬럼이 riotAccount.playerCode 컬럼을 참조
+  riotAccount: one(riotAccount, {
+    fields: [guildMember.account],
+    references: [riotAccount.playerCode],
+  }),
+}));
+
+export const riotAccountRelations = relations(riotAccount, ({ many }) => ({
+  // 하나의 RiotAccount는 여러 GuildMember에 속할 수 있음
+  guildMembers: many(guildMember),
+}));
+

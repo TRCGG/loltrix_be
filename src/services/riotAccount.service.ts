@@ -70,7 +70,20 @@ export class RiotAccountService {
       console.error("error while findRiotAccountsByPuuids");
       throw new SystemError("RiotAccount error while findRiotAccountsByPuuids", 500);
     }
+  }
 
+  /**
+   * @desc RiotName과 RiotNameTag으로 RiotAccount를 조회
+   */
+  public async findAccountByRiotId(
+    { riotName, riotNameTag }: { riotName: string; riotNameTag: string },
+    tx: TransactionType,
+  ) {
+    return await tx.query.riotAccount.findFirst({
+      where: 
+      and(eq(riotAccount.riotName, riotName), 
+      eq(riotAccount.riotNameTag, riotNameTag)),
+    });
   }
 
   /**
