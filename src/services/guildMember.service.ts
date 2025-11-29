@@ -216,6 +216,7 @@ export class GuildMemberService {
           eq(guildMember.guildId, guildId),
           eq(guildMember.isMain, false),
           eq(guildMember.isDeleted, false),
+          eq(guildMember.status, "1")
         ),
       )
       .orderBy(desc(guildMember.id));
