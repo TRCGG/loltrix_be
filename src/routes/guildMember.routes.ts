@@ -6,6 +6,7 @@ import {
   linkSubAccount,
   getSubAccounts,
   removeSubAccount,
+  updateMemberStatus,
 } from '../controllers/guildMember.controller.js'; // 경로 수정 필요
 
 const router: Router = Router();
@@ -64,6 +65,17 @@ const removeSubAccountSchema = z.object({
   }),
 });
 
+const updateMemberStatusSchema = z.object({
+  body: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128),
+    riotName: z.string().min(1, 'Riot Name is required').max(128),
+    riotNameTag: z.string().min(1, 'Riot Tag is required').max(128),
+    status: z.enum(['1', '2'], {
+      errorMap: () => ({ message: "Status must be '1' (Active) or '2' (Withdrawn)" }),
+    }),
+  }),
+});
+
 // --- Define Routes ---
 
 /**
@@ -94,6 +106,16 @@ router.get(
 router.get('/:guildId/:riotName', 
   validateRequest(searchGuildMembersSchema), 
   searchGuildMembers
+);
+
+/**
+ * @route PUT /api/guildMember/status
+ * @desc 길드 멤버 상태 변경 (활동 1 / 탈퇴 2) - 부캐 포함 일괄 처리
+ */
+router.put(
+  '/status',
+  validateRequest(updateMemberStatusSchema),
+  updateMemberStatus
 );
 
 /**

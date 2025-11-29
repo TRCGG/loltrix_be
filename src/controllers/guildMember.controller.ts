@@ -4,8 +4,10 @@ import {
   GuildMemberWithRiotAccountResponse, 
   LinkSubAccountRequest,
   SubAccountsAPIResponse,
+  UpdateGuildMemberStatusRequest,
 } from '../types/guildMember.js'; // 타입 경로 수정 필요
 import { guildMemberService } from '../services/guildMember.service.js';
+import { BusinessError } from '../types/error.js';
 
 /**
  * @desc 길드 멤버 및 라이엇 계정 정보 통합 검색
@@ -128,6 +130,65 @@ export const getSubAccounts = async (
     res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving sub-accounts',
+      data: null,
+    });
+  }
+};
+
+/**
+ * @desc 길드 멤버 상태 변경 (활동/탈퇴) - 부캐 포함
+ * @route PUT /api/guildMember/status
+ * @access Public
+ */
+export const updateMemberStatus = async (
+  req: Request<
+    Record<string, never>,
+    GuildMemberResponse,
+    UpdateGuildMemberStatusRequest
+  >,
+  res: Response<GuildMemberResponse>
+) => {
+  try {
+    const { guildId, riotName, riotNameTag, status } = req.body;
+
+    // 간단한 유효성 검사
+    if (status !== '1' && status !== '2') {
+      return res.status(400).json({
+        status: 'error',
+        message: "Status must be '1' (Active) or '2' (Withdrawn)",
+        data: null,
+      });
+    }
+
+    await guildMemberService.updateGuildMemberStatusByRiotId(
+      guildId,
+      riotName,
+      riotNameTag,
+      status
+    );
+
+    const actionText = status === '1' ? 'restored' : 'withdrawn';
+
+    res.status(200).json({
+      status: 'success',
+      message: `Member and sub-accounts successfully ${actionText}.`,
+      data: null,
+    });
+
+  } catch (error) {
+    console.error('Error updating member status:', error);
+
+    if (error instanceof BusinessError) {
+      return res.status(error.status).json({
+        status: 'error',
+        message: error.message,
+        data: null,
+      });
+    }
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while updating member status',
       data: null,
     });
   }

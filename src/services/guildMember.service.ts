@@ -5,6 +5,7 @@ import { guildMember, InsertGuildMember, matchParticipant, riotAccount, RiotAcco
 import { 
   GetGuildMemberQuery,
   LinkSubAccountRequest,
+  UpdateGuildMemberStatusRequest,
  } from '../types/guildMember.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
@@ -243,6 +244,55 @@ export class GuildMemberService {
           eq(guildMember.isDeleted, false), // 삭제되지 않은 멤버
         ),
       );
+  }
+
+  /**
+   * @desc GuildMember 복귀, 탈퇴 업데이트
+   */
+  public async updateGuildMemberStatusByRiotId(
+    guildId: string,
+    riotName: string,
+    riotNameTag: string,
+    status: '1' | '2',
+  ) {
+    // 계정 찾기
+    const [targetAccount] = await db
+      .select({ playerCode: riotAccount.playerCode })
+      .from(riotAccount)
+      .where(
+        and(
+          eq(riotAccount.riotName, riotName), 
+          eq(riotAccount.riotNameTag, riotNameTag)
+        ))
+      .limit(1); 
+    
+    if(!targetAccount){
+      throw new BusinessError("Riot Account not found", 404);
+    }
+    
+    const targetPlayerCode = targetAccount.playerCode;
+
+    await db.transaction(async (tx) => {
+      // 본캐 상태 변경
+      const updatedMain = await tx
+        .update(guildMember)
+        .set({ status: status })
+        .where(
+          and(
+            eq(guildMember.guildId, guildId), 
+            eq(guildMember.account, targetPlayerCode)
+          ));
+
+      // 부캐들도 일괄 상태 변경
+      await tx
+        .update(guildMember)
+        .set({ status: status })
+        .where(
+          and(
+            eq(guildMember.guildId, guildId), 
+            eq(guildMember.mainAccount, targetPlayerCode))
+          );
+    });
   }
 
   /**

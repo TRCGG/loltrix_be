@@ -17,6 +17,14 @@ export interface LinkSubAccountRequest {
   mainRiotTag: string; 
 }
 
+// 탈퇴, 복귀 req
+export interface UpdateGuildMemberStatusRequest {
+  guildId: string;
+  riotName: string;
+  riotNameTag: string;
+  status: string;
+}
+
 // --- DB Raw 결과 타입 ---
 
 // Drizzle의 Raw 조인 결과 (예: findExactGuildMember)
