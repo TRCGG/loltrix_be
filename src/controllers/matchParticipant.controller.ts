@@ -6,6 +6,7 @@ import {
   RecentGame,
   DashboardData,
   MostPick,
+  GameDetail,
 } from '../types/matchParticipant.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
 import { guildMemberService } from '../services/guildMember.service.js';
@@ -217,6 +218,47 @@ export const getMostPicks = async (
     res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving most picks',
+      data: null,
+    });
+  }
+};
+
+/**
+ * @desc 게임 상세 정보 조회 (10인 데이터)
+ * @route GET /api/matches/:guildId/games/:gameId
+ */
+export const getGameDetail = async (
+  req: Request<
+    { guildId: string; gameId: string }, 
+    MatchResponse<GameDetail[]>,         
+    Record<string, never>,               
+    Record<string, never>                
+  >,
+  res: Response<MatchResponse<GameDetail[]>>
+) => {
+  try {
+    const { guildId, gameId } = req.params;
+
+    const gameDetails = await matchParticipantService.getGameDetail(gameId, guildId);
+
+    if (!gameDetails || gameDetails.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Game not found',
+        data: null,
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Game details retrieved successfully',
+      data: gameDetails,
+    });
+  } catch (error) {
+    console.error('Error retrieving game detail', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving game detail',
       data: null,
     });
   }

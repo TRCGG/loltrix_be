@@ -443,6 +443,98 @@ export class MatchParticipantService {
       .offset(offset);
   }
 
+  /**
+   * @desc 게임 상세 조회 (특정 게임의 모든 참가자 정보)
+   * 정렬: 팀 -> 포지션(TOP-JUG-MID-ADC-SUP)
+   */
+  public async getGameDetail(gameId: string, guildId: string) {
+    const sp1 = alias(summonerSpell, 'sp1');
+    const sp2 = alias(summonerSpell, 'sp2');
+    const keystone = alias(perks, 'keystone');
+    const substyle = alias(perks, 'substyle');
+
+    return await db
+      .select({
+        // Game Info
+        gameId: customMatch.id,
+        season: customMatch.season,
+        createDate: customMatch.createDate,
+        gameResult: matchParticipant.gameResult,
+        gameTeam: matchParticipant.gameTeam,
+        timePlayed: matchParticipant.timePlayed,
+
+        // Player Info
+        riotName: riotAccount.riotName,
+        riotNameTag: riotAccount.riotNameTag,
+        
+        // Champion Info
+        champName: champion.champName,
+        champNameEng: champion.champNameEng,
+        position: matchParticipant.position,
+        level: matchParticipant.level,
+
+        // KDA & Combat
+        kill: matchParticipant.kill,
+        death: matchParticipant.death,
+        assist: matchParticipant.assist,
+        pentaKills: matchParticipant.pentaKills,
+        totalDamageChampions: matchParticipant.totalDamageChampions,
+        totalDamageTaken: matchParticipant.totalDamageTaken,
+
+        // Vision
+        visionScore: matchParticipant.visionScore,
+        visionBought: matchParticipant.visionBought,
+
+        // Items
+        item0: matchParticipant.item0,
+        item1: matchParticipant.item1,
+        item2: matchParticipant.item2,
+        item3: matchParticipant.item3,
+        item4: matchParticipant.item4,
+        item5: matchParticipant.item5,
+        item6: matchParticipant.item6,
+
+        // Summoner Spells
+        summonerSpell1Key: sp1.key,
+        summonerSpell1Name: sp1.name,
+        summonerSpell2Key: sp2.key,
+        summonerSpell2Name: sp2.name,
+
+        // Perks/Runes
+        keystoneIcon: keystone.icon,
+        keystoneName: keystone.name,
+        substyleIcon: substyle.icon,
+        substyleName: substyle.name,
+      })
+      .from(matchParticipant)
+      .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
+      .innerJoin(champion, eq(matchParticipant.championId, champion.id))
+      .leftJoin(sp1, eq(matchParticipant.summonerSpell1, sp1.id))
+      .leftJoin(sp2, eq(matchParticipant.summonerSpell2, sp2.id))
+      .leftJoin(keystone, eq(matchParticipant.keyStoneId, keystone.id))
+      .leftJoin(substyle, eq(matchParticipant.perkSubStyle, substyle.id))
+      .where(and(
+        eq(customMatch.id, gameId), 
+        eq(customMatch.guildId, guildId), 
+        eq(matchParticipant.isDeleted, false),
+        eq(customMatch.isDeleted, false)
+      ))
+      .orderBy(
+        matchParticipant.gameTeam, 
+        sql`
+          CASE ${matchParticipant.position}
+            WHEN 'TOP' THEN 1
+            WHEN 'JUG' THEN 2
+            WHEN 'MID' THEN 3
+            WHEN 'ADC' THEN 4
+            WHEN 'SUP' THEN 5
+            ELSE 6
+          END
+        `
+      );
+  }
+
 }
 
 export const matchParticipantService = new MatchParticipantService();

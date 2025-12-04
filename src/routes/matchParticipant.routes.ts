@@ -4,7 +4,8 @@ import { validateRequest } from '../middlewares/validateRequest.js';
 import { 
   getRecentGames, 
   getMatchDashboard, 
-  getMostPicks 
+  getMostPicks,
+  getGameDetail,
 } from '../controllers/matchParticipant.controller.js';
 
 const router: Router = Router();
@@ -68,6 +69,14 @@ const matchDashboardSchema = z.object({
   }),
 });
 
+// 게임 상세 조회용 스키마
+const gameDetailSchema = z.object({
+  params: z.object({
+    guildId: z.string().min(1).max(128),
+    gameId: z.string().min(1).max(255), // Game ID 길이 넉넉하게
+  }),
+});
+
 // --- Routes ---
 
 /**
@@ -98,6 +107,16 @@ router.get(
   '/:guildId/:riotName/most-picks',
   validateRequest(matchListSchema),
   getMostPicks
+);
+
+/**
+ * @route GET /api/matches/:guildId/games/:gameId
+ * @desc 특정 게임 상세 조회 (10명 플레이어 정보)
+ */
+router.get(
+  '/:guildId/games/:gameId',
+  validateRequest(gameDetailSchema),
+  getGameDetail
 );
 
 export default router;

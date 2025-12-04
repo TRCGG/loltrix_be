@@ -29,6 +29,9 @@ export interface MostPick extends MatchStats {
   champNameEng: string | null;
 }
 
+/** 게임 상세 정보 (한 경기 내의 플레이어 정보) */
+export interface GameDetail extends RecentGame {}
+
 /** 최근 게임 상세 정보 (메인 리스트) */
 export interface RecentGame {
   // Game Info
