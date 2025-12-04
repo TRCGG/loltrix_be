@@ -220,8 +220,8 @@ export type InsertMatchParticipant = typeof matchParticipant.$inferInsert;
 
 export const champion = pgTable('champion', {
   id: varchar('id', { length: 16 }).primaryKey(),
-  champName: varchar('champ_name', { length: 128 }),
-  champNameEng: varchar('champ_name_eng', { length: 128 }),
+  champName: varchar('champ_name', { length: 128 }).notNull(),
+  champNameEng: varchar('champ_name_eng', { length: 128 }).notNull(),
   createDate: timestamp('create_date', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -251,6 +251,29 @@ export const guildMember = pgTable('guild_member', {
 
 export type GuildMember = typeof guildMember.$inferSelect;
 export type InsertGuildMember = typeof guildMember.$inferInsert;
+
+export const summonerSpell = pgTable('summoner_spell', {
+  id: integer('id').primaryKey(), 
+  key: varchar('key', { length: 64 }).notNull(), 
+  name: varchar('name', { length: 64 }).notNull(),
+  createDate: timestamp('create_date').notNull().defaultNow(),
+  updateDate: timestamp('update_date').defaultNow().$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false)
+});
+
+export type SummonerSpell = typeof summonerSpell.$inferSelect;
+
+export const perks = pgTable('perks', { 
+  id: integer('id').primaryKey(),
+  key: varchar('key', { length: 64 }).notNull(), 
+  icon: varchar('icon', { length: 255 }).notNull(),
+  name: varchar('name', { length: 64 }).notNull(),
+  createDate: timestamp('create_date').notNull().defaultNow(),
+  updateDate: timestamp('update_date').defaultNow().$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false)
+});
+
+export type Perks = typeof perks.$inferSelect;
 
 // --- relations 정의 --- 
 export const guildMemberRelations = relations(guildMember, ({ one }) => ({
