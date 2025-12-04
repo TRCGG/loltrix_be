@@ -535,6 +535,40 @@ export class MatchParticipantService {
       );
   }
 
+  /**
+   * @desc 게임 기록 소프트 삭제
+   * customMatch와 연관된 matchParticipant를 모두 isDeleted = true 처리
+   */
+  public async deleteMatch(gameId: string, guildId: string) {
+    return await db.transaction(async (tx) => {
+      // 1. CustomMatch 삭제
+      const [deletedMatch] = await tx
+        .update(customMatch)
+        .set({ isDeleted: true })
+        .where(and(
+          eq(customMatch.id, gameId),
+          eq(customMatch.guildId, guildId),
+          eq(customMatch.isDeleted, false)
+        ))
+        .returning();
+
+      // 해당 게임이 없거나 이미 삭제된 경우 null 반환
+      if (!deletedMatch) {
+        return null;
+      }
+
+      // 2. 연관된 MatchParticipant 일괄 삭제
+      await tx
+        .update(matchParticipant)
+        .set({ isDeleted: true })
+        .where(and(
+          eq(matchParticipant.customMatchId, gameId),
+          eq(matchParticipant.isDeleted, false)
+        ));
+
+      return deletedMatch;
+    });
+  }
 }
 
 export const matchParticipantService = new MatchParticipantService();

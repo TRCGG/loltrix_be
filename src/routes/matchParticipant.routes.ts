@@ -6,6 +6,7 @@ import {
   getMatchDashboard, 
   getMostPicks,
   getGameDetail,
+  deleteMatch,
 } from '../controllers/matchParticipant.controller.js';
 
 const router: Router = Router();
@@ -117,6 +118,16 @@ router.get(
   '/:guildId/games/:gameId',
   validateRequest(gameDetailSchema),
   getGameDetail
+);
+
+/**
+ * @route DELETE /api/matches/:guildId/games/:gameId
+ * @desc 게임 기록 삭제 (소프트 삭제)
+ */
+router.delete(
+  '/:guildId/games/:gameId',
+  validateRequest(gameDetailSchema),
+  deleteMatch,
 );
 
 export default router;

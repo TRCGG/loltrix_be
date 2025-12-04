@@ -263,3 +263,40 @@ export const getGameDetail = async (
     });
   }
 };
+
+/**
+ * @desc 게임 기록 삭제 (소프트 삭제)
+ * @route DELETE /api/matches/:guildId/games/:gameId
+ */
+export const deleteMatch = async (
+  req: Request<{ guildId: string; gameId: string }>,
+  res: Response<MatchResponse<null>>
+) => {
+  try {
+    const { guildId, gameId } = req.params;
+
+    const deletedMatch = await matchParticipantService.deleteMatch(gameId, guildId);
+
+    if (!deletedMatch) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Game not found or already deleted',
+        data: null,
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Game match deleted successfully',
+      data: null,
+    });
+
+  } catch (error) {
+    console.error('Error deleting match:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while deleting match',
+      data: null,
+    });
+  }
+};
