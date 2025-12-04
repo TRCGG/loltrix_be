@@ -32,6 +32,11 @@ export interface MostPick extends MatchStats {
 /** 게임 상세 정보 (한 경기 내의 플레이어 정보) */
 export interface GameDetail extends RecentGame {}
 
+export interface SynergyTeammate extends MatchStats {
+  riotName: string;
+  riotNameTag: string;
+}
+
 /** 최근 게임 상세 정보 (메인 리스트) */
 export interface RecentGame {
   // Game Info
@@ -90,6 +95,7 @@ export interface DashboardData {
   summary: MatchSummary;
   lines: LineStat[];
   mostPicks: MostPick[];
+  synergy: SynergyTeammate[];
 }
 
 // --- Requests & Responses ---

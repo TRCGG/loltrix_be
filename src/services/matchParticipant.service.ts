@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { eq, ne, and, desc, sql, inArray } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { alias } from 'drizzle-orm/pg-core';
 import { 
@@ -223,28 +223,28 @@ export class MatchParticipantService {
   /**
    * @desc 승률 및 KDA 계산용 SQL 조각 생성 (Helper)
    */
-  private getStatSqlChunks() {
+  private getStatSqlChunks(table: any = matchParticipant) {
     return {
       totalCount: sql<number>`COUNT(*)::integer`,
-      win: sql<number>`COUNT(CASE WHEN ${matchParticipant.gameResult} = '승' THEN 1 END)::integer`,
-      lose: sql<number>`COUNT(CASE WHEN ${matchParticipant.gameResult} = '패' THEN 1 END)::integer`,
+      win: sql<number>`COUNT(CASE WHEN ${table.gameResult} = '승' THEN 1 END)::integer`,
+      lose: sql<number>`COUNT(CASE WHEN ${table.gameResult} = '패' THEN 1 END)::integer`,
       winRate: sql<number>`
         CASE 
           WHEN COUNT(*) = 0 THEN 0 
           ELSE ROUND(
-            (COUNT(CASE WHEN ${matchParticipant.gameResult} = '승' THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(*), 0), 
+            (COUNT(CASE WHEN ${table.gameResult} = '승' THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(*), 0), 
             2
           ) 
         END`,
       kda: sql<number>`
         CASE 
-          WHEN COALESCE(SUM(${matchParticipant.death}), 0) = 0 THEN 9999 
+          WHEN COALESCE(SUM(${table.death}), 0) = 0 THEN 9999 
           ELSE ROUND(
-            (COALESCE(SUM(${matchParticipant.kill}), 0) + COALESCE(SUM(${matchParticipant.assist}), 0))::numeric 
-            / NULLIF(COALESCE(SUM(${matchParticipant.death}), 0), 0), 
+            (COALESCE(SUM(${table.kill}), 0) + COALESCE(SUM(${table.assist}), 0))::numeric 
+            / NULLIF(COALESCE(SUM(${table.death}), 0), 0), 
             2
           ) 
-        END`,
+        END`
     };
   }
 
@@ -533,6 +533,57 @@ export class MatchParticipantService {
           END
         `
       );
+  }
+
+  /**
+   * @desc 시너지 팀원 조회 (함께한 게임 승률 분석)
+   * 조건: 같은 팀, 5판 이상 같이 함
+   * 필터: 시즌 (Season) 기준
+   */
+  public async getSynergisticTeammates(
+    playerCode: string,
+    season: string
+  ) {
+    // 1. Alias 생성 (Self Join을 위해)
+    // mpMe: 기준이 되는 내 전적
+    // mpTeammate: 나와 같은 팀인 동료들의 전적
+    const mpMe = alias(matchParticipant, 'mp_me');
+    const mpTeammate = alias(matchParticipant, 'mp_teammate');
+
+    // 2. 통계 SQL 생성 (팀원 기준 통계)
+    const statColumns = this.getStatSqlChunks(mpTeammate);
+
+    const result = await db
+      .select({
+        riotName: riotAccount.riotName,
+        riotNameTag: riotAccount.riotNameTag,
+        ...statColumns, // 팀원 기준 승률/KDA
+      })
+      .from(mpTeammate)
+      // Join 1: 내 전적(mpMe)와 팀원 전적(mpTeammate) 연결
+      .innerJoin(mpMe, and(
+        eq(mpTeammate.customMatchId, mpMe.customMatchId), // 같은 게임
+        eq(mpTeammate.gameTeam, mpMe.gameTeam)            // 같은 팀
+      ))
+      .innerJoin(riotAccount, eq(mpTeammate.playerCode, riotAccount.playerCode))
+      .innerJoin(customMatch, eq(mpTeammate.customMatchId, customMatch.id))
+      .where(and(
+        // 조건 1: 나는 '나'여야 함
+        eq(mpMe.playerCode, playerCode),
+        // 조건 2: 팀원은 '나'가 아니어야 함
+        ne(mpTeammate.playerCode, playerCode),
+        // 조건 3: 시즌 필터 
+        eq(customMatch.season, season),
+        // 조건 4: 삭제되지 않은 데이터
+        eq(mpMe.isDeleted, false),
+        eq(mpTeammate.isDeleted, false),
+        eq(customMatch.isDeleted, false)
+      ))
+      .groupBy(riotAccount.riotName, riotAccount.riotNameTag)
+      .having(sql`count(*) >= 5`) // 5판 이상
+      .orderBy(desc(statColumns.winRate)); // 승률 높은 순
+
+    return result;
   }
 
   /**

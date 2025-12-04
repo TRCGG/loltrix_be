@@ -132,10 +132,11 @@ export const getMatchDashboard = async (
 
     const playerCode = members[0].riot_account.playerCode;
 
-    const [monthRecord, lineRecord, mostPicks] = await Promise.all([
+    const [monthRecord, lineRecord, mostPicks, synergy] = await Promise.all([
       matchParticipantService.getRecentMonthRecord(playerCode),
       matchParticipantService.getLineRecord(playerCode, lolSeason),
       matchParticipantService.getMostPicks(playerCode, lolSeason, 1, 10),
+      matchParticipantService.getSynergisticTeammates(playerCode, lolSeason),
     ]);
 
     res.status(200).json({
@@ -145,6 +146,7 @@ export const getMatchDashboard = async (
         summary: monthRecord,
         lines: lineRecord,
         mostPicks: mostPicks,
+        synergy: synergy,
       },
     });
   } catch (error) {
