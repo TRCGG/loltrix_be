@@ -1,7 +1,16 @@
 import { z } from 'zod';
-import { eq, and, like, desc, sql, is, inArray } from 'drizzle-orm'; // 'inArray' 추가
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
-import { InsertMatchParticipant, matchParticipant, champion } from '../database/schema.js';
+import { alias } from 'drizzle-orm/pg-core';
+import { 
+  InsertMatchParticipant, 
+  matchParticipant, 
+  champion, 
+  riotAccount, 
+  customMatch, 
+  summonerSpell,
+  perks,
+} from '../database/schema.js'; // 스키마 import 추가
 import { BusinessError, SystemError } from '../types/error.js';
 
 const MatchparticipantSchema = z.object({
@@ -210,6 +219,230 @@ export class MatchParticipantService {
 
     return parsedMatchParticipants;
   }
+  // [Read] 데이터 조회 관련 메서드
+  /**
+   * @desc 승률 및 KDA 계산용 SQL 조각 생성 (Helper)
+   */
+  private getStatSqlChunks() {
+    return {
+      totalCount: sql<number>`COUNT(*)::integer`,
+      win: sql<number>`COUNT(CASE WHEN ${matchParticipant.gameResult} = '승' THEN 1 END)::integer`,
+      lose: sql<number>`COUNT(CASE WHEN ${matchParticipant.gameResult} = '패' THEN 1 END)::integer`,
+      winRate: sql<number>`
+        CASE 
+          WHEN COUNT(*) = 0 THEN 0 
+          ELSE ROUND(
+            (COUNT(CASE WHEN ${matchParticipant.gameResult} = '승' THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(*), 0), 
+            2
+          ) 
+        END`,
+      kda: sql<number>`
+        CASE 
+          WHEN COALESCE(SUM(${matchParticipant.death}), 0) = 0 THEN 9999 
+          ELSE ROUND(
+            (COALESCE(SUM(${matchParticipant.kill}), 0) + COALESCE(SUM(${matchParticipant.assist}), 0))::numeric 
+            / NULLIF(COALESCE(SUM(${matchParticipant.death}), 0), 0), 
+            2
+          ) 
+        END`,
+    };
+  }
+
+  /**
+   * @desc 최근 한 달 전적 요약 조회
+   */
+  public async getRecentMonthRecord(playerCode: string,) {
+    // 통계 쿼리 실행
+    const statColumns = this.getStatSqlChunks();
+
+    const [result] = await db
+      .select(statColumns)
+      .from(matchParticipant)
+      .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .where(
+        and(
+          eq(matchParticipant.playerCode, playerCode),
+          eq(matchParticipant.isDeleted, false),
+          eq(customMatch.isDeleted, false),
+          sql`TO_CHAR(${customMatch.createDate}, 'YYYY-MM') = TO_CHAR(NOW(), 'YYYY-MM')`,
+        ),
+      );
+
+    return (
+      result || {
+        totalCount: 0,
+        winCount: 0,
+        loseCount: 0,
+        winRate: 0,
+        kda: 0,
+      }
+    );
+  }
+
+  /**
+   * @desc 전체 라인별(포지션별) 전적 조회
+   * 정렬 순서: TOP -> JUG -> MID -> ADC -> SUP
+   */
+  public async getLineRecord(playerCode: string, season: string) {
+    // 포지션별 통계 집계
+    const statColumns = this.getStatSqlChunks();
+
+    const result = await db
+      .select({
+        position: matchParticipant.position,
+        ...statColumns, // 승률, KDA 등 계산식 재사용
+      })
+      .from(matchParticipant)
+      .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .where(and(
+        eq(matchParticipant.playerCode, playerCode),
+        eq(matchParticipant.isDeleted, false),
+        eq(customMatch.isDeleted, false),
+        eq(customMatch.season, season)
+      ))
+      .groupBy(matchParticipant.position) // 포지션별 그룹화
+      .orderBy(sql`
+        CASE ${matchParticipant.position}
+          WHEN 'TOP' THEN 1
+          WHEN 'JUG' THEN 2
+          WHEN 'MID' THEN 3
+          WHEN 'ADC' THEN 4
+          WHEN 'SUP' THEN 5
+          ELSE 6
+        END
+      `); // 지정된 순서로 정렬
+
+    return result;
+  }
+
+  /**
+   * @desc 모스트 픽 조회 (챔피언별 통계)
+   * 정렬: 플레이 횟수(totalCount) 많은 순 (DESC)
+   * 페이지네이션 적용
+   */
+  public async getMostPicks(
+    playerCode: string,
+    season: string,
+    page: number = 1,
+    limit: number = 10
+  ) {
+    const offset = (page - 1) * limit;
+    // 통계 쿼리 실행
+    const statColumns = this.getStatSqlChunks();
+
+    const result = await db
+      .select({
+        champName: champion.champName,       
+        champNameEng: champion.champNameEng, 
+        ...statColumns,                      
+      })
+      .from(matchParticipant)
+      .innerJoin(champion, eq(matchParticipant.championId, champion.id))
+      .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .where(and(
+        eq(matchParticipant.playerCode, playerCode),
+        eq(matchParticipant.isDeleted, false),
+        eq(customMatch.isDeleted, false),
+        eq(customMatch.season, season)
+      ))
+      .groupBy(champion.champName, champion.champNameEng)
+      .orderBy(desc(sql`count(*)`))
+      .limit(limit)
+      .offset(offset);
+
+    return result;
+  }
+
+  public async getRecentGamesByRiotName(
+    playerCode: string,
+    season: string,
+    page: number = 1,
+    limit: number = 20
+  ) {
+    const offset = (page - 1) * limit;
+    // 1. 유효한 길드 멤버인지 확인 (playerCode 획득)
+
+    // Alias 정의 
+    const sp1 = alias(summonerSpell, 'sp1');
+    const sp2 = alias(summonerSpell, 'sp2');
+    const keystone = alias(perks, 'keystone');
+    const substyle = alias(perks, 'substyle');
+
+    return await db
+      .select({
+        // Game Info
+        gameId: customMatch.id,
+        season: customMatch.season,
+        createDate: customMatch.createDate,
+        gameResult: matchParticipant.gameResult,
+        gameTeam: matchParticipant.gameTeam,
+        timePlayed: matchParticipant.timePlayed,
+
+        // Player Info
+        riotName: riotAccount.riotName,
+        riotNameTag: riotAccount.riotNameTag,
+        
+        // Champion Info
+        champName: champion.champName,
+        champNameEng: champion.champNameEng,
+        position: matchParticipant.position,
+        level: matchParticipant.level,
+
+        // KDA & Combat
+        kill: matchParticipant.kill,
+        death: matchParticipant.death,
+        assist: matchParticipant.assist,
+        pentaKills: matchParticipant.pentaKills,
+        totalDamageChampions: matchParticipant.totalDamageChampions,
+        totalDamageTaken: matchParticipant.totalDamageTaken,
+
+        // Vision
+        visionScore: matchParticipant.visionScore,
+        visionBought: matchParticipant.visionBought,
+
+        // Items
+        item0: matchParticipant.item0,
+        item1: matchParticipant.item1,
+        item2: matchParticipant.item2,
+        item3: matchParticipant.item3,
+        item4: matchParticipant.item4,
+        item5: matchParticipant.item5,
+        item6: matchParticipant.item6,
+
+        // Summoner Spells (Alias)
+        summonerSpell1Key: sp1.key,
+        summonerSpell1Name: sp1.name,
+        summonerSpell2Key: sp2.key,
+        summonerSpell2Name: sp2.name,
+
+        // Perks/Runes (Alias)
+        keystoneIcon: keystone.icon,
+        keystoneName: keystone.name,
+        substyleIcon: substyle.icon,
+        substyleName: substyle.name,
+      })
+      .from(matchParticipant)
+      // Standard Joins
+      .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
+      .innerJoin(champion, eq(matchParticipant.championId, champion.id))
+      // Left Joins (Alias 사용)
+      .leftJoin(sp1, eq(matchParticipant.summonerSpell1, sp1.id))
+      .leftJoin(sp2, eq(matchParticipant.summonerSpell2, sp2.id))
+      .leftJoin(keystone, eq(matchParticipant.keyStoneId, keystone.id))
+      .leftJoin(substyle, eq(matchParticipant.perkSubStyle, substyle.id))
+      // Conditions
+      .where(and(
+        eq(matchParticipant.playerCode, playerCode),
+        eq(matchParticipant.isDeleted, false),
+        eq(customMatch.isDeleted, false),
+        eq(customMatch.season, season)
+      ))
+      .orderBy(desc(customMatch.createDate))
+      .limit(limit)
+      .offset(offset);
+  }
+
 }
 
 export const matchParticipantService = new MatchParticipantService();

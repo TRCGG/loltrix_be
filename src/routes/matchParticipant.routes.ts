@@ -1,0 +1,103 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { validateRequest } from '../middlewares/validateRequest.js';
+import { 
+  getRecentGames, 
+  getMatchDashboard, 
+  getMostPicks 
+} from '../controllers/matchParticipant.controller.js';
+
+const router: Router = Router();
+
+// --- Zod Schemas ---
+
+// 최근 게임 목록 및 모스트 픽 조회용 스키마
+const matchListSchema = z.object({
+  params: z.object({
+    guildId: z
+      .string()
+      .min(1, 'Guild ID is required')
+      .max(128, 'Guild ID must be less than 128 characters'),
+    riotName: z
+      .string()
+      .min(1, 'riotName is required')
+      .max(128, 'riotName must be less than 128 characters'),
+  }),
+  query: z.object({
+    riotNameTag: z
+      .string()
+      .max(128, 'riotNameTag must be less than 128 characters')
+      .optional(),
+    season: z
+      .string()
+      .max(32, 'season must be less than 32 characters')
+      .optional(),
+    page: z
+      .string()
+      .regex(/^\d+$/, 'Page must be a positive number')
+      .transform(Number)
+      .optional(),
+    limit: z
+      .string()
+      .regex(/^\d+$/, 'Limit must be a positive number')
+      .transform(Number)
+      .optional(),
+  }),
+});
+
+const matchDashboardSchema = z.object({
+  params: z.object({
+    guildId: z
+      .string()
+      .min(1, 'Guild ID is required')
+      .max(128, 'Guild ID must be less than 128 characters'),
+    riotName: z
+      .string()
+      .min(1, 'riotName is required')
+      .max(128, 'riotName must be less than 128 characters'),
+  }),
+  query: z.object({
+    riotNameTag: z
+      .string()
+      .max(128, 'Search term must be less than 128 characters')
+      .optional(),
+    season: z
+      .string()
+      .max(32, 'season must be less than 32 characters')
+      .optional(),
+  }),
+});
+
+// --- Routes ---
+
+/**
+ * @route GET /api/matches/:guildId/:riotName/games
+ * @desc 최근 게임 목록 (상세)
+ */
+router.get(
+  '/:guildId/:riotName/games',
+  validateRequest(matchListSchema),
+  getRecentGames
+);
+
+/**
+ * @route GET /api/matches/:guildId/:riotName/dashboard
+ * @desc 전적 요약 + 라인별 통계 + 모스트 픽(TOP 5) 통합 조회
+ */
+router.get(
+  '/:guildId/:riotName/dashboard',
+  validateRequest(matchDashboardSchema),
+  getMatchDashboard
+); 
+
+/**
+ * @route GET /api/matches/:guildId/:riotName/most-picks
+ * @desc 모스트 픽 상세 목록 (페이징 가능)
+ */
+router.get(
+  '/:guildId/:riotName/most-picks',
+  validateRequest(matchListSchema),
+  getMostPicks
+);
+
+export default router;
