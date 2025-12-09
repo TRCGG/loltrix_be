@@ -59,6 +59,7 @@ export class GuildMemberService {
     const conditions = [
       eq(guildMember.guildId, guildId),
       eq(guildMember.isMain, true),
+      eq(guildMember.status, "1"),
       eq(guildMember.isDeleted, false),
       eq(riotAccount.riotName, riotName),
     ];
@@ -90,6 +91,7 @@ export class GuildMemberService {
     const conditions = [
       eq(guildMember.guildId, guildId),
       eq(guildMember.isMain, true),
+      eq(guildMember.status, "1"),
       eq(guildMember.isDeleted, false),
       sql`LOWER(REPLACE(${riotAccount.riotName}, ' ', '')) LIKE ${searchPattern}`,
     ];
