@@ -8,6 +8,7 @@ import replayRouter from './replay.routes.js';
 import authRouter from './discordAuth.routes.js';
 import guildMemberRoutes from './guildMember.routes.js';
 import matchParticipantRoutes from './matchParticipant.routes.js';
+import statisticsRoutes from './statistics.route.js';
 
 const router: Router = Router();
 
@@ -37,6 +38,8 @@ router.use('/guildMember', guildMemberRoutes);
 
 // match
 router.use('/matches', matchParticipantRoutes);
+
+router.use('/statistics',statisticsRoutes);
 
 // Test routes for error logging (개발 환경에서만)
 if (process.env.NODE_ENV === 'development') {
