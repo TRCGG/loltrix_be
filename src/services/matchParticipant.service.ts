@@ -113,7 +113,7 @@ export class MatchParticipantService {
     puuidToPlayerCodeMap: Map<string, string>
   ) {
     try {
-      // 1. rawData를 파싱하고 챔피언 ID로 변환 (await 필요)
+      // 1. rawData를 파싱하고 챔피언 ID로 변환
       const newData = await this.parsedMatchParticipant(rawData, customMatchId, puuidToPlayerCodeMap);
 
       // 2. 변환된 데이터를 삽입
@@ -127,7 +127,7 @@ export class MatchParticipantService {
 
   /**
    * @desc rawData 배열을 Drizzle 삽입용 InsertMatchParticipant 배열로 파싱하고 변환
-   * @param rawData - Zod 스키마에 의해 검증될 알 수 없는 데이터
+   * @param rawData 
    * @param customMatchId - 이 참가자들이 속한 custom_match의 ID
    * @returns InsertMatchParticipant 타입의 객체 배열 Promise
    */
@@ -142,7 +142,7 @@ export class MatchParticipantService {
     // 1. 필요한 모든 챔피언 영문 이름(d.SKIN)을 중복 없이 추출합니다.
     const championEngNames = [...new Set(validatedData.map((d) => d.SKIN).filter(Boolean))];
 
-    // 2. DB 조회를 *단 한 번* 실행하여, 챔피언 영문 이름과 ID 맵
+    // 2. 챔피언 영문, ID DB조회
     const championRecords = await db
       .select({ id: champion.id, nameEng: champion.champNameEng })
       .from(champion)
@@ -290,7 +290,7 @@ export class MatchParticipantService {
     const result = await db
       .select({
         position: matchParticipant.position,
-        ...statColumns, // 승률, KDA 등 계산식 재사용
+        ...statColumns,
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
@@ -300,7 +300,7 @@ export class MatchParticipantService {
         eq(customMatch.isDeleted, false),
         eq(customMatch.season, season)
       ))
-      .groupBy(matchParticipant.position) // 포지션별 그룹화
+      .groupBy(matchParticipant.position)
       .orderBy(sql`
         CASE ${matchParticipant.position}
           WHEN 'TOP' THEN 1
@@ -310,7 +310,7 @@ export class MatchParticipantService {
           WHEN 'SUP' THEN 5
           ELSE 6
         END
-      `); // 지정된 순서로 정렬
+      `);
 
     return result;
   }

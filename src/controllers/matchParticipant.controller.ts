@@ -10,7 +10,6 @@ import {
 } from '../types/matchParticipant.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
 import { guildMemberService } from '../services/guildMember.service.js';
-import { BusinessError } from '../types/error.js';
 
 const envLoLSeason = process.env.LOL_SEASON || "2026";
 
