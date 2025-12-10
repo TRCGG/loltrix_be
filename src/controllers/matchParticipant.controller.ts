@@ -75,8 +75,8 @@ export const getRecentGames = async (
 
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
-    res.setHeader('X-Limit', (limit ?? 50).toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 50)).toString());
+    res.setHeader('X-Limit', (limit ?? 20).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 20)).toString());
 
     return res.status(200).json({
       status: 'success',
@@ -136,7 +136,7 @@ export const getMatchDashboard = async (
 
     const playerCode = members[0].riot_account.playerCode;
 
-    const [monthRecord, lineRecord, mostPicks, synergy] = await Promise.all([
+    const [monthRecord, lineRecord, { mostPicks }, synergy] = await Promise.all([
       matchParticipantService.getRecentMonthRecord(playerCode),
       matchParticipantService.getLineRecord(playerCode, lolSeason),
       matchParticipantService.getMostPicks(playerCode, lolSeason, 1, 10),
@@ -207,17 +207,22 @@ export const getMostPicks = async (
 
     const playerCode = members[0].riot_account.playerCode;
 
-    const result = await matchParticipantService.getMostPicks(
+    const { mostPicks, totalCount } = await matchParticipantService.getMostPicks(
       playerCode,
       lolSeason,
       Number(page) || 1,
       Number(limit) || 10,
     );
 
-    res.status(200).json({
+    res.setHeader('X-Total-Count', totalCount.toString());
+    res.setHeader('X-Page', (page ?? 1).toString());
+    res.setHeader('X-Limit', (limit ?? 10).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 10)).toString());
+
+    return res.status(200).json({
       status: 'success',
       message: 'Most picks retrieved successfully',
-      data: result,
+      data: mostPicks,
     });
   } catch (error) {
     console.error('Error retrieving most picks:', error);

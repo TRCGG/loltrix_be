@@ -330,7 +330,14 @@ export class MatchParticipantService {
     // 통계 쿼리 실행
     const statColumns = this.getStatSqlChunks();
 
-    const result = await db
+    const whereCondition = and(
+        eq(matchParticipant.playerCode, playerCode),
+        eq(matchParticipant.isDeleted, false),
+        eq(customMatch.isDeleted, false),
+        eq(customMatch.season, season)
+      )
+
+    const picksQuery = db
       .select({
         champName: champion.champName,       
         champNameEng: champion.champNameEng, 
@@ -339,18 +346,24 @@ export class MatchParticipantService {
       .from(matchParticipant)
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .where(and(
-        eq(matchParticipant.playerCode, playerCode),
-        eq(matchParticipant.isDeleted, false),
-        eq(customMatch.isDeleted, false),
-        eq(customMatch.season, season)
-      ))
+      .where(whereCondition)
       .groupBy(champion.champName, champion.champNameEng)
       .orderBy(desc(sql`count(*)`))
       .limit(limit)
       .offset(offset);
 
-    return result;
+    const countQuery = db
+      .select({ 
+        count: sql<number>`count(distinct ${matchParticipant.championId})::integer` 
+      })
+      .from(matchParticipant)
+      .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .where(whereCondition);
+
+    const [mostPicks, countResult] = await Promise.all([picksQuery, countQuery]);
+    const totalCount = countResult[0]?.count || 0;
+    
+    return { mostPicks, totalCount };
   }
 
   /**
