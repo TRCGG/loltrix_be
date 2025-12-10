@@ -353,6 +353,9 @@ export class MatchParticipantService {
     return result;
   }
 
+  /**
+   * @desc 최근게임목록 상세 조회
+   */
   public async getRecentGamesByRiotName(
     playerCode: string,
     season: string,
