@@ -94,7 +94,7 @@ export const discordMember = pgTable('discord_member', {
   avatarUrl: text('avatar_url'),
   createDate: timestamp('create_date', { withTimezone: true }).defaultNow(),
   updateDate: timestamp('update_date', { withTimezone: true }).defaultNow(),
-  deleteYn: char('delete_yn', { length: 1 }).default('N'),
+  isDeleted: boolean('is_deleted').notNull().default(false),
 });
 
 export type DiscordMember = typeof discordMember.$inferSelect;
