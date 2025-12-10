@@ -66,12 +66,17 @@ export const getRecentGames = async (
 
     const playerCode = members[0].riot_account.playerCode;
 
-    const games = await matchParticipantService.getRecentGamesByRiotName(
+    const { games, totalCount } = await matchParticipantService.getRecentGamesByRiotName(
       playerCode,
       lolSeason,
       Number(page) || 1,
       Number(limit) || 20,
     );
+
+    res.setHeader('X-Total-Count', totalCount.toString());
+    res.setHeader('X-Page', (page ?? 1).toString());
+    res.setHeader('X-Limit', (limit ?? 50).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 50)).toString());
 
     return res.status(200).json({
       status: 'success',

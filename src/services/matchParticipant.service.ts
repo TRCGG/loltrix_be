@@ -360,7 +360,6 @@ export class MatchParticipantService {
     limit: number = 20
   ) {
     const offset = (page - 1) * limit;
-    // 1. 유효한 길드 멤버인지 확인 (playerCode 획득)
 
     // Alias 정의 
     const sp1 = alias(summonerSpell, 'sp1');
@@ -368,7 +367,14 @@ export class MatchParticipantService {
     const keystone = alias(perks, 'keystone');
     const substyle = alias(perks, 'substyle');
 
-    return await db
+    const whereCondition = and(
+      eq(matchParticipant.playerCode, playerCode),
+      eq(matchParticipant.isDeleted, false),
+      eq(customMatch.isDeleted, false),
+      eq(customMatch.season, season)
+    );
+
+    const gamesQuery = db
       .select({
         // Game Info
         gameId: customMatch.id,
@@ -432,15 +438,21 @@ export class MatchParticipantService {
       .leftJoin(keystone, eq(matchParticipant.keyStoneId, keystone.id))
       .leftJoin(substyle, eq(matchParticipant.perkSubStyle, substyle.id))
       // Conditions
-      .where(and(
-        eq(matchParticipant.playerCode, playerCode),
-        eq(matchParticipant.isDeleted, false),
-        eq(customMatch.isDeleted, false),
-        eq(customMatch.season, season)
-      ))
+      .where(whereCondition)
       .orderBy(desc(customMatch.createDate))
       .limit(limit)
       .offset(offset);
+    
+    const countQuery = db
+      .select({ count: sql<number>`count(*)::integer` })
+      .from(matchParticipant)
+      .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .where(whereCondition);
+
+    const [games, countResult] = await Promise.all([gamesQuery, countQuery]);
+    const totalCount = countResult[0]?.count || 0;
+
+    return { games, totalCount };
   }
 
   /**
