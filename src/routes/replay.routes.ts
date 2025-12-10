@@ -8,7 +8,7 @@ import {
 
  } from '../controllers/replay.controller.js';
 
-const router = Router();
+const router: Router = Router();
 
 // TO-DO replay message
 const createReplaySchema = z.object({
