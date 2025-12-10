@@ -208,6 +208,31 @@ export class DiscordAuthService {
     }
   }
 
+  /**
+   * @desc Discord API로 사용자 정보 조회 
+   */
+  public async fetchUser(accessToken: string) {
+    try {
+      const userResult = await fetch(`${discordApiBaseUrl}/users/@me`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      const userData = await userResult.json();
+
+      return {
+        id: userData.id,
+        username: userData.username,
+        global_name: userData.global_name, 
+        avatar: userData.avatar,
+      };
+    } catch (error) {
+      console.error('fetchUser service error', error);
+      throw new SystemError('Failed to get user info', 500);
+    }
+  }
+
   // --- 2. Public Methods (미들웨어에서 호출) ---
 
   /**
