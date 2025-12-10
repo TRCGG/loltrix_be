@@ -130,11 +130,18 @@ export const getGmokGuilds = async (
  * @desc [(Protected) 현재 세션의 유저 ID 조회 (세션 체크용)
  * @access Private
  */
-export const getSelfProfile = (
+export const getSelfProfile = async (
   req: AuthRequest, 
   res: Response,
 ) => {
   try {
+
+    const { accessToken } = req;
+
+    if (!accessToken) {
+      throw new SystemError('Access token not found after auth middleware');
+    }
+
     if (!req.discordMemberId) {
       res.status(500).json({
         status: 'error',
@@ -143,11 +150,13 @@ export const getSelfProfile = (
       });
     }
 
+    const result =  await discordAuthService.fetchUser(accessToken);
+
     res.status(200).json({
       status: 'success',
       message: 'session OK',
       data: {
-        id: req.discordMemberId,
+        user: result
       },
     });
   } catch (error) {
