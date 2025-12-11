@@ -8,6 +8,7 @@ import {
   getGameDetail,
   deleteMatch,
 } from '../controllers/matchParticipant.controller.js';
+import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 
 const router: Router = Router();
 
@@ -86,6 +87,7 @@ const gameDetailSchema = z.object({
  */
 router.get(
   '/:guildId/:riotName/games',
+  decodeGuildIdMiddleware,
   validateRequest(matchListSchema),
   getRecentGames
 );
@@ -96,6 +98,7 @@ router.get(
  */
 router.get(
   '/:guildId/:riotName/dashboard',
+  decodeGuildIdMiddleware,
   validateRequest(matchDashboardSchema),
   getMatchDashboard
 ); 
@@ -106,6 +109,7 @@ router.get(
  */
 router.get(
   '/:guildId/:riotName/most-picks',
+  decodeGuildIdMiddleware,
   validateRequest(matchListSchema),
   getMostPicks
 );
@@ -116,6 +120,7 @@ router.get(
  */
 router.get(
   '/:guildId/games/:gameId',
+  decodeGuildIdMiddleware,
   validateRequest(gameDetailSchema),
   getGameDetail
 );
@@ -126,6 +131,7 @@ router.get(
  */
 router.delete(
   '/:guildId/games/:gameId',
+  decodeGuildIdMiddleware,
   validateRequest(gameDetailSchema),
   deleteMatch,
 );

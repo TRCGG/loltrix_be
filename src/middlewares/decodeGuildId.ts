@@ -29,21 +29,8 @@ export const decodeGuildIdMiddleware = (req: Request, res: Response, next: NextF
     if (req.query.guildId && typeof req.query.guildId === 'string') {
       req.query.guildId = decodeBase64(req.query.guildId);
     }
-
-    // 3. req.body (요청 본문)
-    if (req.body) {
-      // req.body.guildId
-      if (req.body.guildId) {
-        req.body.guildId = decodeBase64(req.body.guildId);
-      }
-      
-      // req.body.guild.id
-      if (req.body.guild && req.body.guild.id) {
-        req.body.guild.id = decodeBase64(req.body.guild.id);
-      }
-    }
+    
     next();
-
   } catch (error) {
     throw new BusinessError('Invalid Base64 encoded guildId provided', 400);
   }

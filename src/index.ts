@@ -9,7 +9,6 @@ import morgan from 'morgan';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import { initConnectionPool } from './init.js';
-import { decodeGuildIdMiddleware } from './middlewares/decodeGuildId.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { notFoundHandler } from './middlewares/notFoundHandler.js';
 import apiRoutes from './routes/index.js';
@@ -79,7 +78,7 @@ app.use(cors(
 )); 
 
 // API routes
-app.use('/api', decodeGuildIdMiddleware, apiRoutes);
+app.use('/api', apiRoutes);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(currentDirname, './loltrix/index.html'));

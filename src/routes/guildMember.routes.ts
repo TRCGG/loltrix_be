@@ -7,7 +7,8 @@ import {
   getSubAccounts,
   removeSubAccount,
   updateMemberStatus,
-} from '../controllers/guildMember.controller.js'; // 경로 수정 필요
+} from '../controllers/guildMember.controller.js';
+import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 
 const router: Router = Router();
 
@@ -94,6 +95,7 @@ router.post(
  */
 router.get(
   '/:guildId/sub-accounts', 
+  decodeGuildIdMiddleware,
   validateRequest(getSubAccountsSchema),
   getSubAccounts
 );
@@ -104,6 +106,7 @@ router.get(
  * @access Public
  */
 router.get('/:guildId/:riotName', 
+  decodeGuildIdMiddleware,
   validateRequest(searchGuildMembersSchema), 
   searchGuildMembers
 );
