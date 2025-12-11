@@ -8,6 +8,8 @@ import {
   guildMember,
 } from '../database/schema.js';
 
+const envLoLSeason = process.env.LOL_SEASON || '2026' ;
+
 export class StatisticsService {
   private getStatSqlChunks() {
     return {
@@ -43,6 +45,7 @@ export class StatisticsService {
     month: string | undefined,
     championName: string | undefined,
     position: string | undefined,
+    season: string | undefined,
     sortBy: 'totalCount' | 'winRate' = 'totalCount',
     page: number = 1,
     limit: number = 50,
@@ -62,6 +65,14 @@ export class StatisticsService {
     // 챔피언 조건
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
 
+    // 시즌 조건 
+    const seasonCondition =
+      season === 'ALL'
+        ? undefined
+        : season
+          ? eq(customMatch.season, season)
+          : eq(customMatch.season, envLoLSeason);
+
     // 최소게임 조건 (승률)
     const minGameCount = sortBy === 'winRate' ? 30 : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;
@@ -78,6 +89,7 @@ export class StatisticsService {
       dateCondition,
       champCondition,
       positionCondition,
+      seasonCondition
     );
 
     const result = await db
@@ -127,6 +139,7 @@ export class StatisticsService {
     year: string | undefined,
     month: string | undefined,
     position: string | undefined,
+    season: string | undefined,
     sortBy: 'totalCount' | 'winRate' = 'totalCount',
     page: number = 1,
     limit: number = 50,
@@ -139,6 +152,14 @@ export class StatisticsService {
       year ? sql`TO_CHAR(${customMatch.createDate}, 'YYYY') = ${year}` : undefined,
       month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
     );
+
+    // 시즌 조건 
+    const seasonCondition =
+      season === 'ALL'
+        ? undefined
+        : season
+          ? eq(customMatch.season, season)
+          : eq(customMatch.season, envLoLSeason);
 
     // 최소게임 조건 (승률)
     const minGameCount = sortBy === 'winRate' ? 30 : 0;
@@ -154,6 +175,7 @@ export class StatisticsService {
       eq(customMatch.guildId, guildId),
       dateCondition,
       position ? eq(matchParticipant.position, position) : undefined,
+      seasonCondition,
     );
 
     const result = await db

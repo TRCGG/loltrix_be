@@ -22,7 +22,7 @@ export const getUserGameStats = async (
 ) => {
   try {
     const { guildId } = req.params;
-    const { year, month, championName, position, sortBy, page, limit } = req.query;
+    const { year, month, championName, position, season, sortBy, page, limit } = req.query;
 
     const { result, totalCount } = await statisticsService.getUserGameStatistics(
       guildId, 
@@ -30,6 +30,7 @@ export const getUserGameStats = async (
       month,
       championName,
       position,
+      season,
       (sortBy as 'totalCount' | 'winRate') || 'totalCount',
       Number(page) || 1,  
       Number(limit) || 50 
@@ -70,13 +71,14 @@ export const getChampionStats = async (
 ) => {
   try {
     const { guildId } = req.params;
-    const { year, month, position, sortBy, page, limit } = req.query;
+    const { year, month, position, season, sortBy, page, limit } = req.query;
 
     const { result, totalCount } = await statisticsService.getChampionStatistics(
       guildId, 
       year, 
       month,
       position,
+      season,
       (sortBy as 'totalCount' | 'winRate') || 'totalCount',
       Number(page) || 1,
       Number(limit) || 20
