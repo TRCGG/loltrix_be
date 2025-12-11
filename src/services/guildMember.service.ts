@@ -1,4 +1,5 @@
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, ilike, desc, sql, and, inArray } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { guildMember, InsertGuildMember, matchParticipant, riotAccount, RiotAccount } from '../database/schema.js';
 import { 
@@ -37,7 +38,7 @@ export class GuildMemberService {
       const existingMembers = await tx
         .select({ account: guildMember.account })
         .from(guildMember)
-        .where(and(eq(guildMember.guild_id, guildId), inArray(guildMember.account, playerCodes)));
+        .where(and(eq(guildMember.guildId, guildId), inArray(guildMember.account, playerCodes)));
 
       // 조회된 멤버를 Set으로 변환 (빠른 검색용)
       const existingAccountSet = new Set(existingMembers.map((m) => m.account));
@@ -46,7 +47,7 @@ export class GuildMemberService {
       const finalMembersToInsert: InsertGuildMember[] = riotAccounts
         .filter((acc) => !existingAccountSet.has(acc.playerCode))
         .map((acc) => ({
-          guild_id: guildId,
+          guildId: guildId,
           account: acc.playerCode,
           is_main: true,
           status: '1',
