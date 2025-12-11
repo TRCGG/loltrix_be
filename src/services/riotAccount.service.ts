@@ -24,24 +24,43 @@ export class RiotAccountService {
    */
   public async upsertRiotAccount(rawData: any[], tx: TransactionType) {
     try {
-      const riotAccountData = this.parsedRawData(rawData);
+      const riotAccountDataList = this.parsedRawData(rawData);
+      const results = [];
 
-      const result = await tx
-        .insert(riotAccount)
-        .values(riotAccountData)
-        .onConflictDoUpdate({
-          target: riotAccount.puuid,
-          set: {
-            riotName: sql`excluded.riot_name`,
-            riotNameTag: sql`excluded.riot_name_tag`,
-            updateDate: new Date(),
-          },
-          where: sql`${riotAccount.riotName} IS DISTINCT FROM excluded.riot_name 
-             OR ${riotAccount.riotNameTag} IS DISTINCT FROM excluded.riot_name_tag`,
-        })
-        .returning();
+      for (const data of riotAccountDataList) {
+        // 1. Select: 기존 계정 조회
+        const [existingAccount] = await tx
+          .select()
+          .from(riotAccount)
+          .where(eq(riotAccount.puuid, data.puuid));
 
-      return result;
+        if (existingAccount) {
+          // 2. Update: 기존 계정이 있고, 정보가 변경된 경우에만 수행
+          if (
+            existingAccount.riotName !== data.riotName ||
+            existingAccount.riotNameTag !== data.riotNameTag
+          ) {
+            const [updated] = await tx
+              .update(riotAccount)
+              .set({
+                riotName: data.riotName,
+                riotNameTag: data.riotNameTag,
+                updateDate: new Date(),
+              })
+              .where(eq(riotAccount.puuid, data.puuid))
+              .returning();
+            results.push(updated);
+          } else {
+            results.push(existingAccount); 
+          }
+        } else {
+          // 3. Insert: 계정이 없을 때만 수행 (시퀀스 증가)
+          const [inserted] = await tx.insert(riotAccount).values(data).returning();
+          results.push(inserted);
+        }
+      }
+
+      return results;
     } catch (error) {
       console.error('Error upserting RiotAccount', error);
       throw new SystemError('RiotAccount error while upserting', 500);
@@ -49,7 +68,7 @@ export class RiotAccountService {
   }
 
   /**
-   * 
+   *
    * @desc RiotAccount player_code 조회
    * rawData puuid로 player_code 조회
    * 트랜잭션
@@ -57,20 +76,16 @@ export class RiotAccountService {
   public async findRiotAccountsByPuuids(rawData: any[], tx: TransactionType) {
     const riotAccountDatas = this.parsedRawData(rawData);
 
-    const puuids = riotAccountDatas.map(account => account.puuid);
+    const puuids = riotAccountDatas.map((account) => account.puuid);
 
     try {
-      const result = await tx
-        .select()
-        .from(riotAccount)
-        .where(inArray(riotAccount.puuid, puuids));
-      
+      const result = await tx.select().from(riotAccount).where(inArray(riotAccount.puuid, puuids));
+
       return result;
     } catch (error) {
-      console.error("error while findRiotAccountsByPuuids");
-      throw new SystemError("RiotAccount error while findRiotAccountsByPuuids", 500);
+      console.error('error while findRiotAccountsByPuuids');
+      throw new SystemError('RiotAccount error while findRiotAccountsByPuuids', 500);
     }
-
   }
 
   /**
