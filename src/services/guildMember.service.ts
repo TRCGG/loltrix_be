@@ -1,5 +1,4 @@
-import { eq, ilike, desc, sql, and, inArray } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { eq, and, inArray } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { guildMember, InsertGuildMember, matchParticipant, riotAccount, RiotAccount } from '../database/schema.js';
 import { 
@@ -29,20 +28,40 @@ export class GuildMemberService {
     guildId: string,
     tx: TransactionType,
   ) {
-    const membersToInsert: InsertGuildMember[] = riotAccounts.map((acc) => ({
-      guildId: guildId,
-      account: acc.playerCode,
-      isMain: true,
-      status: '1',
-    }));
-
     try {
-      const insertedMembers = await tx
-        .insert(guildMember)
-        .values(membersToInsert)
-        .onConflictDoNothing()
-        .returning();
-      return insertedMembers;
+      // 1. 등록하려는 계정들의 playerCode 목록 추출
+      const playerCodes = riotAccounts.map((acc) => acc.playerCode);
+      if (playerCodes.length === 0) return [];
+
+      // 2. Select: 이미 해당 길드에 존재하는 멤버 조회
+      const existingMembers = await tx
+        .select({ account: guildMember.account })
+        .from(guildMember)
+        .where(and(eq(guildMember.guild_id, guildId), inArray(guildMember.account, playerCodes)));
+
+      // 조회된 멤버를 Set으로 변환 (빠른 검색용)
+      const existingAccountSet = new Set(existingMembers.map((m) => m.account));
+
+      // 3. Filter: DB에 없는 멤버만 필터링
+      const finalMembersToInsert: InsertGuildMember[] = riotAccounts
+        .filter((acc) => !existingAccountSet.has(acc.playerCode))
+        .map((acc) => ({
+          guild_id: guildId,
+          account: acc.playerCode,
+          is_main: true,
+          status: '1',
+        }));
+
+      // 4. Insert: 필터링된 멤버가 있을 때만 저장
+      if (finalMembersToInsert.length > 0) {
+        const insertedMembers = await tx
+          .insert(guildMember)
+          .values(finalMembersToInsert)
+          .returning();
+        return insertedMembers;
+      }
+
+      return []; // 새로 추가된 멤버 없음
     } catch (error) {
       console.error('Error inserting guild members', error);
       throw new SystemError('GuildMember error while inserting', 500);
