@@ -89,6 +89,20 @@ export class RiotAccountService {
   }
 
   /**
+   * @desc RiotName과 RiotNameTag으로 RiotAccount를 조회
+   */
+  public async findAccountByRiotId(
+    { riotName, riotNameTag }: { riotName: string; riotNameTag: string },
+    tx: TransactionType,
+  ) {
+    return await tx.query.riotAccount.findFirst({
+      where: 
+      and(eq(riotAccount.riotName, riotName), 
+      eq(riotAccount.riotNameTag, riotNameTag)),
+    });
+  }
+
+  /**
    * @desc rawData 에서 riotAccount 추출 및 Zod 유효성 검사
    */
   private parsedRawData(rawData: any): InsertRiotAccount[] {
