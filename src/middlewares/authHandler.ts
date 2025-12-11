@@ -33,7 +33,7 @@ export const verifyAuth = async (
   try {
 
     // --- 봇 검증 --- 
-    const botHeader = req.headers['discord-bot-header'];
+    const botHeader = req.headers['X-Discord-Bot'];
     if (botHeader) {
       if(botHeader !== botSecret){
         throw new BusinessError('Invalid bot secret', 403, {isLoggable: false});
