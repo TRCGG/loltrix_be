@@ -27,6 +27,7 @@ export interface GetStatisticsQuery {
   championName?: string;
   position?: string;
   page?: string;
+  season?: string;
   limit?: string;
   sortBy?: 'totalCount' | 'winRate';
 }

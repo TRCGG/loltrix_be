@@ -31,6 +31,11 @@ const dateFilterSchema = z.object({
     position: z
       .enum(['TOP', 'JUG', 'MID', 'ADC', 'SUP'])
       .optional(),
+    season: z
+      .string()
+      .min(1)
+      .max(16, 'season must be less than 16 characters')
+      .optional(),
     page: z
       .string()
       .regex(/^\d+$/)
