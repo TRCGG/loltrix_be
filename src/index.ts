@@ -72,7 +72,7 @@ app.use(cors(
       'Origin',
       'X-Requested-With',
       'Accept',
-      'X-Discord-Bot'
+      'x-discord-bot'
     ]
   }
 )); 
