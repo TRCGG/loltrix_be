@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { getUserGameStats, getChampionStats } from '../controllers/statistics.controller.js';
+import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 
 const router: Router = Router();
 
@@ -55,6 +56,7 @@ const dateFilterSchema = z.object({
  */
 router.get(
   '/:guildId/users',
+  decodeGuildIdMiddleware,
   validateRequest(dateFilterSchema),
   getUserGameStats
 );
@@ -65,6 +67,7 @@ router.get(
  */
 router.get(
   '/:guildId/champions',
+  decodeGuildIdMiddleware,
   validateRequest(dateFilterSchema), // 기존 스키마 재사용
   getChampionStats
 );
