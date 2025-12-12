@@ -6,11 +6,13 @@ import { MatchStats } from './matchParticipant.js';
 export interface UserGameStatistic extends MatchStats {
   riotName: string;
   riotNameTag: string;
+  position?: string;
 }
 
 export interface ChampionStatistic extends MatchStats {
   champName: string;
   champNameEng: string;
+  position?: string;
 }
 
 // API 응답 타입

@@ -30,7 +30,7 @@ const dateFilterSchema = z.object({
       .max(32, 'championName must be less than 32 characters')
       .optional(),
     position: z
-      .enum(['TOP', 'JUG', 'MID', 'ADC', 'SUP'])
+      .enum(['ALL','TOP', 'JUG', 'MID', 'ADC', 'SUP'])
       .optional(),
     season: z
       .string()

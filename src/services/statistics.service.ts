@@ -59,9 +59,13 @@ export class StatisticsService {
       month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
     );
 
-    // 포지션 조건
-    const positionCondition = position ? eq(matchParticipant.position, position) : undefined;
+    const shouldGroupByPosition = !!position;
 
+    // 포지션 조건
+    const positionCondition = (position && position !== 'ALL')
+      ? eq(matchParticipant.position, position)
+      : undefined;
+    
     // 챔피언 조건
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
 
@@ -92,11 +96,19 @@ export class StatisticsService {
       seasonCondition
     );
 
+    const groupByColumns = [
+      riotAccount.playerCode,
+      riotAccount.riotName,
+      riotAccount.riotNameTag,
+      ...(shouldGroupByPosition) ? [matchParticipant.position] : []
+    ];
+
     const result = await db
       .select({
         playerCode: riotAccount.playerCode,
         riotName: riotAccount.riotName,
         riotNameTag: riotAccount.riotNameTag,
+        ...(shouldGroupByPosition ? { position: matchParticipant.position } : {}),
         ...statColumns,
       })
       .from(matchParticipant)
@@ -105,7 +117,7 @@ export class StatisticsService {
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       .where(whereCondition)
-      .groupBy(riotAccount.playerCode, riotAccount.riotName, riotAccount.riotNameTag)
+      .groupBy(...groupByColumns)
       .having(havingCondition)
       .orderBy(orderCriteria)
       .limit(limit)
@@ -121,7 +133,7 @@ export class StatisticsService {
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       .where(whereCondition)
-      .groupBy(riotAccount.playerCode)
+      .groupBy(...groupByColumns)
       .having(havingCondition)
       .as('sq');
 
@@ -153,6 +165,13 @@ export class StatisticsService {
       month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
     );
 
+    const shouldGroupByPosition = !!position;
+
+    // 포지션 조건
+    const positionCondition = (position && position !== 'ALL')
+      ? eq(matchParticipant.position, position)
+      : undefined;
+
     // 시즌 조건 
     const seasonCondition =
       season === 'ALL'
@@ -174,14 +193,21 @@ export class StatisticsService {
       eq(customMatch.isDeleted, false),
       eq(customMatch.guildId, guildId),
       dateCondition,
-      position ? eq(matchParticipant.position, position) : undefined,
+      positionCondition,
       seasonCondition,
     );
+
+    const groupByColumns = [
+      champion.champName,
+      champion.champNameEng,
+      ...(shouldGroupByPosition ? [matchParticipant.position] : [])
+    ];
 
     const result = await db
       .select({
         champName: champion.champName,
         champNameEng: champion.champNameEng,
+        ...(shouldGroupByPosition ? { position: matchParticipant.position } : {}),
         ...statColumns,
       })
       .from(matchParticipant)
@@ -189,11 +215,16 @@ export class StatisticsService {
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
       .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
       .where(whereCondition)
-      .groupBy(champion.champName, champion.champNameEng)
+      .groupBy(...groupByColumns)
       .having(havingCondition)
       .orderBy(orderCriteria)
       .limit(limit)
       .offset(offset);
+
+    const subQueryGroupBy = [
+      matchParticipant.championId,
+      ...(shouldGroupByPosition ? [matchParticipant.position] : [])
+    ];  
 
     const subQuery = db
       .select({
@@ -203,7 +234,7 @@ export class StatisticsService {
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
       .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
       .where(whereCondition)
-      .groupBy(matchParticipant.championId)
+      .groupBy(...subQueryGroupBy)
       .having(havingCondition)
       .as('sq');
 
