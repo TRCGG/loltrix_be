@@ -64,7 +64,7 @@ export const getRecentGames = async (
       });
     }
 
-    const playerCode = members[0].riot_account.playerCode;
+    const playerCode = members[0].playerCode;
 
     const { games, totalCount } = await matchParticipantService.getRecentGamesByRiotName(
       playerCode,
@@ -134,7 +134,7 @@ export const getMatchDashboard = async (
       });
     }
 
-    const playerCode = members[0].riot_account.playerCode;
+    const playerCode = members[0].playerCode;
 
     const [monthRecord, lineRecord, { mostPicks }, synergy] = await Promise.all([
       matchParticipantService.getRecentMonthRecord(playerCode),
@@ -205,7 +205,7 @@ export const getMostPicks = async (
       });
     }
 
-    const playerCode = members[0].riot_account.playerCode;
+    const playerCode = members[0].playerCode;
 
     const { mostPicks, totalCount } = await matchParticipantService.getMostPicks(
       playerCode,

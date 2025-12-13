@@ -89,7 +89,16 @@ export class GuildMemberService {
     }
 
     const result = await db
-      .select()
+      .select({
+        playerCode: riotAccount.playerCode,
+        riotName: riotAccount.riotName,
+        riotNameTag: riotAccount.riotNameTag,
+        isMain: guildMember.isMain,
+        guildId: guildMember.guildId,
+        createDate: guildMember.createDate,
+        updateDate: guildMember.updateDate,
+        isDeleted: guildMember.isDeleted
+      })
       .from(guildMember)
       .innerJoin(riotAccount, eq(guildMember.account, riotAccount.playerCode))
       .where(and(...conditions));
@@ -121,7 +130,16 @@ export class GuildMemberService {
     }
 
     const result = await db
-      .select()
+      .select({
+        playerCode: riotAccount.playerCode,
+        riotName: riotAccount.riotName,
+        riotNameTag: riotAccount.riotNameTag,
+        isMain: guildMember.isMain,
+        guildId: guildMember.guildId,
+        createDate: guildMember.createDate,
+        updateDate: guildMember.updateDate,
+        isDeleted: guildMember.isDeleted
+      })
       .from(guildMember)
       .innerJoin(riotAccount, eq(guildMember.account, riotAccount.playerCode))
       .where(and(...conditions))
