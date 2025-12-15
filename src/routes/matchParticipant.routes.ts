@@ -87,6 +87,28 @@ const gameDetailSchema = z.object({
  */
 router.get(
   '/:guildId/:riotName/games',
+  /* #swagger.auto = false
+    #swagger.tags = ['Matches']
+    #swagger.summary = '최근 게임 목록 조회'
+    #swagger.description = '특정 유저의 최근 게임 전적 리스트를 조회합니다.'
+    
+    #swagger.parameters['guildId'] = { 
+      in: 'path', 
+      description: '길드 ID', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['riotName'] = { 
+      in: 'path', 
+      description: 'Riot Name', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['riotNameTag'] = { in: 'query', description: 'Riot Tag (선택)', type: 'string' }
+    #swagger.parameters['season'] = { in: 'query', description: '시즌 필터 (예: S13)', type: 'string' }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
+  */
   decodeGuildIdMiddleware,
   validateRequest(matchListSchema),
   getRecentGames
@@ -98,6 +120,26 @@ router.get(
  */
 router.get(
   '/:guildId/:riotName/dashboard',
+  /* #swagger.auto = false
+    #swagger.tags = ['Matches']
+    #swagger.summary = '전적 대시보드 조회'
+    #swagger.description = '전적 요약, 라인별 통계, 모스트 5 챔피언 정보를 통합 조회합니다.'
+    
+    #swagger.parameters['guildId'] = { 
+      in: 'path', 
+      description: '길드 ID', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['riotName'] = { 
+      in: 'path', 
+      description: 'Riot Name', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['riotNameTag'] = { in: 'query', description: 'Riot Tag (선택)', type: 'string' }
+    #swagger.parameters['season'] = { in: 'query', description: '시즌 필터', type: 'string' }
+  */
   decodeGuildIdMiddleware,
   validateRequest(matchDashboardSchema),
   getMatchDashboard
@@ -109,6 +151,27 @@ router.get(
  */
 router.get(
   '/:guildId/:riotName/most-picks',
+  /* #swagger.auto = false
+    #swagger.tags = ['Matches']
+    #swagger.summary = '모스트 픽 상세 조회'
+    #swagger.description = '플레이한 챔피언들의 상세 통계 목록을 조회합니다 (페이징 지원).'
+    
+    #swagger.parameters['guildId'] = { 
+      in: 'path', 
+      description: '길드 ID', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['riotName'] = { 
+      in: 'path', 
+      description: 'Riot Name', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['season'] = { in: 'query', description: '시즌 필터', type: 'string' }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
+  */
   decodeGuildIdMiddleware,
   validateRequest(matchListSchema),
   getMostPicks
@@ -120,6 +183,24 @@ router.get(
  */
 router.get(
   '/:guildId/games/:gameId',
+  /* #swagger.auto = false
+    #swagger.tags = ['Matches']
+    #swagger.summary = '게임 상세 조회'
+    #swagger.description = '특정 게임의 상세 정보(참여자 10명 포함)를 조회합니다.'
+    
+    #swagger.parameters['guildId'] = { 
+      in: 'path', 
+      description: '길드 ID', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['gameId'] = { 
+      in: 'path', 
+      description: 'Game ID', 
+      required: true,
+      type: 'string'
+    }
+  */
   decodeGuildIdMiddleware,
   validateRequest(gameDetailSchema),
   getGameDetail
@@ -131,6 +212,24 @@ router.get(
  */
 router.delete(
   '/:guildId/games/:gameId',
+  /* #swagger.auto = false
+    #swagger.tags = ['Matches']
+    #swagger.summary = '게임 기록 삭제'
+    #swagger.description = '특정 게임 기록을 삭제(숨김) 처리합니다.'
+    
+    #swagger.parameters['guildId'] = { 
+      in: 'path', 
+      description: '길드 ID', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['gameId'] = { 
+      in: 'path', 
+      description: 'Game ID', 
+      required: true,
+      type: 'string'
+    }
+  */
   decodeGuildIdMiddleware,
   validateRequest(gameDetailSchema),
   deleteMatch,

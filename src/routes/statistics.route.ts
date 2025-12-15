@@ -8,7 +8,7 @@ const router: Router = Router();
 
 // --- Zod Schemas ---
 
-const dateFilterSchema = z.object({
+const filterSchema = z.object({
   params: z.object({
     guildId: z
       .string()
@@ -61,8 +61,38 @@ const dateFilterSchema = z.object({
  */
 router.get(
   '/:guildId/users',
+  /* #swagger.auto = false
+    #swagger.tags = ['Statistics']
+    #swagger.summary = '유저별 게임 통계'
+    #swagger.description = '특정 길드 내 유저들의 게임 통계(승률, 판수 등)를 다양한 필터로 조회합니다.'
+    
+    #swagger.parameters['guildId'] = { 
+      in: 'path', 
+      description: '길드 ID', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['year'] = { in: 'query', description: '년도 (YYYY)', type: 'string' }
+    #swagger.parameters['month'] = { in: 'query', description: '월 (1~12)', type: 'string' }
+    #swagger.parameters['season'] = { in: 'query', description: '시즌 (예: S14-2)', type: 'string' }
+    #swagger.parameters['position'] = { 
+      in: 'query', 
+      description: '포지션 필터', 
+      type: 'string', 
+      enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP'] 
+    }
+    #swagger.parameters['championName'] = { in: 'query', description: '특정 챔피언 플레이 기록 필터', type: 'string' }
+    #swagger.parameters['sortBy'] = { 
+      in: 'query', 
+      description: '정렬 기준 (판수/승률)', 
+      type: 'string', 
+      enum: ['totalCount', 'winRate'] 
+    }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
+  */
   decodeGuildIdMiddleware,
-  validateRequest(dateFilterSchema),
+  validateRequest(filterSchema),
   getUserGameStats
 );
 
@@ -72,8 +102,37 @@ router.get(
  */
 router.get(
   '/:guildId/champions',
+  /* #swagger.auto = false
+    #swagger.tags = ['Statistics']
+    #swagger.summary = '챔피언별 통계'
+    #swagger.description = '길드 내에서 플레이된 챔피언들의 통계를 조회합니다.'
+    
+    #swagger.parameters['guildId'] = { 
+      in: 'path', 
+      description: '길드 ID', 
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['year'] = { in: 'query', description: '년도 (YYYY)', type: 'string' }
+    #swagger.parameters['month'] = { in: 'query', description: '월 (1~12)', type: 'string' }
+    #swagger.parameters['season'] = { in: 'query', description: '시즌', type: 'string' }
+    #swagger.parameters['position'] = { 
+      in: 'query', 
+      description: '포지션 필터', 
+      type: 'string', 
+      enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP'] 
+    }
+    #swagger.parameters['sortBy'] = { 
+      in: 'query', 
+      description: '정렬 기준', 
+      type: 'string', 
+      enum: ['totalCount', 'winRate'] 
+    }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
+  */
   decodeGuildIdMiddleware,
-  validateRequest(dateFilterSchema), // 기존 스키마 재사용
+  validateRequest(filterSchema), // 기존 스키마 재사용
   getChampionStats
 );
 

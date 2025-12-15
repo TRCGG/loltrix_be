@@ -8,6 +8,10 @@ const router: Router = Router();
  * @desc 헬스 체크 엔드포인트
  * @access Public
  */
-router.get('/', getHealth);
+
+router.get('/',
+  // #swagger.tags = ['Health']
+  // #swagger.security = []
+  getHealth);
 
 export default router;

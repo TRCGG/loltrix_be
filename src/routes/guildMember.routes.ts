@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import {
-  searchGuildMembers, 
+  searchGuildMembers,
   linkSubAccount,
   getSubAccounts,
   removeSubAccount,
@@ -84,9 +84,25 @@ const updateMemberStatusSchema = z.object({
  * @desc 부계정을 본계정에 연결하고 DB 정보 업데이트 (트랜잭션 포함)
  */
 router.post(
-  '/sub-account', 
+  '/sub-account',
+  /* #swagger.tags = ['GuildMember']
+    #swagger.summary = '부계정 연결'
+    #swagger.description = '본계정에 부계정을 연결합니다.'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: '연결할 계정 정보',
+      required: true,
+      schema: {
+        guildId: 'string',
+        subRiotName: 'SubName',
+        subRiotTag: 'KR1',
+        mainRiotName: 'MainName',
+        mainRiotTag: 'KR1'
+      }
+    }
+  */
   validateRequest(linkSubAccountSchema),
-  linkSubAccount
+  linkSubAccount,
 );
 
 /**
@@ -94,10 +110,22 @@ router.post(
  * @desc 특정 길드의 부계정 목록 조회
  */
 router.get(
-  '/:guildId/sub-accounts', 
+  '/:guildId/sub-accounts',
+  /* #swagger.auto = false
+    #swagger.tags = ['GuildMember']
+    #swagger.summary = '부계정 목록 조회'
+    #swagger.description = '특정 길드 내의 연결된 부계정 목록을 조회합니다.'
+    
+    #swagger.parameters['guildId'] = { 
+      in: 'path',
+      description: '길드 ID',
+      required: true,
+      type: 'string'
+    }
+  */
   decodeGuildIdMiddleware,
   validateRequest(getSubAccountsSchema),
-  getSubAccounts
+  getSubAccounts,
 );
 
 /**
@@ -105,10 +133,31 @@ router.get(
  * @desc 쿼리 파라미터로 길드 ID와 Riot ID를 받아 멤버 검색
  * @access Public
  */
-router.get('/:guildId/:riotName', 
+router.get(
+  '/:guildId/:riotName',
+  /* #swagger.auto = false
+    #swagger.tags = ['GuildMember']
+    #swagger.summary = '길드 멤버 검색'
+    #swagger.description = '길드 ID, Riot Name, Tag를 조합하여 멤버를 검색합니다.'
+    
+    #swagger.parameters['guildId'] = {
+      in: 'path',         
+      description: '길드 ID',
+      required: true,
+      type: 'string'
+     }
+    #swagger.parameters['riotName'] = { 
+      in: 'path',
+      description: 'Riot Name',
+      required: true,
+      type: 'string'
+     }
+    #swagger.parameters['riotNameTag'] = { in: 'query', description: 'Riot Tag (선택)', type: 'string' }
+    #swagger.parameters['limit'] = { in: 'query', description: '조회 개수 제한', type: 'integer' }
+  */
   decodeGuildIdMiddleware,
-  validateRequest(searchGuildMembersSchema), 
-  searchGuildMembers
+  validateRequest(searchGuildMembersSchema),
+  searchGuildMembers,
 );
 
 /**
@@ -117,8 +166,23 @@ router.get('/:guildId/:riotName',
  */
 router.put(
   '/status',
+  /* #swagger.tags = ['GuildMember']
+    #swagger.summary = '멤버 상태 변경'
+    #swagger.description = '멤버와 연결된 부계정의 상태를 일괄 변경합니다. (1: 활동, 2: 탈퇴)'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: '상태 변경 정보',
+      required: true,
+      schema: {
+        guildId: 'string',
+        riotName: 'string',
+        riotNameTag: 'string',
+        status: '1'
+      }
+    }
+  */
   validateRequest(updateMemberStatusSchema),
-  updateMemberStatus
+  updateMemberStatus,
 );
 
 /**
@@ -127,8 +191,22 @@ router.put(
  */
 router.delete(
   '/sub-account',
+  /* #swagger.tags = ['GuildMember']
+    #swagger.summary = '부계정 연결 해제'
+    #swagger.description = '부계정 연결 정보를 영구 삭제합니다.'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: '해제할 계정 정보',
+      required: true,
+      schema: {
+        guildId: 'string',
+        riotName: 'string',
+        riotNameTag: 'string'
+      }
+    }
+  */
   validateRequest(removeSubAccountSchema),
-  removeSubAccount
+  removeSubAccount,
 );
 
 export default router;

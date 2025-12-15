@@ -56,12 +56,47 @@ const deleteReplaySchema = z.object({
 
 
 /**
- * @route POST /api/replay/save
+ * @route POST /api/replays
  * @desc 리플레이 파일 저장
  * @access Public 또는 인증 필요
  */
-router.post('/', validateRequest(createReplaySchema), createReplay);
+router.post('/', 
+  /* #swagger.tags = ['Replays']
+    #swagger.summary = '리플레이 생성'
+    #swagger.description = '리플레이 파일 정보와 길드 정보를 저장합니다.'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: '리플레이 및 길드 데이터',
+      required: true,
+      schema: {
+        fileName: 'example.rofl',
+        fileUrl: 'https://s3-bucket-url...',
+        gameType: '1',
+        createUser: 'DiscordUser123',
+        guild: {
+          id: 'guild_12345',
+          name: 'My Awesome Guild',
+          languageCode: 'ko'
+        }
+      }
+    }
+  */
+  validateRequest(createReplaySchema), 
+  createReplay
+);
 
-router.delete('/:replayCode', validateRequest(deleteReplaySchema), softDeleteReplay);
+/**
+ * @route DELETE /api/replays/:replayCode
+ * @desc 리플레이 삭제
+ */
+router.delete('/:replayCode', 
+  /* #swagger.tags = ['Replays']
+    #swagger.summary = '리플레이 삭제'
+    #swagger.description = '리플레이 코드를 사용하여 리플레이를 소프트 삭제합니다.'
+    #swagger.parameters['replayCode'] = { description: '삭제할 리플레이 코드' }
+  */
+  validateRequest(deleteReplaySchema), 
+  softDeleteReplay
+);
 
 export default router;

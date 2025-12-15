@@ -12,6 +12,8 @@ import { initConnectionPool } from './init.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { notFoundHandler } from './middlewares/notFoundHandler.js';
 import apiRoutes from './routes/index.js';
+import swaggerUi from 'swagger-ui-express';
+import swaggerDocument from './swagger-output.json';
 
 // Define currentDirname for ES modules
 const currentFilename = fileURLToPath(import.meta.url);
@@ -79,6 +81,7 @@ app.use(cors(
 
 // API routes
 app.use('/api', apiRoutes);
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(currentDirname, './loltrix/index.html'));
