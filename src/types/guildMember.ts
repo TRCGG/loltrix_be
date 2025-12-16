@@ -27,10 +27,15 @@ export interface UpdateGuildMemberStatusRequest {
 
 // --- DB Raw 결과 타입 ---
 
-// Drizzle의 Raw 조인 결과 (예: findExactGuildMember)
-export type GuildMemberJoinRiotAccount = {
-  guild_member: GuildMember; 
-  riot_account: RiotAccount;
+export type GuildMemberAccount = {
+  playerCode: string;
+  riotName: string;
+  riotNameTag: string;
+  isMain: boolean;
+  guildId: string;
+  createDate: Date;
+  updateDate: Date;
+  isDeleted: boolean;
 };
 
 // --- API 응답 데이터 구조 ---
@@ -54,10 +59,10 @@ export interface GuildMemberResponse {
   data?: GuildMember | GuildMember[] | null
 }
 
-export interface GuildMemberWithRiotAccountResponse {
+export interface GuildMemberAccountResponse {
   status: 'success' | 'error',
   message: string;
-  data?: GuildMemberJoinRiotAccount | GuildMemberJoinRiotAccount[] | null
+  data?: GuildMemberAccount | GuildMemberAccount[] | null
 }
 
 /**

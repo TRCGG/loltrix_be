@@ -47,7 +47,7 @@ const generateErrorCode = (): string => {
 /**
  * @desc Request 객체에서 로깅용 데이터 추출
  */
-export const extractRequestData = (req: Request) => ({
+export const extractRequestData = (req: Request): ErrorLogData['request'] => ({
   method: req.method,
   url: req.url,
   originalUrl: req.originalUrl,

@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import {
   GuildMemberResponse, 
-  GuildMemberWithRiotAccountResponse, 
+  GuildMemberAccountResponse, 
   LinkSubAccountRequest,
   SubAccountsAPIResponse,
   UpdateGuildMemberStatusRequest,
@@ -17,11 +17,11 @@ import { BusinessError } from '../types/error.js';
 export const searchGuildMembers = async (
   req: Request<
     { guildId: string, riotName: string },
-    GuildMemberWithRiotAccountResponse,   
+    GuildMemberAccountResponse,   
     Record<string, never>, 
     { riotNameTag?: string, limit?: number}    
   >,
-  res: Response<GuildMemberWithRiotAccountResponse>,
+  res: Response<GuildMemberAccountResponse>,
 ) => {
   try {
     const { guildId, riotName } = req.params;

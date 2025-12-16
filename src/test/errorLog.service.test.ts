@@ -67,9 +67,9 @@ describe('Error Log Service Tests', () => {
 
       const result = extractRequestData(req);
 
-      expect(result.body).toBeUndefined();
-      expect(result.query).toBeUndefined();
-      expect(result.params).toBeUndefined();
+      expect(result?.body).toBeUndefined();
+      expect(result?.query).toBeUndefined();
+      expect(result?.params).toBeUndefined();
     });
   });
 
@@ -142,7 +142,7 @@ describe('Error Log Service Tests', () => {
         params: {},
         ip: '127.0.0.1',
         connection: { remoteAddress: '127.0.0.1' }
-      } as Partial<Request> as Request;
+        } as unknown as Request
 
       const result = await logErrorFromRequest(error, req, 500);
 

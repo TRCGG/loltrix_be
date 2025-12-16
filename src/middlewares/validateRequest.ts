@@ -24,7 +24,7 @@ export const validateRequest =
             code: err.code,
             path: err.path.join('.'),
             message: err.message,
-            value: err.received || undefined,
+            value: 'received' in err ? err.received : undefined,
           })),
         };
 

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { testError, testValidationError, testDatabaseError } from '../controllers/test.controller.js';
 
-const router = Router();
+const router:Router = Router();
 
 // 테스트용 에러 발생 라우트들
 
