@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { BusinessError } from '../types/error';
+import { BusinessError } from '../types/error.js';
 
 /**
  * Base64 문자열을 디코딩하는 헬퍼 함수

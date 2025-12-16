@@ -13,11 +13,14 @@ import { errorHandler } from './middlewares/errorHandler.js';
 import { notFoundHandler } from './middlewares/notFoundHandler.js';
 import apiRoutes from './routes/index.js';
 import swaggerUi from 'swagger-ui-express';
-import swaggerDocument from './swagger-output.json';
+import { createRequire } from 'module';
 
 // Define currentDirname for ES modules
 const currentFilename = fileURLToPath(import.meta.url);
 const currentDirname = dirname(currentFilename);
+
+const require = createRequire(import.meta.url);
+const swaggerDocument = require('./swagger-output.json');
 
 // Load environment-specific .env file first
 const nodeEnv = process.env.NODE_ENV || 'development';
