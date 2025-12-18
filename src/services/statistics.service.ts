@@ -191,7 +191,8 @@ export class StatisticsService {
     const whereCondition = and(
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
-      eq(customMatch.guildId, guildId),
+      eq(guildMember.isDeleted, false),
+      eq(guildMember.guildId, guildId),
       dateCondition,
       positionCondition,
       seasonCondition,
@@ -213,7 +214,7 @@ export class StatisticsService {
       .from(matchParticipant)
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
+      .innerJoin(guildMember, eq(matchParticipant.playerCode, guildMember.account))
       .where(whereCondition)
       .groupBy(...groupByColumns)
       .having(havingCondition)
@@ -232,7 +233,7 @@ export class StatisticsService {
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
+      .innerJoin(guildMember, eq(matchParticipant.playerCode, guildMember.account))
       .where(whereCondition)
       .groupBy(...subQueryGroupBy)
       .having(havingCondition)
