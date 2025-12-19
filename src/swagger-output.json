@@ -404,31 +404,6 @@
         }
       }
     },
-    "/api/replays/{replayCode}": {
-      "delete": {
-        "tags": [
-          "Replays"
-        ],
-        "summary": "리플레이 삭제",
-        "description": "리플레이 코드를 사용하여 리플레이를 소프트 삭제합니다.",
-        "parameters": [
-          {
-            "name": "replayCode",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "삭제할 리플레이 코드"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": ""
-          }
-        }
-      }
-    },
     "/api/guildMember/sub-account": {
       "post": {
         "tags": [
@@ -506,35 +481,34 @@
           "GuildMember"
         ],
         "summary": "부계정 연결 해제",
-        "description": "부계정 연결 정보를 영구 삭제합니다.",
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "description": "해제할 계정 정보",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "properties": {
-                "guildId": {
-                  "type": "string",
-                  "example": "string"
-                },
-                "riotName": {
-                  "type": "string",
-                  "example": "string"
-                },
-                "riotNameTag": {
-                  "type": "string",
-                  "example": "string"
-                }
-              }
-            }
-          }
-        ],
+        "description": "부계정의 본계정 연결을 해제합니다.",
         "responses": {
           "default": {
             "description": ""
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guildId": {
+                    "type": "string",
+                    "example": "string"
+                  },
+                  "riotName": {
+                    "type": "string",
+                    "example": "string"
+                  },
+                  "riotNameTag": {
+                    "type": "string",
+                    "example": "string"
+                  }
+                }
+              }
+            }
           }
         }
       }

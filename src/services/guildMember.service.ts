@@ -365,29 +365,36 @@ export class GuildMemberService {
   }
 
   /**
-   * @desc 닉네임/태그로 부계정을 찾아 삭제 
+   * @desc 닉네임/태그로 부계정을 찾아 본계정 연동 해제
    */
   public async deleteSubAccountByRiotId(
     guildId: string, 
     riotName: string, 
     riotNameTag: string
   ) {
-    const targetAccountSubQuery = db
+    const [targetAccount] = await db
       .select({ playerCode: riotAccount.playerCode })
       .from(riotAccount)
       .where(and(
         eq(riotAccount.riotName, riotName),
         eq(riotAccount.riotNameTag, riotNameTag)
-      ));
+      ))
+      .limit(1);
 
     const result = await db
-      .delete(guildMember)
+      .update(guildMember)
+      .set({
+        isMain: true,
+        mainAccount: null,
+        updateDate: new Date(),
+      })
       .where(and(
         eq(guildMember.guildId, guildId),
         eq(guildMember.isMain, false),
-        inArray(guildMember.account, targetAccountSubQuery)
+        eq(guildMember.account, targetAccount.playerCode)
       ))
       .returning();
+
     return result[0];
   }
 }

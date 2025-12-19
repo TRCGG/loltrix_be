@@ -191,7 +191,7 @@ export const updateMemberStatus = async (
 };
 
 /**
- * @desc 부계정 연결 해제 (Hard Delete)
+ * @desc 부계정 연결 해제 (부계정이 본계정과의 연결을 해제)
  * @route DELETE /api/guildMember/sub-account
  * @access Public
  */
@@ -222,12 +222,12 @@ export const removeSubAccount = async (
 
     res.status(200).json({
       status: 'success',
-      message: 'Sub-account removed successfully.',
+      message: 'Sub-account link removed successfully.',
       data: deleteSubAccount,
     });
 
   } catch (error) {
-    console.error('Error removing sub-account:', error);
+    console.error('Error removing sub-account link:', error);
     res.status(500).json({
       status: 'error',
       message: 'Internal server error while removing sub-account',

@@ -193,15 +193,20 @@ router.delete(
   '/sub-account',
   /* #swagger.tags = ['GuildMember']
     #swagger.summary = '부계정 연결 해제'
-    #swagger.description = '부계정 연결 정보를 영구 삭제합니다.'
-    #swagger.parameters['body'] = {
-      in: 'body',
-      description: '해제할 계정 정보',
+    #swagger.description = '부계정이 본계정과의 연결을 해제합니다.'
+    #swagger.requestBody = {
       required: true,
-      schema: {
-        guildId: 'string',
-        riotName: 'string',
-        riotNameTag: 'string'
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            properties: {
+              guildId: { type: "string", example: "string" },
+              riotName: { type: "string", example: "string" },
+              riotNameTag: { type: "string", example: "string" }
+            }
+          }
+        }
       }
     }
   */
