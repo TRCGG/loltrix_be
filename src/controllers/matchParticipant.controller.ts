@@ -1,6 +1,7 @@
 // controllers/matchParticipant.controller.ts
 import { Request, Response } from 'express';
 import {
+  CustomMatch,
   MatchResponse,
   MatchQuery,
   RecentGame,
@@ -281,7 +282,7 @@ export const getGameDetail = async (
  */
 export const deleteMatch = async (
   req: Request<{ guildId: string; gameId: string }>,
-  res: Response<MatchResponse<null>>
+  res: Response<MatchResponse<CustomMatch>>
 ) => {
   try {
     const { guildId, gameId } = req.params;
@@ -299,7 +300,7 @@ export const deleteMatch = async (
     res.status(200).json({
       status: 'success',
       message: 'Game match deleted successfully',
-      data: null,
+      data: deletedMatch,
     });
 
   } catch (error) {

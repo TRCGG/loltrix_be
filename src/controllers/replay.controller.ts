@@ -3,7 +3,6 @@ import {
   ReplayResponse,
   ReplayFileRequest,
 } from '../types/replay.js';
-import { replayService } from '../services/replay.service.js';
 import { replaySaveFacade } from '../facade/replaySave.facade.js';
 
 /**
@@ -28,43 +27,4 @@ export const createReplay = async (
     } catch (error) { 
       next(error);
     }
-};
-
-/**
- * @desc 리플레이를 논리적으로 삭제
- * @route DELETE /api/replays/:replayCode
- * @access Public
- */
-export const softDeleteReplay = async (
-  req: Request<{ replayCode: string }>, 
-  res: Response<ReplayResponse>
-) => {
-  try {
-    const { replayCode } = req.params;
-    if (!replayCode) {
-      return res.status(400).json({ status: 'error', message: 'Invalid replay ID' });
-    }
-
-    const deletedReplay = await replayService.softDeleteReplayByCode(replayCode);
-    if(!deletedReplay) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Replay not found',
-        data: null
-      });
-    }
-
-    return res.status(200).json({ 
-      status: 'success', 
-      message: 'Replay deleted successfully', 
-      data: deletedReplay 
-    });
-  } catch (error) {
-    console.error('Error deleting replay:', error);
-    return res.status(500).json({ 
-      status: 'error', 
-      message: 'Internal server error while deleting replay',
-      data: null
-    });
-  }
 };

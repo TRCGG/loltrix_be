@@ -1,4 +1,6 @@
 // types/matchParticipant.ts
+import { CustomMatch } from '../database/schema.js';
+
 
 /** 승률 및 KDA 기본 통계 */
 export interface MatchStats {
@@ -113,3 +115,5 @@ export interface MatchResponse<T> {
   message: string;
   data: T | GuildMembers[] | null;
 }
+
+export type { CustomMatch };

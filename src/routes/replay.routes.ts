@@ -4,8 +4,6 @@ import { validateRequest } from '../middlewares/validateRequest.js';
 
 import { 
   createReplay,
-  softDeleteReplay
-
  } from '../controllers/replay.controller.js';
 
 const router: Router = Router();
@@ -45,16 +43,6 @@ const createReplaySchema = z.object({
   }),
 });
 
-const deleteReplaySchema = z.object({
-  params: z.object({
-    replayCode: z
-      .string()
-      .min(1, 'Replay code is required')
-      .max(255, 'Replay code must be less than 255 characters'),
-  }),
-});
-
-
 /**
  * @route POST /api/replays
  * @desc 리플레이 파일 저장
@@ -83,20 +71,6 @@ router.post('/',
   */
   validateRequest(createReplaySchema), 
   createReplay
-);
-
-/**
- * @route DELETE /api/replays/:replayCode
- * @desc 리플레이 삭제
- */
-router.delete('/:replayCode', 
-  /* #swagger.tags = ['Replays']
-    #swagger.summary = '리플레이 삭제'
-    #swagger.description = '리플레이 코드를 사용하여 리플레이를 소프트 삭제합니다.'
-    #swagger.parameters['replayCode'] = { description: '삭제할 리플레이 코드' }
-  */
-  validateRequest(deleteReplaySchema), 
-  softDeleteReplay
 );
 
 export default router;

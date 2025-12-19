@@ -30,7 +30,12 @@ export class ReplayService {
     const result = await db
       .select({ id: replay.id })
       .from(replay)
-      .where(and(eq(replay.hashData, hashData), eq(replay.guildId, guildId)))
+      .where(
+        and(
+          eq(replay.hashData, hashData), 
+          eq(replay.guildId, guildId),
+          eq(replay.isDeleted, false)
+        ))
       .limit(1);
 
     return result.length > 0;
@@ -49,13 +54,13 @@ export class ReplayService {
         res.on('end', () => {
           const buffer = Buffer.concat(data);
           if (buffer.length === 0) {
-            throw new SystemError("replay file no data");
+            throw new SystemError('replay file no data');
           }
           resolve(buffer);
         });
       }).on('error', (err) => {
         console.error('Error getInputStreaming replay file', err);
-        throw new SystemError("replay error while getInputStreaming file");
+        throw new SystemError('replay error while getInputStreaming file');
       });
     });
   }
@@ -94,7 +99,7 @@ export class ReplayService {
     return `${prefix}${sequencePart}`;
   }
 
-   /**
+  /**
    * @desc 리플레이 데이터 파싱
    */
   private async parseReplayData(byte: Buffer): Promise<string> {
@@ -115,7 +120,7 @@ export class ReplayService {
       return JSON.stringify(statsArray);
     } catch (error) {
       console.error('Error parsing replay data', error);
-      throw new SystemError("replay error while parsing data");
+      throw new SystemError('replay error while parsing data');
     }
   }
 
@@ -148,7 +153,7 @@ export class ReplayService {
 
     // 1. 중복된 데이터 확인
     if (await this.checkDuplicateByHash(hashData, guildId)) {
-      throw new BusinessError("duplicated replay data", 400, {"isLoggable": false});
+      throw new BusinessError('duplicated replay data', 400, { isLoggable: false });
     }
 
     const replayCode = await this.generateReplayCode(fileName);
@@ -174,8 +179,8 @@ export class ReplayService {
   /**
    * @desc 리플레이 코드를 사용하여 리플레이를 논리적으로 삭제
    */
-  public async softDeleteReplayByCode(replayCode: string) {
-    const result = await db
+  public async softDeleteReplayByCode(replayCode: string, tx: TransactionType) {
+    const result = await tx
       .update(replay)
       .set({
         isDeleted: true,

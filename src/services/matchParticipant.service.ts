@@ -12,6 +12,7 @@ import {
   perks,
 } from '../database/schema.js'; // 스키마 import 추가
 import { BusinessError, SystemError } from '../types/error.js';
+import { replayService } from './replay.service.js';
 
 const MatchparticipantSchema = z.object({
   PUUID: z.string().max(64),
@@ -623,7 +624,10 @@ export class MatchParticipantService {
       // 1. CustomMatch 삭제
       const [deletedMatch] = await tx
         .update(customMatch)
-        .set({ isDeleted: true })
+        .set({ 
+          isDeleted: true,
+          updateDate: new Date(),
+         })
         .where(and(
           eq(customMatch.id, gameId),
           eq(customMatch.guildId, guildId),
@@ -639,11 +643,17 @@ export class MatchParticipantService {
       // 2. 연관된 MatchParticipant 일괄 삭제
       await tx
         .update(matchParticipant)
-        .set({ isDeleted: true })
+        .set({ 
+          isDeleted: true,
+          updateDate: new Date(),
+         })
         .where(and(
           eq(matchParticipant.customMatchId, gameId),
           eq(matchParticipant.isDeleted, false)
         ));
+
+      // 3. 연관된 replays 삭제
+      await replayService.softDeleteReplayByCode(gameId, tx);
 
       return deletedMatch;
     });
