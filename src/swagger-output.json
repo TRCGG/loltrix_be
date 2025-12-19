@@ -481,7 +481,7 @@
           "GuildMember"
         ],
         "summary": "부계정 연결 해제",
-        "description": "부계정의 본계정 연결을 해제합니다.",
+        "description": "부계정이 본계정과의 연결을 해제합니다.",
         "responses": {
           "default": {
             "description": ""
