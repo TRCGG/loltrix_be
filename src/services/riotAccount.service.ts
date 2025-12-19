@@ -97,8 +97,11 @@ export class RiotAccountService {
   ) {
     return await tx.query.riotAccount.findFirst({
       where: 
-      and(eq(riotAccount.riotName, riotName), 
-      eq(riotAccount.riotNameTag, riotNameTag)),
+      and(
+        eq(riotAccount.riotName, riotName), 
+        eq(riotAccount.riotNameTag, riotNameTag),
+        eq(riotAccount.isDeleted, false)
+      ),
     });
   }
 

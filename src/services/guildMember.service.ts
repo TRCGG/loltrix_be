@@ -1,11 +1,10 @@
-import { eq, ilike, desc, sql, and, inArray } from 'drizzle-orm';
+import { eq, ilike, desc, sql, and, or, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { guildMember, InsertGuildMember, matchParticipant, riotAccount, RiotAccount } from '../database/schema.js';
 import { 
   GetGuildMemberQuery,
   LinkSubAccountRequest,
-  UpdateGuildMemberStatusRequest,
  } from '../types/guildMember.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
@@ -167,8 +166,10 @@ export class GuildMemberService {
    *
    * @desc 부계정 본계정 연결 (!부캐저장)
    * 1. 부계정 조회, 본계정 조회
-   * 2. 부계정 is_main, main_account 업데이트
-   * 3. 부계정 경기 기록 player_code 본계정으로 변경
+   * 2. 부계정이 이미 다른 본계정의 부계정인지 확인
+   * 3. 본계정이 이미 다른 본계정의 부계정인지 확인
+   * 4. 부계정 is_main, main_account 업데이트
+   * 5. 부계정 경기 기록 player_code 본계정으로 변경
    */
   public async linkSubAccount({
     guildId,
@@ -193,7 +194,15 @@ export class GuildMemberService {
       ]);
 
       if (!priRiot || !secRiot) {
-        throw new BusinessError('Primary or Secondary Riot Account not found in DB.', 404);
+        throw new BusinessError('Primary or Secondary Riot Account not found in DB.', 400, {
+          isLoggable: false,
+        });
+      }
+
+      if (priRiot.playerCode === secRiot.playerCode) {
+        throw new BusinessError('Cannot link the same account.', 400, {
+          isLoggable: false
+        });
       }
 
       // 2. 부계정 GuildMember 엔티티 조회 (업데이트 대상)
@@ -201,13 +210,42 @@ export class GuildMemberService {
         where: and(
           eq(guildMember.guildId, guildId),
           eq(guildMember.account, secRiot.playerCode), // 부계정의 playerCode 사용
+          eq(guildMember.isDeleted, false)
         ),
       });
 
       if (!secMember) {
         throw new BusinessError(
-          'Secondary account is not registered as a member in this guild.',
-          403,
+          `${secRiot.riotName} account is not registered in this guild.`,
+          400, { isLoggable: false }
+        );
+      }
+
+      if (secMember.isMain === false) {
+        throw new BusinessError(
+          `${secRiot.riotName} is already linked as a sub-account.`,
+          409, { isLoggable: false}
+        );
+      }
+
+      const priMember = await tx.query.guildMember.findFirst({
+        where: and(
+            eq(guildMember.guildId, guildId),
+            eq(guildMember.account, priRiot.playerCode),
+            eq(guildMember.isDeleted, false)
+        )
+      });
+
+      if (!priMember) {
+        throw new BusinessError(`${priRiot.riotName} is not registered in this guild.`,
+          400, { isLoggable: false });
+      }
+
+      // 본캐가 이미 다른 사람의 부캐임 (계층 구조 방지)
+      if (priMember.isMain === false) {
+        throw new BusinessError(
+          `${priRiot.riotName} is already a sub-account. (Cannot nest accounts)`,
+          409, { isLoggable: false },
         );
       }
 
@@ -217,6 +255,7 @@ export class GuildMemberService {
         .set({
           isMain: false,
           mainAccount: priRiot.playerCode,
+          updateDate: new Date(),
         })
         .where(eq(guildMember.id, secMember.id))
         .returning();
@@ -226,6 +265,7 @@ export class GuildMemberService {
         .update(matchParticipant)
         .set({
           playerCode: priRiot.playerCode,
+          updateDate: new Date(),
         })
         .where(eq(matchParticipant.playerCode, secRiot.playerCode));
 
@@ -300,40 +340,28 @@ export class GuildMemberService {
     const [targetAccount] = await db
       .select({ playerCode: riotAccount.playerCode })
       .from(riotAccount)
-      .where(
-        and(
-          eq(riotAccount.riotName, riotName), 
-          eq(riotAccount.riotNameTag, riotNameTag)
-        ))
-      .limit(1); 
-    
-    if(!targetAccount){
-      throw new BusinessError("Riot Account not found", 404);
+      .where(and(eq(riotAccount.riotName, riotName), eq(riotAccount.riotNameTag, riotNameTag)))
+      .limit(1);
+
+    if (!targetAccount) {
+      throw new BusinessError('Riot Account not found', 404);
     }
-    
+
     const targetPlayerCode = targetAccount.playerCode;
 
-    await db.transaction(async (tx) => {
-      // 본캐 상태 변경
-      const updatedMain = await tx
-        .update(guildMember)
-        .set({ status: status })
-        .where(
-          and(
-            eq(guildMember.guildId, guildId), 
-            eq(guildMember.account, targetPlayerCode)
-          ));
-
-      // 부캐들도 일괄 상태 변경
-      await tx
-        .update(guildMember)
-        .set({ status: status })
-        .where(
-          and(
-            eq(guildMember.guildId, guildId), 
-            eq(guildMember.mainAccount, targetPlayerCode))
-          );
-    });
+    const result = await db
+      .update(guildMember)
+      .set({ status: status, updateDate: new Date() })
+      .where(
+        and(
+          eq(guildMember.guildId, guildId),
+          or(
+            eq(guildMember.account, targetPlayerCode), // 본인
+            eq(guildMember.mainAccount, targetPlayerCode), // 딸린 부캐들
+          ),
+        ),
+      )
+      .returning();
   }
 
   /**

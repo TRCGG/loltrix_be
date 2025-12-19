@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import {
   GuildMemberResponse, 
   GuildMemberAccountResponse, 
@@ -69,6 +69,7 @@ export const linkSubAccount = async (
     Record<string, never>
   >,
   res: Response<GuildMemberResponse>,
+  next: NextFunction
 ) => {
   try {
     const { guildId, subRiotName, subRiotTag, mainRiotName, mainRiotTag } = req.body;
@@ -88,12 +89,7 @@ export const linkSubAccount = async (
     });
 
   } catch (error) {
-    console.error('Error linking sub-account:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error while linking sub-account',
-      data: null,
-    });
+    next(error);
   }
 };
 
