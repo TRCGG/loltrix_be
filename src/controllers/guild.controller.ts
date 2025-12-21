@@ -91,16 +91,17 @@ export const getAllGuilds = async (
 
     const { result, totalCount } = await guildService.findAllGuilds({ page, limit, search });
 
+    res.setHeader('X-Total-Count', totalCount.toString());
+    res.setHeader('X-Page', (page ?? 1).toString());
+    res.setHeader('X-Limit', (limit ?? 10).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 10)).toString());
+
     res.status(200).json({
       status: 'success',
       message: 'Guilds retrieved successfully',
       data: result,
     });
 
-    res.setHeader('X-Total-Count', totalCount.toString());
-    res.setHeader('X-Page', (page ?? 1).toString());
-    res.setHeader('X-Limit', (limit ?? 10).toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 10)).toString());
   } catch (error) {
     console.error('Error retrieving guilds:', error);
     res.status(500).json({
