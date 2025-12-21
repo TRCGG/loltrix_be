@@ -15,12 +15,11 @@ import { guildMemberService } from '../services/guildMember.service.js';
 const envLoLSeason = process.env.LOL_SEASON || "2026";
 
 const formatMember = (members: any[]) => {
-  const formattedMembers = members.map((member) => ({
-    playerCode: member.riot_account.playerCode,
-    riotName: member.riot_account.riotName,
-    riotNameTag: member.riot_account.riotNameTag,
+  return members.map((member) => ({
+    playerCode: member.playerCode,
+    riotName: member.riotName,
+    riotNameTag: member.riotNameTag,
   }));
-  return formattedMembers;
 };
 
 /**
@@ -137,7 +136,7 @@ export const getMatchDashboard = async (
 
     const playerCode = members[0].playerCode;
 
-    const [monthRecord, lineRecord, { mostPicks }, synergy] = await Promise.all([
+    const [ monthRecord, lineRecord, { mostPicks }, synergy] = await Promise.all([
       matchParticipantService.getRecentMonthRecord(playerCode),
       matchParticipantService.getLineRecord(playerCode, lolSeason),
       matchParticipantService.getMostPicks(playerCode, lolSeason, 1, 10),
@@ -148,6 +147,7 @@ export const getMatchDashboard = async (
       status: 'success',
       message: 'Match dashboard data retrieved successfully',
       data: {
+        member: members[0],
         summary: monthRecord,
         lines: lineRecord,
         mostPicks: mostPicks,

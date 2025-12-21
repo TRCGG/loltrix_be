@@ -1,5 +1,6 @@
 // types/matchParticipant.ts
 import { CustomMatch } from '../database/schema.js';
+import { GuildMemberAccount } from './guildMember.js';
 
 
 /** 승률 및 KDA 기본 통계 */
@@ -11,11 +12,22 @@ export interface MatchStats {
   kda: number;
 }
 
-export interface GuildMembers {
+export interface MultipleMember {
   playerCode: string;
   riotName: string;
   riotNameTag: string;
 }
+
+export type Member = {
+  playerCode: string;
+  riotName: string;
+  riotNameTag: string;
+  isMain: boolean;
+  guildId: string;
+  createDate: Date;
+  updateDate: Date;
+  isDeleted: boolean;
+};
 
 /** 최근 한 달 요약 (상단) */
 export interface MatchSummary extends MatchStats {}
@@ -94,6 +106,7 @@ export interface RecentGame {
 
 /** 대시보드 통합 데이터 */
 export interface DashboardData {
+  member: Member;
   summary: MatchSummary;
   lines: LineStat[];
   mostPicks: MostPick[];
@@ -113,7 +126,7 @@ export interface MatchQuery {
 export interface MatchResponse<T> {
   status: 'success' | 'error';
   message: string;
-  data: T | GuildMembers[] | null;
+  data: T | MultipleMember[] | null;
 }
 
 export type { CustomMatch };
