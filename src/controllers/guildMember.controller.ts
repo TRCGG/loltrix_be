@@ -5,7 +5,7 @@ import {
   LinkSubAccountRequest,
   SubAccountsAPIResponse,
   UpdateGuildMemberStatusRequest,
-} from '../types/guildMember.js'; // 타입 경로 수정 필요
+} from '../types/guildMember.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { BusinessError } from '../types/error.js';
 

@@ -48,7 +48,7 @@ export class GuildMemberService {
         .map((acc) => ({
           guildId: guildId,
           account: acc.playerCode,
-          is_main: true,
+          isMain: true,
           status: '1',
         }));
 
