@@ -252,7 +252,7 @@ export class MatchParticipantService {
   /**
    * @desc 최근 한 달 전적 요약 조회
    */
-  public async getRecentMonthRecord(playerCode: string,) {
+  public async getRecentMonthRecord(playerCode: string, guildId: string) {
     // 통계 쿼리 실행
     const statColumns = this.getStatSqlChunks();
 
@@ -263,6 +263,7 @@ export class MatchParticipantService {
       .where(
         and(
           eq(matchParticipant.playerCode, playerCode),
+          eq(customMatch.guildId, guildId),
           eq(matchParticipant.isDeleted, false),
           eq(customMatch.isDeleted, false),
           sql`TO_CHAR(${customMatch.createDate}, 'YYYY-MM') = TO_CHAR(NOW(), 'YYYY-MM')`,
@@ -284,7 +285,7 @@ export class MatchParticipantService {
    * @desc 전체 라인별(포지션별) 전적 조회
    * 정렬 순서: TOP -> JUG -> MID -> ADC -> SUP
    */
-  public async getLineRecord(playerCode: string, season: string) {
+  public async getLineRecord(playerCode: string, season: string, guildId: string) {
     // 포지션별 통계 집계
     const statColumns = this.getStatSqlChunks();
 
@@ -299,6 +300,7 @@ export class MatchParticipantService {
         eq(matchParticipant.playerCode, playerCode),
         eq(matchParticipant.isDeleted, false),
         eq(customMatch.isDeleted, false),
+        eq(customMatch.guildId, guildId),
         eq(customMatch.season, season)
       ))
       .groupBy(matchParticipant.position)
@@ -324,6 +326,7 @@ export class MatchParticipantService {
   public async getMostPicks(
     playerCode: string,
     season: string,
+    guildId: string,
     page: number = 1,
     limit: number = 10
   ) {
@@ -335,6 +338,7 @@ export class MatchParticipantService {
         eq(matchParticipant.playerCode, playerCode),
         eq(matchParticipant.isDeleted, false),
         eq(customMatch.isDeleted, false),
+        eq(customMatch.guildId, guildId),
         eq(customMatch.season, season)
       )
 
@@ -373,6 +377,7 @@ export class MatchParticipantService {
   public async getRecentGamesByRiotName(
     playerCode: string,
     season: string,
+    guildId: string,
     page: number = 1,
     limit: number = 20
   ) {
@@ -388,6 +393,7 @@ export class MatchParticipantService {
       eq(matchParticipant.playerCode, playerCode),
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
+      eq(customMatch.guildId, guildId),
       eq(customMatch.season, season)
     );
 
@@ -571,7 +577,8 @@ export class MatchParticipantService {
    */
   public async getSynergisticTeammates(
     playerCode: string,
-    season: string
+    season: string,
+    guildId: string
   ) {
     // 1. Alias 생성 (Self Join을 위해)
     // mpMe: 기준이 되는 내 전적
@@ -606,11 +613,12 @@ export class MatchParticipantService {
         // 조건 4: 삭제되지 않은 데이터
         eq(mpMe.isDeleted, false),
         eq(mpTeammate.isDeleted, false),
+        eq(customMatch.guildId, guildId),
         eq(customMatch.isDeleted, false)
       ))
       .groupBy(riotAccount.riotName, riotAccount.riotNameTag)
       .having(sql`count(*) >= 5`) // 5판 이상
-      .orderBy(desc(statColumns.winRate)); // 승률 높은 순
+      .orderBy(desc(statColumns.winRate), desc(statColumns.totalCount));
 
     return result;
   }

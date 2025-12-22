@@ -69,6 +69,7 @@ export const getRecentGames = async (
     const { games, totalCount } = await matchParticipantService.getRecentGamesByRiotName(
       playerCode,
       lolSeason,
+      guildId,
       Number(page) || 1,
       Number(limit) || 20,
     );
@@ -137,10 +138,10 @@ export const getMatchDashboard = async (
     const playerCode = members[0].playerCode;
 
     const [ monthRecord, lineRecord, { mostPicks }, synergy] = await Promise.all([
-      matchParticipantService.getRecentMonthRecord(playerCode),
-      matchParticipantService.getLineRecord(playerCode, lolSeason),
-      matchParticipantService.getMostPicks(playerCode, lolSeason, 1, 10),
-      matchParticipantService.getSynergisticTeammates(playerCode, lolSeason),
+      matchParticipantService.getRecentMonthRecord(playerCode, guildId),
+      matchParticipantService.getLineRecord(playerCode, lolSeason, guildId),
+      matchParticipantService.getMostPicks(playerCode, lolSeason, guildId, 1, 10),
+      matchParticipantService.getSynergisticTeammates(playerCode, lolSeason, guildId),
     ]);
 
     res.status(200).json({
@@ -211,6 +212,7 @@ export const getMostPicks = async (
     const { mostPicks, totalCount } = await matchParticipantService.getMostPicks(
       playerCode,
       lolSeason,
+      guildId,
       Number(page) || 1,
       Number(limit) || 10,
     );
