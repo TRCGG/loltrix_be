@@ -381,6 +381,10 @@ export class GuildMemberService {
       ))
       .limit(1);
 
+    if (!targetAccount) {
+      return null;
+    }
+
     const result = await db
       .update(guildMember)
       .set({
