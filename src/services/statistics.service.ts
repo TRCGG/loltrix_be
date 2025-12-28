@@ -89,6 +89,7 @@ export class StatisticsService {
       eq(guildMember.guildId, guildId),
       eq(customMatch.guildId, guildId),
       eq(guildMember.isDeleted, false),
+      eq(guildMember.isMain, true),
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       dateCondition,
@@ -192,6 +193,7 @@ export class StatisticsService {
     const whereCondition = and(
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
+      eq(guildMember.isMain, true),
       eq(guildMember.isDeleted, false),
       eq(guildMember.guildId, guildId),
       eq(customMatch.guildId, guildId),
