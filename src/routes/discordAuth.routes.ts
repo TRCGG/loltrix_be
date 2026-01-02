@@ -14,13 +14,6 @@ import { verifyAuth } from '../middlewares/authHandler.js';
 
 const router: Router = Router();
 
-// --- Zod 유효성 검사 스키마 ---
-const callbackSchema = z.object({
-  query: z.object({
-    code: z.string().min(1, 'Discord authorization code is required'),
-  }),
-});
-
 /**
  * @route GET /api/auth/login
  * @desc 디스코드 로그인 시작
@@ -45,14 +38,7 @@ router.get('/callback',
     #swagger.summary = '디스코드 로그인 콜백'
     #swagger.description = '디스코드 인증 후 리다이렉트되는 콜백 URL입니다.'
     #swagger.security = []
-    #swagger.parameters['code'] = {
-      in: 'query',
-      description: 'Discord Authorization Code',
-      required: true,
-      type: 'string'
-    }
   */
-  validateRequest(callbackSchema), 
   callback
 );
 

@@ -92,17 +92,6 @@
         ],
         "summary": "디스코드 로그인 콜백",
         "description": "디스코드 인증 후 리다이렉트되는 콜백 URL입니다.",
-        "parameters": [
-          {
-            "name": "code",
-            "in": "query",
-            "description": "Discord Authorization Code",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "default": {
             "description": ""

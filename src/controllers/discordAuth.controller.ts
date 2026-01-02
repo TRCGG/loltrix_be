@@ -46,11 +46,20 @@ export const login = (
  * @access Public
  */
 export const callback = async (
-  req: Request<Record<string, never>, void, never, { code: string }>, 
+  req: Request<Record<string, never>, void, never, { code?: string; error?: string }>, 
   res: Response<void>,
   next: NextFunction
 ) => {
-  const { code } = req.query;
+  const { code, error } = req.query;
+
+  if (error === 'access_denied') {
+    return res.redirect(frontendUrl); 
+  }
+
+  if (!code) {
+    return next(new BusinessError('Authorization code missing'));
+  }
+
   try {
    const sessionUid = await discordAuthService.handleDiscordCallback(
       code,
@@ -61,7 +70,7 @@ export const callback = async (
     res.cookie('session_uid', sessionUid, cookieOptions);
     res.redirect(frontendUrl);
   } catch (error) {
-    next();
+    next(error); 
   }
 };
 
