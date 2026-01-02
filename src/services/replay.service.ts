@@ -1,5 +1,5 @@
-import { eq, and, like, desc } from 'drizzle-orm';
-import { get } from 'https'; // http 또는 https 모듈
+import { eq, and, desc } from 'drizzle-orm';
+import { get } from 'https';
 import { createHash } from 'crypto';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { replay } from '../database/schema.js';
@@ -13,8 +13,6 @@ const season = process.env.LOL_SEASON || 'error_season';
  * @desc 리플레이 파일 서비스
  */
 export class ReplayService {
-  constructor() {}
-
   /**
    * @desc 주어진 데이터를 사용하여 SHA-256 해시를 생성
    */
@@ -90,7 +88,7 @@ export class ReplayService {
     if (lastReplay.length > 0) {
       const lastCode = lastReplay[0].id;
 
-      if (!isNaN(lastCode)) {
+      if (!Number.isNaN(lastCode)) {
         nextSequence = lastCode + 1;
       }
     }

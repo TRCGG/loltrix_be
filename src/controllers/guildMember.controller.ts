@@ -41,14 +41,14 @@ export const searchGuildMembers = async (
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Guild members retrieved successfully',
       data: members,
     });
   } catch (error) {
     console.error('Error searching guild members:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while searching guild members',
       data: null,
@@ -114,14 +114,14 @@ export const getSubAccounts = async (
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Sub-accounts retrieved successfully',
       data: members,
     });
   } catch (error) {
     console.error('Error retrieving sub-accounts:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving sub-accounts',
       data: null,
@@ -150,7 +150,7 @@ export const updateMemberStatus = async (
       });
     }
 
-    await guildMemberService.updateGuildMemberStatusByRiotId(
+    const updateMember = await guildMemberService.updateGuildMemberStatusByRiotId(
       guildId,
       riotName,
       riotNameTag,
@@ -159,10 +159,10 @@ export const updateMemberStatus = async (
 
     const actionText = status === '1' ? 'restored' : 'withdrawn';
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: `Member and sub-accounts successfully ${actionText}.`,
-      data: null,
+      data: updateMember,
     });
   } catch (error) {
     console.error('Error updating member status:', error);
@@ -175,7 +175,7 @@ export const updateMemberStatus = async (
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while updating member status',
       data: null,
@@ -213,14 +213,14 @@ export const removeSubAccount = async (
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Sub-account link removed successfully.',
       data: deleteSubAccount,
     });
   } catch (error) {
     console.error('Error removing sub-account link:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while removing sub-account',
       data: null,

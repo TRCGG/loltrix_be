@@ -86,7 +86,7 @@ export const getRecentGames = async (
     });
   } catch (error) {
     console.error('Error retrieving recent games:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving recent games',
       data: null,
@@ -144,7 +144,7 @@ export const getMatchDashboard = async (
       matchParticipantService.getSynergisticTeammates(playerCode, lolSeason, guildId),
     ]);
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Match dashboard data retrieved successfully',
       data: {
@@ -157,7 +157,7 @@ export const getMatchDashboard = async (
     });
   } catch (error) {
     console.error('Error retrieving match dashboard:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving match dashboard',
       data: null,
@@ -229,7 +229,7 @@ export const getMostPicks = async (
     });
   } catch (error) {
     console.error('Error retrieving most picks:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving most picks',
       data: null,
@@ -263,14 +263,14 @@ export const getGameDetail = async (
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Game details retrieved successfully',
       data: gameDetails,
     });
   } catch (error) {
     console.error('Error retrieving game detail', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving game detail',
       data: null,
@@ -299,14 +299,14 @@ export const deleteMatch = async (
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Game match deleted successfully',
       data: deletedMatch,
     });
   } catch (error) {
     console.error('Error deleting match:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while deleting match',
       data: null,

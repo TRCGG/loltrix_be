@@ -48,7 +48,7 @@ export const getUserGameStats = async (
     });
   } catch (error) {
     console.error('Error retrieving user game stats:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving user game stats',
       data: null,
@@ -96,7 +96,7 @@ export const getChampionStats = async (
     });
   } catch (error) {
     console.error('Error retrieving champion stats:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving champion stats',
       data: null,

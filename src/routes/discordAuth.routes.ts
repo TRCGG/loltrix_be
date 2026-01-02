@@ -1,7 +1,5 @@
 // discordAuth.routes.ts
 import { Router } from 'express';
-import { z } from 'zod';
-import { validateRequest } from '../middlewares/validateRequest.js';
 import {
   login,
   callback,

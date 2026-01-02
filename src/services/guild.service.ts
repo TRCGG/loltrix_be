@@ -3,14 +3,12 @@ import { eq, ilike, desc, sql, and } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { guild, InsertGuild } from '../database/schema.js';
 import { GetGuildsQuery, UpdateGuildRequest } from '../types/guild.js';
-import { BusinessError, SystemError } from '../types/error.js';
+import { SystemError } from '../types/error.js';
 
 /**
  * @desc 길드 데이터의 생성, 조회, 수정, 삭제를 담당하는 서비스 클래스
  */
 export class GuildService {
-  constructor() {}
-
   /**
    * @desc 새로운 길드를 데이터베이스에 생성
    */

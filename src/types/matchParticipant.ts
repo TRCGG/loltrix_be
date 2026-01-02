@@ -1,6 +1,5 @@
 // types/matchParticipant.ts
 import { CustomMatch } from '../database/schema.js';
-import { GuildMemberAccount } from './guildMember.js';
 
 /** 승률 및 KDA 기본 통계 */
 export interface MatchStats {

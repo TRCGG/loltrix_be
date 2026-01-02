@@ -1,4 +1,4 @@
-import { GuildMember, RiotAccount } from '../database/schema.js';
+import { GuildMember } from '../database/schema.js';
 
 // --- 검색 및 요청 파라미터 ---
 

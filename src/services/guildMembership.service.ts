@@ -11,8 +11,6 @@ const discordAuthService = new DiscordAuthService();
  * GUildService 와 DiscordAuthService 두개의 서비스 import
  */
 export class GuildMembershipService {
-  constructor() {}
-
   /**
    * @desc 사용자가 가입한 길드 목록 중,
    * Gmok(DB)에 등록된 길드 목록만 필터링하여 반환

@@ -169,6 +169,18 @@ export const customMatch = pgTable('custom_match', {
 export type CustomMatch = typeof customMatch.$inferSelect;
 export type InsertCustomMatch = typeof customMatch.$inferInsert;
 
+export const champion = pgTable('champion', {
+  id: varchar('id', { length: 16 }).primaryKey(),
+  champName: varchar('champ_name', { length: 128 }).notNull(),
+  champNameEng: varchar('champ_name_eng', { length: 128 }).notNull(),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
 export const matchParticipant = pgTable('match_participant', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   customMatchId: varchar('custom_match_id', { length: 255 })
@@ -228,18 +240,6 @@ export const matchParticipant = pgTable('match_participant', {
 
 export type MatchParticipant = typeof matchParticipant.$inferSelect;
 export type InsertMatchParticipant = typeof matchParticipant.$inferInsert;
-
-export const champion = pgTable('champion', {
-  id: varchar('id', { length: 16 }).primaryKey(),
-  champName: varchar('champ_name', { length: 128 }).notNull(),
-  champNameEng: varchar('champ_name_eng', { length: 128 }).notNull(),
-  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
-  updateDate: timestamp('update_date', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  isDeleted: boolean('is_deleted').notNull().default(false),
-});
 
 export const guildMember = pgTable('guild_member', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),

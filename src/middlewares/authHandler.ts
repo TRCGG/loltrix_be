@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { DiscordAuthService } from '../services/discordAuth.service.js';
-import { BusinessError, SystemError } from '../types/error.js';
+import { BusinessError } from '../types/error.js';
 
 const discordAuthService = new DiscordAuthService();
 const botSecret = process.env.DISCORD_BOT_SECRET;
@@ -56,11 +56,11 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
     req.discordMemberId = discordMemberId;
     req.accessToken = validAccessToken;
 
-    next();
+    return next();
   } catch (error) {
     if (error instanceof BusinessError && error.status === 401) {
       res.clearCookie('session_uid', cookieOptions);
     }
-    next(error);
+    return next(error);
   }
 };

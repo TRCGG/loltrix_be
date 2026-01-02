@@ -1,6 +1,6 @@
 // discordAuth.service.ts
 import querystring from 'querystring';
-import { eq, ilike, desc, sql, and, isNull } from 'drizzle-orm';
+import { eq, sql, and, isNull } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { discordMember, discordToken, authSession } from '../database/schema.js';
 import {
@@ -52,8 +52,6 @@ function formatRefreshedToken(tokenData: DiscordTokenAPI, oldRefreshToken: strin
  * @desc discord API 호출 및 DB 작업 처리
  */
 export class DiscordAuthService {
-  constructor() {}
-
   // --- 1. Public Methods (컨트롤러에서 호출) ---
 
   /**
@@ -147,13 +145,13 @@ export class DiscordAuthService {
    */
   public async revokeAndDeactivateSession(sessionUid: string): Promise<void> {
     try {
-      const authSession = await this.findAuthSessionByUid(sessionUid);
-      if (!authSession) {
+      const sessionData = await this.findAuthSessionByUid(sessionUid);
+      if (!sessionData) {
         console.warn(`Logout: Session UID ${sessionUid} not found in DB.`);
         return;
       }
 
-      const { discordMemberId } = authSession;
+      const { discordMemberId } = sessionData;
       const token = await this.findDiscordTokenById(discordMemberId);
 
       if (token) {

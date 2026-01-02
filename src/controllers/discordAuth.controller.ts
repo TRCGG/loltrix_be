@@ -62,9 +62,9 @@ export const callback = async (
     );
 
     res.cookie('session_uid', sessionUid, cookieOptions);
-    res.redirect(frontendUrl);
-  } catch (error) {
-    next(error);
+    return res.redirect(frontendUrl);
+  } catch (err) {
+    return next(err);
   }
 };
 

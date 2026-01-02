@@ -1,4 +1,4 @@
-import { eq, ilike, desc, sql, and, or, inArray } from 'drizzle-orm';
+import { eq, desc, sql, and, or, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, TransactionType } from '../database/connectionPool.js';
 import {
@@ -18,8 +18,6 @@ export const primaryRiotAccount = alias(riotAccount, 'primary_riot_account');
  * @desc 길드 멤버 서비스 클래스
  */
 export class GuildMemberService {
-  constructor() {}
-
   /**
    * @desc 리플레이 참여 계정들을 길드 멤버로 등록
    * 'UNIQUE(guild_id, account)' 제약 조건에 따라
@@ -367,6 +365,8 @@ export class GuildMemberService {
         ),
       )
       .returning();
+
+    return result;
   }
 
   /**

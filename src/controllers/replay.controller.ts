@@ -22,6 +22,6 @@ export const createReplay = async (
       data: savedReplay,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };

@@ -7,12 +7,6 @@ import {
   InsertAuthSession,
 } from '../database/schema.js';
 
-export interface discordMemberResponse {
-  status: 'success' | 'error';
-  message: string;
-  data?: DiscordMember | DiscordMember[] | null;
-}
-
 export interface UpdateDiscordTokenRequest {
   accessToken: string;
   acExpiresDate?: Date;

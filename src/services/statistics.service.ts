@@ -69,12 +69,14 @@ export class StatisticsService {
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
 
     // 시즌 조건
-    const seasonCondition =
-      season === 'ALL'
-        ? undefined
-        : season
-          ? eq(customMatch.season, season)
-          : eq(customMatch.season, envLoLSeason);
+    let seasonCondition;
+    if (season === 'ALL') {
+      seasonCondition = undefined;
+    } else if (season) {
+      seasonCondition = eq(customMatch.season, season);
+    } else {
+      seasonCondition = eq(customMatch.season, envLoLSeason);
+    }
 
     // 최소게임 조건 (승률)
     const minGameCount = sortBy === 'winRate' ? 30 : 0;
@@ -174,13 +176,14 @@ export class StatisticsService {
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
 
     // 시즌 조건
-    const seasonCondition =
-      season === 'ALL'
-        ? undefined
-        : season
-          ? eq(customMatch.season, season)
-          : eq(customMatch.season, envLoLSeason);
-
+    let seasonCondition;
+    if (season === 'ALL') {
+      seasonCondition = undefined;
+    } else if (season) {
+      seasonCondition = eq(customMatch.season, season);
+    } else {
+      seasonCondition = eq(customMatch.season, envLoLSeason);
+    }
     // 최소게임 조건 (승률)
     const minGameCount = sortBy === 'winRate' ? 30 : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;

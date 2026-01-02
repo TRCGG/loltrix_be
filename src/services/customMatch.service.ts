@@ -1,16 +1,12 @@
-import { z } from 'zod';
-import { eq, and, like, desc, sql, is } from 'drizzle-orm';
-import { db, TransactionType } from '../database/connectionPool.js';
+import { TransactionType } from '../database/connectionPool.js';
 import { customMatch, InsertCustomMatch } from '../database/schema.js';
-import { BusinessError, SystemError } from '../types/error.js';
+import { SystemError } from '../types/error.js';
 
 /**
  * @desc 내전 커스텀 게임정보
  *
  */
 export class CustomMatchService {
-  constructor() {}
-
   /**
    * @desc 새로운 내전 매치 데이터베이스에 저장
    */

@@ -11,7 +11,7 @@ import {
   summonerSpell,
   perks,
 } from '../database/schema.js'; // 스키마 import 추가
-import { BusinessError, SystemError } from '../types/error.js';
+import { SystemError } from '../types/error.js';
 import { replayService } from './replay.service.js';
 
 const MatchparticipantSchema = z.object({
@@ -99,8 +99,6 @@ const mapPosition = (position: string): string => {
  * @desc 내전 참여자 서비스
  */
 export class MatchParticipantService {
-  constructor() {}
-
   /**
    * 여러 참가자 데이터를 DB에 삽입합니다.
    * @param rawData - API로부터 받은 원본 데이터 배열
@@ -155,16 +153,16 @@ export class MatchParticipantService {
 
     // 3. 챔피언 영문 이름을 Key, 챔피언 ID를 Value로 하는 Map
     const championNameIdMap = new Map<string, string>();
-    for (const record of championRecords) {
+    championRecords.forEach((record) => {
       if (record.nameEng) {
         championNameIdMap.set(record.nameEng, record.id);
       }
-    }
+    });
 
     const parseIntOptional = (val: string | undefined): number | undefined => {
       if (val === undefined || val === null) return undefined;
       const num = parseInt(val, 10);
-      return isNaN(num) ? undefined : num;
+      return Number.isNaN(num) ? undefined : num;
     };
 
     const parsedMatchParticipants: InsertMatchParticipant[] = validatedData.map((d) => {
@@ -185,27 +183,27 @@ export class MatchParticipantService {
         gameTeam,
         gameResult,
         position,
-        kill: parseInt(d.CHAMPIONS_KILLED),
-        death: parseInt(d.NUM_DEATHS),
-        assist: parseInt(d.ASSISTS),
-        gold: parseInt(d.GOLD_EARNED),
-        ccing: parseInt(d.TIME_CCING_OTHERS),
-        exp: parseInt(d.EXP),
-        timePlayed: parseInt(d.TIME_PLAYED),
-        totalDamageChampions: parseInt(d.TOTAL_DAMAGE_DEALT_TO_CHAMPIONS),
-        totalDamageDealtToBuildings: parseInt(d.TOTAL_DAMAGE_DEALT_TO_BUILDINGS),
-        totalDamageTaken: parseInt(d.TOTAL_DAMAGE_TAKEN),
-        visionScore: parseInt(d.VISION_SCORE),
-        visionBought: parseInt(d.VISION_WARDS_BOUGHT_IN_GAME),
+        kill: parseInt(d.CHAMPIONS_KILLED, 10),
+        death: parseInt(d.NUM_DEATHS, 10),
+        assist: parseInt(d.ASSISTS, 10),
+        gold: parseInt(d.GOLD_EARNED, 10),
+        ccing: parseInt(d.TIME_CCING_OTHERS, 10),
+        exp: parseInt(d.EXP, 10),
+        timePlayed: parseInt(d.TIME_PLAYED, 10),
+        totalDamageChampions: parseInt(d.TOTAL_DAMAGE_DEALT_TO_CHAMPIONS, 10),
+        totalDamageDealtToBuildings: parseInt(d.TOTAL_DAMAGE_DEALT_TO_BUILDINGS, 10),
+        totalDamageTaken: parseInt(d.TOTAL_DAMAGE_TAKEN, 10),
+        visionScore: parseInt(d.VISION_SCORE, 10),
+        visionBought: parseInt(d.VISION_WARDS_BOUGHT_IN_GAME, 10),
         pentaKills: parseIntOptional(d.PENTA_KILLS),
-        level: parseInt(d.LEVEL),
-        item0: parseInt(d.ITEM0),
-        item1: parseInt(d.ITEM1),
-        item2: parseInt(d.ITEM2),
-        item3: parseInt(d.ITEM3),
-        item4: parseInt(d.ITEM4),
-        item5: parseInt(d.ITEM5),
-        item6: parseInt(d.ITEM6),
+        level: parseInt(d.LEVEL, 10),
+        item0: parseInt(d.ITEM0, 10),
+        item1: parseInt(d.ITEM1, 10),
+        item2: parseInt(d.ITEM2, 10),
+        item3: parseInt(d.ITEM3, 10),
+        item4: parseInt(d.ITEM4, 10),
+        item5: parseInt(d.ITEM5, 10),
+        item6: parseInt(d.ITEM6, 10),
         summonerSpell1: parseIntOptional(d.SUMMONER_SPELL_1),
         summonerSpell2: parseIntOptional(d.SUMMONER_SPELL_2),
         perk0: parseIntOptional(d.PERK0),
@@ -214,8 +212,8 @@ export class MatchParticipantService {
         perk3: parseIntOptional(d.PERK3),
         perk4: parseIntOptional(d.PERK4),
         perk5: parseIntOptional(d.PERK5),
-        keyStoneId: parseInt(d.KEYSTONE_ID),
-        perkSubStyle: parseInt(d.PERK_SUB_STYLE),
+        keyStoneId: parseInt(d.KEYSTONE_ID, 10),
+        perkSubStyle: parseInt(d.PERK_SUB_STYLE, 10),
         minionsKilled: parseIntOptional(d.MINIONS_KILLED),
         neutralMinionsKilled: parseIntOptional(d.NEUTRAL_MINIONS_KILLED),
         neutralMinionsKilledYourJungle: parseIntOptional(d.NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE),
