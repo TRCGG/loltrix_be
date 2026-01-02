@@ -1,11 +1,14 @@
 import { eq, ilike, desc, sql, and, or, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, TransactionType } from '../database/connectionPool.js';
-import { guildMember, InsertGuildMember, matchParticipant, riotAccount, RiotAccount } from '../database/schema.js';
-import { 
-  GetGuildMemberQuery,
-  LinkSubAccountRequest,
- } from '../types/guildMember.js';
+import {
+  guildMember,
+  InsertGuildMember,
+  matchParticipant,
+  riotAccount,
+  RiotAccount,
+} from '../database/schema.js';
+import { GetGuildMemberQuery, LinkSubAccountRequest } from '../types/guildMember.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
 
@@ -46,7 +49,7 @@ export class GuildMemberService {
       const finalMembersToInsert: InsertGuildMember[] = riotAccounts
         .filter((acc) => !existingAccountSet.has(acc.playerCode))
         .map((acc) => ({
-          guildId: guildId,
+          guildId,
           account: acc.playerCode,
           isMain: true,
           status: '1',
@@ -78,7 +81,7 @@ export class GuildMemberService {
     const conditions = [
       eq(guildMember.guildId, guildId),
       eq(guildMember.isMain, true),
-      eq(guildMember.status, "1"),
+      eq(guildMember.status, '1'),
       eq(guildMember.isDeleted, false),
       eq(riotAccount.riotName, riotName),
     ];
@@ -96,7 +99,7 @@ export class GuildMemberService {
         guildId: guildMember.guildId,
         createDate: guildMember.createDate,
         updateDate: guildMember.updateDate,
-        isDeleted: guildMember.isDeleted
+        isDeleted: guildMember.isDeleted,
       })
       .from(guildMember)
       .innerJoin(riotAccount, eq(guildMember.account, riotAccount.playerCode))
@@ -119,7 +122,7 @@ export class GuildMemberService {
     const conditions = [
       eq(guildMember.guildId, guildId),
       eq(guildMember.isMain, true),
-      eq(guildMember.status, "1"),
+      eq(guildMember.status, '1'),
       eq(guildMember.isDeleted, false),
       sql`LOWER(REPLACE(${riotAccount.riotName}, ' ', '')) LIKE ${searchPattern}`,
     ];
@@ -137,7 +140,7 @@ export class GuildMemberService {
         guildId: guildMember.guildId,
         createDate: guildMember.createDate,
         updateDate: guildMember.updateDate,
-        isDeleted: guildMember.isDeleted
+        isDeleted: guildMember.isDeleted,
       })
       .from(guildMember)
       .innerJoin(riotAccount, eq(guildMember.account, riotAccount.playerCode))
@@ -178,7 +181,7 @@ export class GuildMemberService {
     mainRiotName,
     mainRiotTag,
   }: LinkSubAccountRequest) {
-    return await db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
       // 1. 본계정 및 부계정 RiotAccount 존재 확인 (DB에서 playerCode, puuid 추출)
       const [priRiot, secRiot] = await Promise.all([
         // 본계정 조회
@@ -201,7 +204,7 @@ export class GuildMemberService {
 
       if (priRiot.playerCode === secRiot.playerCode) {
         throw new BusinessError('Cannot link the same account.', 400, {
-          isLoggable: false
+          isLoggable: false,
         });
       }
 
@@ -210,42 +213,44 @@ export class GuildMemberService {
         where: and(
           eq(guildMember.guildId, guildId),
           eq(guildMember.account, secRiot.playerCode), // 부계정의 playerCode 사용
-          eq(guildMember.isDeleted, false)
+          eq(guildMember.isDeleted, false),
         ),
       });
 
       if (!secMember) {
         throw new BusinessError(
           `${secRiot.riotName} account is not registered in this guild.`,
-          400, { isLoggable: false }
+          400,
+          { isLoggable: false },
         );
       }
 
       if (secMember.isMain === false) {
-        throw new BusinessError(
-          `${secRiot.riotName} is already linked as a sub-account.`,
-          409, { isLoggable: false}
-        );
+        throw new BusinessError(`${secRiot.riotName} is already linked as a sub-account.`, 409, {
+          isLoggable: false,
+        });
       }
 
       const priMember = await tx.query.guildMember.findFirst({
         where: and(
-            eq(guildMember.guildId, guildId),
-            eq(guildMember.account, priRiot.playerCode),
-            eq(guildMember.isDeleted, false)
-        )
+          eq(guildMember.guildId, guildId),
+          eq(guildMember.account, priRiot.playerCode),
+          eq(guildMember.isDeleted, false),
+        ),
       });
 
       if (!priMember) {
-        throw new BusinessError(`${priRiot.riotName} is not registered in this guild.`,
-          400, { isLoggable: false });
+        throw new BusinessError(`${priRiot.riotName} is not registered in this guild.`, 400, {
+          isLoggable: false,
+        });
       }
 
       // 본캐가 이미 다른 사람의 부캐임 (계층 구조 방지)
       if (priMember.isMain === false) {
         throw new BusinessError(
           `${priRiot.riotName} is already a sub-account. (Cannot nest accounts)`,
-          409, { isLoggable: false },
+          409,
+          { isLoggable: false },
         );
       }
 
@@ -296,7 +301,7 @@ export class GuildMemberService {
           eq(guildMember.guildId, guildId),
           eq(guildMember.isMain, false),
           eq(guildMember.isDeleted, false),
-          eq(guildMember.status, "1")
+          eq(guildMember.status, '1'),
         ),
       )
       .orderBy(desc(guildMember.id));
@@ -311,7 +316,7 @@ export class GuildMemberService {
     guildId: string,
     tx: TransactionType,
   ) {
-    return await tx
+    return tx
       .select({
         account: guildMember.account,
         mainAccount: guildMember.mainAccount,
@@ -351,7 +356,7 @@ export class GuildMemberService {
 
     const result = await db
       .update(guildMember)
-      .set({ status: status, updateDate: new Date() })
+      .set({ status, updateDate: new Date() })
       .where(
         and(
           eq(guildMember.guildId, guildId),
@@ -367,18 +372,11 @@ export class GuildMemberService {
   /**
    * @desc 닉네임/태그로 부계정을 찾아 본계정 연동 해제
    */
-  public async deleteSubAccountByRiotId(
-    guildId: string, 
-    riotName: string, 
-    riotNameTag: string
-  ) {
+  public async deleteSubAccountByRiotId(guildId: string, riotName: string, riotNameTag: string) {
     const [targetAccount] = await db
       .select({ playerCode: riotAccount.playerCode })
       .from(riotAccount)
-      .where(and(
-        eq(riotAccount.riotName, riotName),
-        eq(riotAccount.riotNameTag, riotNameTag)
-      ))
+      .where(and(eq(riotAccount.riotName, riotName), eq(riotAccount.riotNameTag, riotNameTag)))
       .limit(1);
 
     if (!targetAccount) {
@@ -392,11 +390,13 @@ export class GuildMemberService {
         mainAccount: null,
         updateDate: new Date(),
       })
-      .where(and(
-        eq(guildMember.guildId, guildId),
-        eq(guildMember.isMain, false),
-        eq(guildMember.account, targetAccount.playerCode)
-      ))
+      .where(
+        and(
+          eq(guildMember.guildId, guildId),
+          eq(guildMember.isMain, false),
+          eq(guildMember.account, targetAccount.playerCode),
+        ),
+      )
       .returning();
 
     return result[0];

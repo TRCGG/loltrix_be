@@ -13,20 +13,24 @@ export interface ProblemDetails {
  */
 export class BusinessError extends Error {
   public readonly status: number;
+
   public readonly type: string;
+
   public readonly title: string;
+
   public readonly isLoggable: boolean;
+
   public readonly showMessage: boolean;
 
   constructor(
     message: string,
-    status: number = 400,
+    status = 400,
     options?: {
       type?: string;
       title?: string;
       isLoggable?: boolean;
       showMessage?: boolean;
-    }
+    },
   ) {
     super(message);
     this.name = 'BusinessError';
@@ -47,19 +51,23 @@ export class BusinessError extends Error {
  */
 export class SystemError extends Error {
   public readonly status: number;
+
   public readonly type: string;
+
   public readonly title: string;
+
   public readonly isLoggable: boolean;
+
   public readonly showMessage: boolean;
 
   constructor(
     message: string,
-    status: number = 500,
+    status = 500,
     options?: {
       type?: string;
       title?: string;
       isLoggable?: boolean;
-    }
+    },
   ) {
     super(message);
     this.name = 'SystemError';

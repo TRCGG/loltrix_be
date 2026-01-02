@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { 
-  getRecentGames, 
-  getMatchDashboard, 
+import {
+  getRecentGames,
+  getMatchDashboard,
   getMostPicks,
   getGameDetail,
   deleteMatch,
@@ -27,19 +27,9 @@ const matchListSchema = z.object({
       .max(128, 'riotName must be less than 128 characters'),
   }),
   query: z.object({
-    riotNameTag: z
-      .string()
-      .max(128, 'riotNameTag must be less than 128 characters')
-      .optional(),
-    season: z
-      .string()
-      .max(32, 'season must be less than 32 characters')
-      .optional(),
-    page: z
-      .string()
-      .regex(/^\d+$/, 'Page must be a positive number')
-      .transform(Number)
-      .optional(),
+    riotNameTag: z.string().max(128, 'riotNameTag must be less than 128 characters').optional(),
+    season: z.string().max(32, 'season must be less than 32 characters').optional(),
+    page: z.string().regex(/^\d+$/, 'Page must be a positive number').transform(Number).optional(),
     limit: z
       .string()
       .regex(/^\d+$/, 'Limit must be a positive number')
@@ -60,14 +50,8 @@ const matchDashboardSchema = z.object({
       .max(128, 'riotName must be less than 128 characters'),
   }),
   query: z.object({
-    riotNameTag: z
-      .string()
-      .max(128, 'Search term must be less than 128 characters')
-      .optional(),
-    season: z
-      .string()
-      .max(32, 'season must be less than 32 characters')
-      .optional(),
+    riotNameTag: z.string().max(128, 'Search term must be less than 128 characters').optional(),
+    season: z.string().max(32, 'season must be less than 32 characters').optional(),
   }),
 });
 
@@ -111,7 +95,7 @@ router.get(
   */
   decodeGuildIdMiddleware,
   validateRequest(matchListSchema),
-  getRecentGames
+  getRecentGames,
 );
 
 /**
@@ -142,8 +126,8 @@ router.get(
   */
   decodeGuildIdMiddleware,
   validateRequest(matchDashboardSchema),
-  getMatchDashboard
-); 
+  getMatchDashboard,
+);
 
 /**
  * @route GET /api/matches/:guildId/:riotName/most-picks
@@ -174,7 +158,7 @@ router.get(
   */
   decodeGuildIdMiddleware,
   validateRequest(matchListSchema),
-  getMostPicks
+  getMostPicks,
 );
 
 /**
@@ -203,7 +187,7 @@ router.get(
   */
   decodeGuildIdMiddleware,
   validateRequest(gameDetailSchema),
-  getGameDetail
+  getGameDetail,
 );
 
 /**

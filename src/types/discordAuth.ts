@@ -1,11 +1,11 @@
-import { 
-  DiscordMember, 
-  InsertDiscordMember, 
-  DiscordToken, 
-  InsertDiscordToken, 
-  AuthSession, 
-  InsertAuthSession 
-} from "../database/schema.js";
+import {
+  DiscordMember,
+  InsertDiscordMember,
+  DiscordToken,
+  InsertDiscordToken,
+  AuthSession,
+  InsertAuthSession,
+} from '../database/schema.js';
 
 export interface discordMemberResponse {
   status: 'success' | 'error';
@@ -23,7 +23,7 @@ export interface UpdateDiscordTokenRequest {
 }
 
 export interface DiscordTokenResponse {
-  status: 'success' | 'error'
+  status: 'success' | 'error';
   message: string;
   data?: DiscordToken | null;
 }
@@ -31,7 +31,7 @@ export interface DiscordTokenResponse {
 // Discord API 원본 응답 타입
 export interface DiscordTokenAPI {
   access_token: string;
-  expires_in: number; 
+  expires_in: number;
   refresh_token: string;
   scope: string;
   token_type: string;
@@ -53,10 +53,10 @@ export interface DiscordGuildAPIResponse {
 }
 
 export type {
-  DiscordMember, 
-  InsertDiscordMember, 
-  DiscordToken, 
-  InsertDiscordToken, 
+  DiscordMember,
+  InsertDiscordMember,
+  DiscordToken,
+  InsertDiscordToken,
   AuthSession,
-  InsertAuthSession
+  InsertAuthSession,
 };

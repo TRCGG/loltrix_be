@@ -25,18 +25,13 @@ export interface AuthRequest extends Request {
  * 3. 서비스 레이어를 통해 토큰 검증 및 자동 재발급
  * 4. req 객체에 discordMemberId, accessToken 주입
  */
-export const verifyAuth = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-) => {
+export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-
-    // --- 봇 검증 --- 
+    // --- 봇 검증 ---
     const botHeader = req.headers['x-discord-bot'];
     if (botHeader) {
-      if(botHeader !== botSecret){
-        throw new BusinessError('Invalid bot secret', 403, {isLoggable: false});
+      if (botHeader !== botSecret) {
+        throw new BusinessError('Invalid bot secret', 403, { isLoggable: false });
       }
       return next();
     }
@@ -44,27 +39,24 @@ export const verifyAuth = async (
     // --- 1. 유저 세션 검증 ---
     const sessionUid = req.cookies.session_uid;
     if (!sessionUid) {
-      throw new BusinessError('Session cookie not found', 401, {isLoggable: false});
+      throw new BusinessError('Session cookie not found', 401, { isLoggable: false });
     }
 
     // 1a. 세션 조회 (DB)
-    const authSession =
-      await discordAuthService.findAuthSessionByUid(sessionUid);
+    const authSession = await discordAuthService.findAuthSessionByUid(sessionUid);
     if (!authSession) {
-      throw new BusinessError('Invalid or inactive session', 401, {isLoggable: false});
+      throw new BusinessError('Invalid or inactive session', 401, { isLoggable: false });
     }
 
     // 1b. 서비스 레이어에 토큰 검증 및 자동 재발급 위임
     const { discordMemberId } = authSession;
-    const validAccessToken =
-      await discordAuthService.getValidAccessToken(discordMemberId);
+    const validAccessToken = await discordAuthService.getValidAccessToken(discordMemberId);
 
     // 2. (성공) req 객체에 인증 정보 주입
     req.discordMemberId = discordMemberId;
     req.accessToken = validAccessToken;
-    
-    next(); 
-    
+
+    next();
   } catch (error) {
     if (error instanceof BusinessError && error.status === 401) {
       res.clearCookie('session_uid', cookieOptions);

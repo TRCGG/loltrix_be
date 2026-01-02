@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { eq, ne, and, desc, sql, inArray } from 'drizzle-orm';
-import { db, TransactionType } from '../database/connectionPool.js';
 import { alias } from 'drizzle-orm/pg-core';
-import { 
-  InsertMatchParticipant, 
-  matchParticipant, 
-  champion, 
-  riotAccount, 
-  customMatch, 
+import { db, TransactionType } from '../database/connectionPool.js';
+import {
+  InsertMatchParticipant,
+  matchParticipant,
+  champion,
+  riotAccount,
+  customMatch,
   summonerSpell,
   perks,
 } from '../database/schema.js'; // 스키마 import 추가
@@ -96,7 +96,7 @@ const mapPosition = (position: string): string => {
 };
 
 /**
- * @desc 내전 참여자 서비스 
+ * @desc 내전 참여자 서비스
  */
 export class MatchParticipantService {
   constructor() {}
@@ -108,14 +108,18 @@ export class MatchParticipantService {
    * @param tx - Drizzle 트랜잭션 객체
    */
   public async insertMatchParticipants(
-    rawData: any[], 
-    customMatchId: string, 
+    rawData: any[],
+    customMatchId: string,
     tx: TransactionType,
-    puuidToPlayerCodeMap: Map<string, string>
+    puuidToPlayerCodeMap: Map<string, string>,
   ) {
     try {
       // 1. rawData를 파싱하고 챔피언 ID로 변환
-      const newData = await this.parsedMatchParticipant(rawData, customMatchId, puuidToPlayerCodeMap);
+      const newData = await this.parsedMatchParticipant(
+        rawData,
+        customMatchId,
+        puuidToPlayerCodeMap,
+      );
 
       // 2. 변환된 데이터를 삽입
       const result = await tx.insert(matchParticipant).values(newData).returning();
@@ -128,14 +132,14 @@ export class MatchParticipantService {
 
   /**
    * @desc rawData 배열을 Drizzle 삽입용 InsertMatchParticipant 배열로 파싱하고 변환
-   * @param rawData 
+   * @param rawData
    * @param customMatchId - 이 참가자들이 속한 custom_match의 ID
    * @returns InsertMatchParticipant 타입의 객체 배열 Promise
    */
   private async parsedMatchParticipant(
     rawData: any,
     customMatchId: string,
-    puuidToPlayerCodeMap: Map<string, string>
+    puuidToPlayerCodeMap: Map<string, string>,
   ): Promise<InsertMatchParticipant[]> {
     // Zod를 사용하여 원본 데이터 검증
     const validatedData = MatchparticipantArraySchema.parse(rawData);
@@ -171,23 +175,24 @@ export class MatchParticipantService {
       const position = mapPosition(d.TEAM_POSITION);
 
       const participantPuuid = d.PUUID;
-      const participantPlayerCode = puuidToPlayerCodeMap.get(participantPuuid) || 'error_player_code';
+      const participantPlayerCode =
+        puuidToPlayerCodeMap.get(participantPuuid) || 'error_player_code';
 
       return {
-        customMatchId: customMatchId,
+        customMatchId,
         playerCode: participantPlayerCode,
-        championId: championId,
-        gameTeam: gameTeam,
-        gameResult: gameResult,
-        position: position,
+        championId,
+        gameTeam,
+        gameResult,
+        position,
         kill: parseInt(d.CHAMPIONS_KILLED),
         death: parseInt(d.NUM_DEATHS),
         assist: parseInt(d.ASSISTS),
         gold: parseInt(d.GOLD_EARNED),
         ccing: parseInt(d.TIME_CCING_OTHERS),
         exp: parseInt(d.EXP),
-        timePlayed: parseInt(d.TIME_PLAYED) ,
-        totalDamageChampions: parseInt(d.TOTAL_DAMAGE_DEALT_TO_CHAMPIONS), 
+        timePlayed: parseInt(d.TIME_PLAYED),
+        totalDamageChampions: parseInt(d.TOTAL_DAMAGE_DEALT_TO_CHAMPIONS),
         totalDamageDealtToBuildings: parseInt(d.TOTAL_DAMAGE_DEALT_TO_BUILDINGS),
         totalDamageTaken: parseInt(d.TOTAL_DAMAGE_TAKEN),
         visionScore: parseInt(d.VISION_SCORE),
@@ -220,6 +225,7 @@ export class MatchParticipantService {
 
     return parsedMatchParticipants;
   }
+
   // [Read] 데이터 조회 관련 메서드
   /**
    * @desc 승률 및 KDA 계산용 SQL 조각 생성 (Helper)
@@ -245,7 +251,7 @@ export class MatchParticipantService {
             / NULLIF(COALESCE(SUM(${table.death}), 0), 0), 
             2
           ) 
-        END`
+        END`,
     };
   }
 
@@ -296,15 +302,16 @@ export class MatchParticipantService {
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .where(and(
-        eq(matchParticipant.playerCode, playerCode),
-        eq(matchParticipant.isDeleted, false),
-        eq(customMatch.isDeleted, false),
-        eq(customMatch.guildId, guildId),
-        eq(customMatch.season, season)
-      ))
-      .groupBy(matchParticipant.position)
-      .orderBy(sql`
+      .where(
+        and(
+          eq(matchParticipant.playerCode, playerCode),
+          eq(matchParticipant.isDeleted, false),
+          eq(customMatch.isDeleted, false),
+          eq(customMatch.guildId, guildId),
+          eq(customMatch.season, season),
+        ),
+      )
+      .groupBy(matchParticipant.position).orderBy(sql`
         CASE ${matchParticipant.position}
           WHEN 'TOP' THEN 1
           WHEN 'JUG' THEN 2
@@ -327,26 +334,26 @@ export class MatchParticipantService {
     playerCode: string,
     season: string,
     guildId: string,
-    page: number = 1,
-    limit: number = 10
+    page = 1,
+    limit = 10,
   ) {
     const offset = (page - 1) * limit;
     // 통계 쿼리 실행
     const statColumns = this.getStatSqlChunks();
 
     const whereCondition = and(
-        eq(matchParticipant.playerCode, playerCode),
-        eq(matchParticipant.isDeleted, false),
-        eq(customMatch.isDeleted, false),
-        eq(customMatch.guildId, guildId),
-        eq(customMatch.season, season)
-      )
+      eq(matchParticipant.playerCode, playerCode),
+      eq(matchParticipant.isDeleted, false),
+      eq(customMatch.isDeleted, false),
+      eq(customMatch.guildId, guildId),
+      eq(customMatch.season, season),
+    );
 
     const picksQuery = db
       .select({
-        champName: champion.champName,       
-        champNameEng: champion.champNameEng, 
-        ...statColumns,                      
+        champName: champion.champName,
+        champNameEng: champion.champNameEng,
+        ...statColumns,
       })
       .from(matchParticipant)
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
@@ -358,8 +365,8 @@ export class MatchParticipantService {
       .offset(offset);
 
     const countQuery = db
-      .select({ 
-        count: sql<number>`count(distinct ${matchParticipant.championId})::integer` 
+      .select({
+        count: sql<number>`count(distinct ${matchParticipant.championId})::integer`,
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
@@ -367,7 +374,7 @@ export class MatchParticipantService {
 
     const [mostPicks, countResult] = await Promise.all([picksQuery, countQuery]);
     const totalCount = countResult[0]?.count || 0;
-    
+
     return { mostPicks, totalCount };
   }
 
@@ -378,12 +385,12 @@ export class MatchParticipantService {
     playerCode: string,
     season: string,
     guildId: string,
-    page: number = 1,
-    limit: number = 20
+    page = 1,
+    limit = 20,
   ) {
     const offset = (page - 1) * limit;
 
-    // Alias 정의 
+    // Alias 정의
     const sp1 = alias(summonerSpell, 'sp1');
     const sp2 = alias(summonerSpell, 'sp2');
     const keystone = alias(perks, 'keystone');
@@ -394,7 +401,7 @@ export class MatchParticipantService {
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       eq(customMatch.guildId, guildId),
-      eq(customMatch.season, season)
+      eq(customMatch.season, season),
     );
 
     const gamesQuery = db
@@ -410,7 +417,7 @@ export class MatchParticipantService {
         // Player Info
         riotName: riotAccount.riotName,
         riotNameTag: riotAccount.riotNameTag,
-        
+
         // Champion Info
         champName: champion.champName,
         champNameEng: champion.champNameEng,
@@ -465,7 +472,7 @@ export class MatchParticipantService {
       .orderBy(desc(customMatch.createDate))
       .limit(limit)
       .offset(offset);
-    
+
     const countQuery = db
       .select({ count: sql<number>`count(*)::integer` })
       .from(matchParticipant)
@@ -488,7 +495,7 @@ export class MatchParticipantService {
     const keystone = alias(perks, 'keystone');
     const substyle = alias(perks, 'substyle');
 
-    return await db
+    return db
       .select({
         // Game Info
         gameId: customMatch.id,
@@ -501,7 +508,7 @@ export class MatchParticipantService {
         // Player Info
         riotName: riotAccount.riotName,
         riotNameTag: riotAccount.riotNameTag,
-        
+
         // Champion Info
         champName: champion.champName,
         champNameEng: champion.champNameEng,
@@ -549,14 +556,16 @@ export class MatchParticipantService {
       .leftJoin(sp2, eq(matchParticipant.summonerSpell2, sp2.id))
       .leftJoin(keystone, eq(matchParticipant.keyStoneId, keystone.id))
       .leftJoin(substyle, eq(matchParticipant.perkSubStyle, substyle.id))
-      .where(and(
-        eq(customMatch.id, gameId), 
-        eq(customMatch.guildId, guildId), 
-        eq(matchParticipant.isDeleted, false),
-        eq(customMatch.isDeleted, false)
-      ))
+      .where(
+        and(
+          eq(customMatch.id, gameId),
+          eq(customMatch.guildId, guildId),
+          eq(matchParticipant.isDeleted, false),
+          eq(customMatch.isDeleted, false),
+        ),
+      )
       .orderBy(
-        matchParticipant.gameTeam, 
+        matchParticipant.gameTeam,
         sql`
           CASE ${matchParticipant.position}
             WHEN 'TOP' THEN 1
@@ -566,7 +575,7 @@ export class MatchParticipantService {
             WHEN 'SUP' THEN 5
             ELSE 6
           END
-        `
+        `,
       );
   }
 
@@ -575,11 +584,7 @@ export class MatchParticipantService {
    * 조건: 같은 팀, 5판 이상 같이 함
    * 필터: 시즌 (Season) 기준
    */
-  public async getSynergisticTeammates(
-    playerCode: string,
-    season: string,
-    guildId: string
-  ) {
+  public async getSynergisticTeammates(playerCode: string, season: string, guildId: string) {
     // 1. Alias 생성 (Self Join을 위해)
     // mpMe: 기준이 되는 내 전적
     // mpTeammate: 나와 같은 팀인 동료들의 전적
@@ -597,25 +602,30 @@ export class MatchParticipantService {
       })
       .from(mpTeammate)
       // Join 1: 내 전적(mpMe)와 팀원 전적(mpTeammate) 연결
-      .innerJoin(mpMe, and(
-        eq(mpTeammate.customMatchId, mpMe.customMatchId), // 같은 게임
-        eq(mpTeammate.gameTeam, mpMe.gameTeam)            // 같은 팀
-      ))
+      .innerJoin(
+        mpMe,
+        and(
+          eq(mpTeammate.customMatchId, mpMe.customMatchId), // 같은 게임
+          eq(mpTeammate.gameTeam, mpMe.gameTeam), // 같은 팀
+        ),
+      )
       .innerJoin(riotAccount, eq(mpTeammate.playerCode, riotAccount.playerCode))
       .innerJoin(customMatch, eq(mpTeammate.customMatchId, customMatch.id))
-      .where(and(
-        // 조건 1: 나는 '나'여야 함
-        eq(mpMe.playerCode, playerCode),
-        // 조건 2: 팀원은 '나'가 아니어야 함
-        ne(mpTeammate.playerCode, playerCode),
-        // 조건 3: 시즌 필터 
-        eq(customMatch.season, season),
-        // 조건 4: 삭제되지 않은 데이터
-        eq(mpMe.isDeleted, false),
-        eq(mpTeammate.isDeleted, false),
-        eq(customMatch.guildId, guildId),
-        eq(customMatch.isDeleted, false)
-      ))
+      .where(
+        and(
+          // 조건 1: 나는 '나'여야 함
+          eq(mpMe.playerCode, playerCode),
+          // 조건 2: 팀원은 '나'가 아니어야 함
+          ne(mpTeammate.playerCode, playerCode),
+          // 조건 3: 시즌 필터
+          eq(customMatch.season, season),
+          // 조건 4: 삭제되지 않은 데이터
+          eq(mpMe.isDeleted, false),
+          eq(mpTeammate.isDeleted, false),
+          eq(customMatch.guildId, guildId),
+          eq(customMatch.isDeleted, false),
+        ),
+      )
       .groupBy(riotAccount.riotName, riotAccount.riotNameTag)
       .having(sql`count(*) >= 5`) // 5판 이상
       .orderBy(desc(statColumns.winRate), desc(statColumns.totalCount));
@@ -628,19 +638,21 @@ export class MatchParticipantService {
    * customMatch와 연관된 matchParticipant를 모두 isDeleted = true 처리
    */
   public async deleteMatch(gameId: string, guildId: string) {
-    return await db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
       // 1. CustomMatch 삭제
       const [deletedMatch] = await tx
         .update(customMatch)
-        .set({ 
+        .set({
           isDeleted: true,
           updateDate: new Date(),
-         })
-        .where(and(
-          eq(customMatch.id, gameId),
-          eq(customMatch.guildId, guildId),
-          eq(customMatch.isDeleted, false)
-        ))
+        })
+        .where(
+          and(
+            eq(customMatch.id, gameId),
+            eq(customMatch.guildId, guildId),
+            eq(customMatch.isDeleted, false),
+          ),
+        )
         .returning();
 
       // 해당 게임이 없거나 이미 삭제된 경우 null 반환
@@ -651,14 +663,13 @@ export class MatchParticipantService {
       // 2. 연관된 MatchParticipant 일괄 삭제
       await tx
         .update(matchParticipant)
-        .set({ 
+        .set({
           isDeleted: true,
           updateDate: new Date(),
-         })
-        .where(and(
-          eq(matchParticipant.customMatchId, gameId),
-          eq(matchParticipant.isDeleted, false)
-        ));
+        })
+        .where(
+          and(eq(matchParticipant.customMatchId, gameId), eq(matchParticipant.isDeleted, false)),
+        );
 
       // 3. 연관된 replays 삭제
       await replayService.softDeleteReplayByCode(gameId, tx);

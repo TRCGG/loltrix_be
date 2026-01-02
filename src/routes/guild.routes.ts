@@ -85,7 +85,8 @@ const deleteGuildSchema = z.object({
  * @desc 새로운 길드 생성
  * @access Public
  */
-router.post('/', 
+router.post(
+  '/',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '새 길드 생성'
     #swagger.description = '새로운 길드를 등록합니다.'
@@ -100,8 +101,8 @@ router.post('/',
       }
     }
   */
-  validateRequest(createGuildSchema), 
-  createGuild
+  validateRequest(createGuildSchema),
+  createGuild,
 );
 
 /**
@@ -109,14 +110,15 @@ router.post('/',
  * @desc Guild ID로 길드 조회
  * @access Public
  */
-router.get('/:id', 
+router.get(
+  '/:id',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '길드 상세 조회'
     #swagger.description = '길드 ID를 이용하여 특정 길드의 정보를 조회합니다.'
     #swagger.parameters['id'] = { description: '조회할 Guild ID' }
   */
-  validateRequest(getGuildByIdSchema), 
-  getGuildById
+  validateRequest(getGuildByIdSchema),
+  getGuildById,
 );
 
 /**
@@ -124,7 +126,8 @@ router.get('/:id',
  * @desc Guild ID로 길드 수정
  * @access Public
  */
-router.put('/:id', 
+router.put(
+  '/:id',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '길드 정보 수정'
     #swagger.description = '길드 이름, 언어 코드, 삭제 여부 등을 수정합니다.'
@@ -139,8 +142,8 @@ router.put('/:id',
       }
     }
   */
-  validateRequest(updateGuildSchema), 
-  updateGuild
+  validateRequest(updateGuildSchema),
+  updateGuild,
 );
 
 /**
@@ -148,7 +151,8 @@ router.put('/:id',
  * @desc 페이지네이션과 검색으로 모든 길드 조회
  * @access Public
  */
-router.get('/', 
+router.get(
+  '/',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '길드 목록 조회'
     #swagger.description = '검색어, 페이지, 리밋을 사용하여 길드 목록을 조회합니다.'
@@ -156,8 +160,8 @@ router.get('/',
     #swagger.parameters['limit'] = { in: 'query', description: '한 페이지당 개수 (기본 10)', type: 'integer' }
     #swagger.parameters['search'] = { in: 'query', description: '길드명 검색어', type: 'string' }
   */
-  validateRequest(getAllGuildsSchema), 
-  getAllGuilds
+  validateRequest(getAllGuildsSchema),
+  getAllGuilds,
 );
 
 /**
@@ -165,14 +169,15 @@ router.get('/',
  * @desc Guild ID로 길드 삭제 (소프트 삭제)
  * @access Public
  */
-router.delete('/:id', 
+router.delete(
+  '/:id',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '길드 삭제'
     #swagger.description = '길드 ID를 이용하여 길드를 소프트 삭제(isDeleted=true) 처리합니다.'
     #swagger.parameters['id'] = { description: '삭제할 Guild ID' }
   */
-  validateRequest(deleteGuildSchema), 
-  deleteGuild
+  validateRequest(deleteGuildSchema),
+  deleteGuild,
 );
 
 export default router;

@@ -6,9 +6,8 @@ import { AuthRequest } from '../middlewares/authHandler.js';
 import { GuildMembershipService } from '../services/guildMembership.service.js';
 import { DiscordGuildAPIResponse } from '../types/discordAuth.js';
 
-const frontendUrl = process.env.NODE_ENV === 'development' 
-? 'https://dev.gmok.kr' 
-: 'https://gmok.kr';
+const frontendUrl =
+  process.env.NODE_ENV === 'development' ? 'https://dev.gmok.kr' : 'https://gmok.kr';
 
 const discordAuthService = new DiscordAuthService();
 const guildMembershipService = new GuildMembershipService();
@@ -26,15 +25,10 @@ const cookieOptions = {
  * @desc 디스코드 로그인 시작 (디스코드로 리디렉션)
  * @access Public
  */
-export const login = (
-  req: Request,
-  res: Response<void>,
-  next: NextFunction
-): void => {
+export const login = (req: Request, res: Response<void>, next: NextFunction): void => {
   try {
     const authorizeUrl = discordAuthService.getDiscordAuthorizeUrl();
     res.redirect(authorizeUrl);
-
   } catch (error) {
     next();
   }
@@ -46,14 +40,14 @@ export const login = (
  * @access Public
  */
 export const callback = async (
-  req: Request<Record<string, never>, void, never, { code?: string; error?: string }>, 
+  req: Request<Record<string, never>, void, never, { code?: string; error?: string }>,
   res: Response<void>,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const { code, error } = req.query;
 
   if (error === 'access_denied') {
-    return res.redirect(frontendUrl); 
+    return res.redirect(frontendUrl);
   }
 
   if (!code) {
@@ -61,16 +55,16 @@ export const callback = async (
   }
 
   try {
-   const sessionUid = await discordAuthService.handleDiscordCallback(
+    const sessionUid = await discordAuthService.handleDiscordCallback(
       code,
       req.headers['user-agent'],
-      (req.ip || req.connection.remoteAddress) as string
+      (req.ip || req.connection.remoteAddress) as string,
     );
 
     res.cookie('session_uid', sessionUid, cookieOptions);
     res.redirect(frontendUrl);
   } catch (error) {
-    next(error); 
+    next(error);
   }
 };
 
@@ -79,17 +73,14 @@ export const callback = async (
  * @desc  로그아웃 (디스코드 토큰 폐기)
  * @access Public
  */
-export const logout = async (
-  req: Request,
-  res: Response<void>
-) => {
+export const logout = async (req: Request, res: Response<void>) => {
   try {
     const sessionUid = req.cookies.session_uid;
     res.clearCookie('session_uid', cookieOptions);
 
     if (sessionUid) {
       await discordAuthService.revokeAndDeactivateSession(sessionUid);
-    } 
+    }
 
     return res.redirect(frontendUrl);
   } catch (error) {
@@ -104,10 +95,7 @@ export const logout = async (
  * @desc (Protected) 현재 인증된 유저의 gmok이 있는 길드 목록 가져오기
  * @access Private (auth.middleware를 통과해야 함)
  */
-export const getGmokGuilds = async (
-  req: AuthRequest, 
-  res: Response<DiscordGuildAPIResponse>,
-) => {
+export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuildAPIResponse>) => {
   try {
     // 1. 유저 요청 처리
     const { accessToken } = req;
@@ -123,14 +111,13 @@ export const getGmokGuilds = async (
       message: 'gmok Guilds find successfully',
       data: guildsData,
     });
-
   } catch (error) {
     console.error('getSelfGuilds error', error);
     res.status(500).json({
       status: 'error',
       message: 'Internal server error discordAuth getGmokGuilds',
-      data: null
-    })
+      data: null,
+    });
   }
 };
 
@@ -139,12 +126,8 @@ export const getGmokGuilds = async (
  * @desc [(Protected) 현재 세션의 유저 ID 조회 (세션 체크용)
  * @access Private
  */
-export const getSelfProfile = async (
-  req: AuthRequest, 
-  res: Response,
-) => {
+export const getSelfProfile = async (req: AuthRequest, res: Response) => {
   try {
-
     const { accessToken } = req;
 
     if (!accessToken) {
@@ -155,25 +138,25 @@ export const getSelfProfile = async (
       res.status(500).json({
         status: 'error',
         message: 'User ID not found after auth middleware',
-        data: null
+        data: null,
       });
     }
 
-    const result =  await discordAuthService.fetchUser(accessToken);
+    const result = await discordAuthService.fetchUser(accessToken);
 
     res.status(200).json({
       status: 'success',
       message: 'session OK',
       data: {
-        user: result
+        user: result,
       },
     });
   } catch (error) {
-    console.error("getSelfProfile error");
+    console.error('getSelfProfile error');
     res.status(500).json({
       status: 'error',
       message: 'Internal server error while discordAuth getSelfProfile',
-      data: null
+      data: null,
     });
   }
 };

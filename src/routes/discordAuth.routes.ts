@@ -19,13 +19,14 @@ const router: Router = Router();
  * @desc 디스코드 로그인 시작
  * @access Public
  */
-router.get('/login', 
+router.get(
+  '/login',
   /* #swagger.tags = ['Auth']
     #swagger.summary = '디스코드 로그인 시작'
     #swagger.description = '디스코드 OAuth2 로그인 페이지로 리다이렉트합니다.'
     #swagger.security = [] 
   */
-  login
+  login,
 );
 
 /**
@@ -33,13 +34,14 @@ router.get('/login',
  * @desc 디스코드 로그인 콜백 처리
  * @access Public
  */
-router.get('/callback', 
+router.get(
+  '/callback',
   /* #swagger.tags = ['Auth']
     #swagger.summary = '디스코드 로그인 콜백'
     #swagger.description = '디스코드 인증 후 리다이렉트되는 콜백 URL입니다.'
     #swagger.security = []
   */
-  callback
+  callback,
 );
 
 /**
@@ -47,13 +49,14 @@ router.get('/callback',
  * @desc 로그아웃 (토큰 폐기)
  * @access Public
  */
-router.post('/logout', 
+router.post(
+  '/logout',
   /* #swagger.tags = ['Auth']
     #swagger.summary = '로그아웃'
     #swagger.description = '세션 쿠키를 제거하여 로그아웃 처리합니다.'
     #swagger.security = []
   */
-  logout
+  logout,
 );
 
 // --- 보호된 라우트 (인증 필요) ---
@@ -78,8 +81,8 @@ router.get(
       }
     }
   */
-  verifyAuth, 
-  getSelfProfile
+  verifyAuth,
+  getSelfProfile,
 );
 
 /**
@@ -87,14 +90,15 @@ router.get(
  * @desc 현재 유저의 길드 목록 조회
  * @access Private
  */
-router.get('/gmokGuilds', 
+router.get(
+  '/gmokGuilds',
   /* #swagger.tags = ['Auth']
     #swagger.summary = '내 길드 목록 조회'
     #swagger.description = '현재 유저가 속한 GMOK 길드 목록을 조회합니다.'
     // security 설정 생략 -> 전역 설정 자동 적용
   */
-  verifyAuth, 
-  getGmokGuilds
+  verifyAuth,
+  getGmokGuilds,
 );
 
 export default router;

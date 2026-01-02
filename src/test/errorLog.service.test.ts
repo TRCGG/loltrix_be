@@ -3,7 +3,7 @@ import {
   logError,
   logErrorFromRequest,
   extractRequestData,
-  ErrorLogData
+  ErrorLogData,
 } from '../services/errorLog.service.js';
 import { db } from '../database/connectionPool.js';
 import { errorLog } from '../database/schema.js';
@@ -25,15 +25,19 @@ describe('Error Log Service Tests', () => {
         originalUrl: '/api/test?param=value',
         get: jest.fn((header) => {
           switch (header) {
-            case 'user-agent': return 'Mozilla/5.0';
-            case 'content-type': return 'application/json';
-            case 'authorization': return 'Bearer token';
-            default: return undefined;
+            case 'user-agent':
+              return 'Mozilla/5.0';
+            case 'content-type':
+              return 'application/json';
+            case 'authorization':
+              return 'Bearer token';
+            default:
+              return undefined;
           }
         }),
         body: { name: 'test' },
         query: { param: 'value' },
-        params: { id: '123' }
+        params: { id: '123' },
       } as Partial<Request> as Request;
 
       const result = extractRequestData(req);
@@ -45,12 +49,12 @@ describe('Error Log Service Tests', () => {
         headers: {
           'user-agent': 'Mozilla/5.0',
           'content-type': 'application/json',
-          'accept': undefined,
-          'authorization': '[HIDDEN]'
+          accept: undefined,
+          authorization: '[HIDDEN]',
         },
         body: { name: 'test' },
         query: { param: 'value' },
-        params: { id: '123' }
+        params: { id: '123' },
       });
     });
 
@@ -62,7 +66,7 @@ describe('Error Log Service Tests', () => {
         get: jest.fn().mockReturnValue(undefined),
         body: {},
         query: {},
-        params: {}
+        params: {},
       } as Partial<Request> as Request;
 
       const result = extractRequestData(req);
@@ -80,11 +84,11 @@ describe('Error Log Service Tests', () => {
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([])
+        limit: jest.fn().mockResolvedValue([]),
       };
 
       const mockInsert = {
-        values: jest.fn().mockResolvedValue([{ errorCode: 'ERR-20250925-001' }])
+        values: jest.fn().mockResolvedValue([{ errorCode: 'ERR-20250925-001' }]),
       };
 
       mockDb.select = jest.fn().mockReturnValue(mockSelect);
@@ -94,10 +98,10 @@ describe('Error Log Service Tests', () => {
         error: {
           message: 'Test error',
           stack: 'Error stack',
-          name: 'Error'
+          name: 'Error',
         },
         severity: 'error',
-        status: 500
+        status: 500,
       };
 
       const result = await logError(errorData);
@@ -109,8 +113,8 @@ describe('Error Log Service Tests', () => {
           errorCode: expect.any(String),
           error: errorData.error,
           severity: 'error',
-          status: 500
-        })
+          status: 500,
+        }),
       );
     });
   });
@@ -121,11 +125,11 @@ describe('Error Log Service Tests', () => {
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([])
+        limit: jest.fn().mockResolvedValue([]),
       };
 
       const mockInsert = {
-        values: jest.fn().mockResolvedValue([])
+        values: jest.fn().mockResolvedValue([]),
       };
 
       mockDb.select = jest.fn().mockReturnValue(mockSelect);
@@ -141,8 +145,8 @@ describe('Error Log Service Tests', () => {
         query: {},
         params: {},
         ip: '127.0.0.1',
-        connection: { remoteAddress: '127.0.0.1' }
-        } as unknown as Request
+        connection: { remoteAddress: '127.0.0.1' },
+      } as unknown as Request;
 
       const result = await logErrorFromRequest(error, req, 500);
 
@@ -152,17 +156,17 @@ describe('Error Log Service Tests', () => {
           error: expect.objectContaining({
             message: 'Test error',
             stack: expect.any(String),
-            name: 'Error'
+            name: 'Error',
           }),
           request: expect.objectContaining({
             method: 'POST',
-            url: '/api/test'
+            url: '/api/test',
           }),
           userAgent: 'Mozilla/5.0',
           ipAddress: '127.0.0.1',
           severity: 'error',
-          status: 500
-        })
+          status: 500,
+        }),
       );
     });
 
@@ -171,11 +175,11 @@ describe('Error Log Service Tests', () => {
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([])
+        limit: jest.fn().mockResolvedValue([]),
       };
 
       const mockInsert = {
-        values: jest.fn().mockResolvedValue([])
+        values: jest.fn().mockResolvedValue([]),
       };
 
       mockDb.select = jest.fn().mockReturnValue(mockSelect);
@@ -190,7 +194,7 @@ describe('Error Log Service Tests', () => {
         body: {},
         query: {},
         params: {},
-        ip: '127.0.0.1'
+        ip: '127.0.0.1',
       } as Partial<Request> as Request;
 
       await logErrorFromRequest(error, req, 400);
@@ -198,12 +202,11 @@ describe('Error Log Service Tests', () => {
       expect(mockInsert.values).toHaveBeenCalledWith(
         expect.objectContaining({
           severity: 'warning',
-          status: 400
-        })
+          status: 400,
+        }),
       );
     });
   });
-
 });
 
 export {};

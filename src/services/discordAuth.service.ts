@@ -3,11 +3,11 @@ import querystring from 'querystring';
 import { eq, ilike, desc, sql, and, isNull } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { discordMember, discordToken, authSession } from '../database/schema.js';
-import { 
+import {
   InsertDiscordMember,
   InsertDiscordToken,
   InsertAuthSession,
-  DiscordToken, 
+  DiscordToken,
   DiscordTokenAPI,
 } from '../types/discordAuth.js';
 import { BusinessError, SystemError } from '../types/error.js';
@@ -35,10 +35,7 @@ function formatNewToken(tokenData: DiscordTokenAPI) {
 /**
  * @desc 토큰 재발급 시 토큰 포맷 (토큰 순환 처리)
  */
-function formatRefreshedToken(
-  tokenData: DiscordTokenAPI,
-  oldRefreshToken: string,
-) {
+function formatRefreshedToken(tokenData: DiscordTokenAPI, oldRefreshToken: string) {
   return {
     accessToken: tokenData.access_token,
     acExpiresDate: new Date(Date.now() + tokenData.expires_in * 1000),
@@ -64,14 +61,12 @@ export class DiscordAuthService {
    */
   public getDiscordAuthorizeUrl(): string {
     try {
-      const authorizeUrl =
-        `${discordApiBaseUrl}/oauth2/authorize?` +
-        querystring.stringify({
-          client_id: clientId,
-          redirect_uri: redirectUri,
-          response_type: 'code',
-          scope: scopes.join(' '),
-        });
+      const authorizeUrl = `${discordApiBaseUrl}/oauth2/authorize?${querystring.stringify({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: scopes.join(' '),
+      })}`;
       return authorizeUrl;
     } catch (error) {
       console.error('Error creating authorize URL', error);
@@ -127,8 +122,8 @@ export class DiscordAuthService {
       };
       const newAuthData: InsertAuthSession = {
         discordMemberId: userData.id,
-        userAgent: userAgent,
-        ipAddr: ipAddr,
+        userAgent,
+        ipAddr,
         isActive: true,
       };
 
@@ -209,7 +204,7 @@ export class DiscordAuthService {
   }
 
   /**
-   * @desc Discord API로 사용자 정보 조회 
+   * @desc Discord API로 사용자 정보 조회
    */
   public async fetchUser(accessToken: string) {
     try {
@@ -224,7 +219,7 @@ export class DiscordAuthService {
       return {
         id: userData.id,
         username: userData.username,
-        global_name: userData.global_name, 
+        global_name: userData.global_name,
         avatar: userData.avatar,
       };
     } catch (error) {

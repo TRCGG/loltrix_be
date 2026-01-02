@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import { statisticsService } from '../services/statistics.service.js';
-import { 
-  StatisticsResponse, 
-  UserGameStatistic, 
+import {
+  StatisticsResponse,
+  UserGameStatistic,
   GetStatisticsQuery,
-  ChampionStatistic
+  ChampionStatistic,
 } from '../types/statistics.js';
 
 /**
@@ -13,29 +13,29 @@ import {
  */
 export const getUserGameStats = async (
   req: Request<
-    { guildId: string }, 
-    StatisticsResponse<UserGameStatistic>, 
-    Record<string, never>, 
+    { guildId: string },
+    StatisticsResponse<UserGameStatistic>,
+    Record<string, never>,
     GetStatisticsQuery
   >,
-  res: Response<StatisticsResponse<UserGameStatistic>>
+  res: Response<StatisticsResponse<UserGameStatistic>>,
 ) => {
   try {
     const { guildId } = req.params;
     const { year, month, championName, position, season, sortBy, page, limit } = req.query;
 
     const { result, totalCount } = await statisticsService.getUserGameStatistics(
-      guildId, 
-      year, 
+      guildId,
+      year,
       month,
       championName,
       position,
       season,
       (sortBy as 'totalCount' | 'winRate') || 'totalCount',
-      Number(page) || 1,  
-      Number(limit) || 50 
+      Number(page) || 1,
+      Number(limit) || 50,
     );
-    
+
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
     res.setHeader('X-Limit', (limit ?? 50).toString());
@@ -63,25 +63,25 @@ export const getUserGameStats = async (
 export const getChampionStats = async (
   req: Request<
     { guildId: string },
-    StatisticsResponse<ChampionStatistic>, 
-    Record<string, never>, 
+    StatisticsResponse<ChampionStatistic>,
+    Record<string, never>,
     GetStatisticsQuery
   >,
-  res: Response<StatisticsResponse<ChampionStatistic>>
+  res: Response<StatisticsResponse<ChampionStatistic>>,
 ) => {
   try {
     const { guildId } = req.params;
     const { year, month, position, season, sortBy, page, limit } = req.query;
 
     const { result, totalCount } = await statisticsService.getChampionStatistics(
-      guildId, 
-      year, 
+      guildId,
+      year,
       month,
       position,
       season,
       (sortBy as 'totalCount' | 'winRate') || 'totalCount',
       Number(page) || 1,
-      Number(limit) || 20
+      Number(limit) || 20,
     );
 
     res.setHeader('X-Total-Count', totalCount.toString());

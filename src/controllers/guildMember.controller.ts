@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import {
-  GuildMemberResponse, 
-  GuildMemberAccountResponse, 
+  GuildMemberResponse,
+  GuildMemberAccountResponse,
   LinkSubAccountRequest,
   SubAccountsAPIResponse,
   UpdateGuildMemberStatusRequest,
@@ -16,10 +16,10 @@ import { BusinessError } from '../types/error.js';
  */
 export const searchGuildMembers = async (
   req: Request<
-    { guildId: string, riotName: string },
-    GuildMemberAccountResponse,   
-    Record<string, never>, 
-    { riotNameTag?: string, limit?: number}    
+    { guildId: string; riotName: string },
+    GuildMemberAccountResponse,
+    Record<string, never>,
+    { riotNameTag?: string; limit?: number }
   >,
   res: Response<GuildMemberAccountResponse>,
 ) => {
@@ -33,12 +33,12 @@ export const searchGuildMembers = async (
       limit,
     });
 
-    if(members.length < 1) {
+    if (members.length < 1) {
       return res.status(404).json({
         status: 'error',
         message: 'Guild members not found',
-        data: null
-      })
+        data: null,
+      });
     }
 
     res.status(200).json({
@@ -57,19 +57,19 @@ export const searchGuildMembers = async (
 };
 
 /**
- * @desc 부계정을 본계정에 연결하고 DB 정보 업데이트 
+ * @desc 부계정을 본계정에 연결하고 DB 정보 업데이트
  * @route POST /api/guildMember/sub-account
  * @access Public
  */
 export const linkSubAccount = async (
   req: Request<
-    Record<string, never>, 
-    GuildMemberResponse, 
+    Record<string, never>,
+    GuildMemberResponse,
     LinkSubAccountRequest,
     Record<string, never>
   >,
   res: Response<GuildMemberResponse>,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { guildId, subRiotName, subRiotTag, mainRiotName, mainRiotTag } = req.body;
@@ -87,7 +87,6 @@ export const linkSubAccount = async (
       message: 'Sub-account linked successfully to primary account.',
       data: resultGuildMember,
     });
-
   } catch (error) {
     next(error);
   }
@@ -99,7 +98,7 @@ export const linkSubAccount = async (
  * @access Public
  */
 export const getSubAccounts = async (
-  req: Request<{guildId: string }>,
+  req: Request<{ guildId: string }>,
   res: Response<SubAccountsAPIResponse>,
 ) => {
   try {
@@ -111,7 +110,7 @@ export const getSubAccounts = async (
       return res.status(200).json({
         status: 'success',
         message: 'No sub-accounts found for this guild.',
-        data: [], 
+        data: [],
       });
     }
 
@@ -120,7 +119,6 @@ export const getSubAccounts = async (
       message: 'Sub-accounts retrieved successfully',
       data: members,
     });
-
   } catch (error) {
     console.error('Error retrieving sub-accounts:', error);
     res.status(500).json({
@@ -137,12 +135,8 @@ export const getSubAccounts = async (
  * @access Public
  */
 export const updateMemberStatus = async (
-  req: Request<
-    Record<string, never>,
-    GuildMemberResponse,
-    UpdateGuildMemberStatusRequest
-  >,
-  res: Response<GuildMemberResponse>
+  req: Request<Record<string, never>, GuildMemberResponse, UpdateGuildMemberStatusRequest>,
+  res: Response<GuildMemberResponse>,
 ) => {
   try {
     const { guildId, riotName, riotNameTag, status } = req.body;
@@ -160,7 +154,7 @@ export const updateMemberStatus = async (
       guildId,
       riotName,
       riotNameTag,
-      status
+      status,
     );
 
     const actionText = status === '1' ? 'restored' : 'withdrawn';
@@ -170,7 +164,6 @@ export const updateMemberStatus = async (
       message: `Member and sub-accounts successfully ${actionText}.`,
       data: null,
     });
-
   } catch (error) {
     console.error('Error updating member status:', error);
 
@@ -209,10 +202,10 @@ export const removeSubAccount = async (
     const deleteSubAccount = await guildMemberService.deleteSubAccountByRiotId(
       guildId,
       riotName,
-      riotNameTag
+      riotNameTag,
     );
 
-    if(!deleteSubAccount) {
+    if (!deleteSubAccount) {
       return res.status(404).json({
         status: 'error',
         message: 'Sub-account not found',
@@ -225,7 +218,6 @@ export const removeSubAccount = async (
       message: 'Sub-account link removed successfully.',
       data: deleteSubAccount,
     });
-
   } catch (error) {
     console.error('Error removing sub-account link:', error);
     res.status(500).json({

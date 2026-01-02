@@ -15,7 +15,7 @@ const router: Router = Router();
 // Health check route
 router.use('/health', healthRouter);
 
-// discord auth routes 
+// discord auth routes
 router.use('/auth', authRouter);
 
 // --- 아래 API 부터는 모두 세션 검증 ---
@@ -27,10 +27,10 @@ router.use('/examples', exampleRouter);
 // Guild routes with CRUD operations
 router.use('/guilds', guildRouter);
 
-// Replay routes 
+// Replay routes
 router.use('/replays', replayRouter);
 
-// discord auth routes 
+// discord auth routes
 router.use('/auth', authRouter);
 
 // Guild Meber routes
@@ -39,7 +39,7 @@ router.use('/guildMember', guildMemberRoutes);
 // match
 router.use('/matches', matchParticipantRoutes);
 
-router.use('/statistics',statisticsRoutes);
+router.use('/statistics', statisticsRoutes);
 
 // Test routes for error logging (개발 환경에서만)
 if (process.env.NODE_ENV === 'development') {

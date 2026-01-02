@@ -9,9 +9,11 @@ const router: Router = Router();
  * @access Public
  */
 
-router.get('/',
+router.get(
+  '/',
   // #swagger.tags = ['Health']
   // #swagger.security = []
-  getHealth);
+  getHealth,
+);
 
 export default router;

@@ -12,7 +12,7 @@ import {
 import { matchParticipantService } from '../services/matchParticipant.service.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 
-const envLoLSeason = process.env.LOL_SEASON || "2026";
+const envLoLSeason = process.env.LOL_SEASON || '2026';
 
 const formatMember = (members: any[]) => {
   return members.map((member) => ({
@@ -40,7 +40,7 @@ export const getRecentGames = async (
     const { guildId, riotName } = req.params;
     const { riotNameTag, season, page, limit } = req.query;
 
-    const lolSeason = season ? season : envLoLSeason;
+    const lolSeason = season || envLoLSeason;
 
     const members = await guildMemberService.searchGuildMemberByRiotId(guildId, {
       riotName,
@@ -64,7 +64,7 @@ export const getRecentGames = async (
       });
     }
 
-    const playerCode = members[0].playerCode;
+    const { playerCode } = members[0];
 
     const { games, totalCount } = await matchParticipantService.getRecentGamesByRiotName(
       playerCode,
@@ -112,7 +112,7 @@ export const getMatchDashboard = async (
     const { guildId, riotName } = req.params;
     const { riotNameTag, season } = req.query;
 
-    const lolSeason = season ? season : envLoLSeason;
+    const lolSeason = season || envLoLSeason;
 
     const members = await guildMemberService.searchGuildMemberByRiotId(guildId, {
       riotName,
@@ -135,9 +135,9 @@ export const getMatchDashboard = async (
       });
     }
 
-    const playerCode = members[0].playerCode;
+    const { playerCode } = members[0];
 
-    const [ monthRecord, lineRecord, { mostPicks }, synergy] = await Promise.all([
+    const [monthRecord, lineRecord, { mostPicks }, synergy] = await Promise.all([
       matchParticipantService.getRecentMonthRecord(playerCode, guildId),
       matchParticipantService.getLineRecord(playerCode, lolSeason, guildId),
       matchParticipantService.getMostPicks(playerCode, lolSeason, guildId, 1, 10),
@@ -151,8 +151,8 @@ export const getMatchDashboard = async (
         member: members[0],
         summary: monthRecord,
         lines: lineRecord,
-        mostPicks: mostPicks,
-        synergy: synergy,
+        mostPicks,
+        synergy,
       },
     });
   } catch (error) {
@@ -183,7 +183,7 @@ export const getMostPicks = async (
     const { guildId, riotName } = req.params;
     const { riotNameTag, season, page, limit } = req.query;
 
-    const lolSeason = season ? season : envLoLSeason;
+    const lolSeason = season || envLoLSeason;
 
     const members = await guildMemberService.searchGuildMemberByRiotId(guildId, {
       riotName,
@@ -207,7 +207,7 @@ export const getMostPicks = async (
       });
     }
 
-    const playerCode = members[0].playerCode;
+    const { playerCode } = members[0];
 
     const { mostPicks, totalCount } = await matchParticipantService.getMostPicks(
       playerCode,
@@ -243,12 +243,12 @@ export const getMostPicks = async (
  */
 export const getGameDetail = async (
   req: Request<
-    { guildId: string; gameId: string }, 
-    MatchResponse<GameDetail[]>,         
-    Record<string, never>,               
-    Record<string, never>                
+    { guildId: string; gameId: string },
+    MatchResponse<GameDetail[]>,
+    Record<string, never>,
+    Record<string, never>
   >,
-  res: Response<MatchResponse<GameDetail[]>>
+  res: Response<MatchResponse<GameDetail[]>>,
 ) => {
   try {
     const { guildId, gameId } = req.params;
@@ -284,7 +284,7 @@ export const getGameDetail = async (
  */
 export const deleteMatch = async (
   req: Request<{ guildId: string; gameId: string }>,
-  res: Response<MatchResponse<CustomMatch>>
+  res: Response<MatchResponse<CustomMatch>>,
 ) => {
   try {
     const { guildId, gameId } = req.params;
@@ -304,7 +304,6 @@ export const deleteMatch = async (
       message: 'Game match deleted successfully',
       data: deletedMatch,
     });
-
   } catch (error) {
     console.error('Error deleting match:', error);
     res.status(500).json({

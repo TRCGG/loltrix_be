@@ -34,12 +34,12 @@ export class GuildService {
             languageCode: newGuildData.languageCode,
             updateDate: new Date(),
           },
-          where: sql`${guild.name} IS DISTINCT FROM ${newGuildData.name} `
+          where: sql`${guild.name} IS DISTINCT FROM ${newGuildData.name} `,
         })
         .returning();
       return result;
     } catch (error) {
-      console.error('Error upserting Guild',error);
+      console.error('Error upserting Guild', error);
       throw new SystemError('Guild error while upserting', 500);
     }
   }

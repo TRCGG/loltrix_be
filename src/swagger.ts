@@ -21,7 +21,7 @@ const doc = {
     {
       url: 'https://dev-api.gmok.kr',
       description: 'Dev Server',
-    }
+    },
   ],
   components: {
     securitySchemes: {

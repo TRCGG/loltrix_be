@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { eq, and, like, desc, sql, is } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
-import { customMatch, InsertCustomMatch  } from '../database/schema.js';
+import { customMatch, InsertCustomMatch } from '../database/schema.js';
 import { BusinessError, SystemError } from '../types/error.js';
 
 /**
  * @desc 내전 커스텀 게임정보
- * 
+ *
  */
 export class CustomMatchService {
   constructor() {}
@@ -20,10 +20,9 @@ export class CustomMatchService {
       return result[0];
     } catch (error) {
       console.error('Error inserting CustomMatch', error);
-      throw new SystemError("CustomMatch error while inserting", 500);
+      throw new SystemError('CustomMatch error while inserting', 500);
     }
   }
-  
 }
 
 export const customMatchService = new CustomMatchService();

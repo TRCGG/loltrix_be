@@ -1,12 +1,12 @@
 import { eq, and, like, desc } from 'drizzle-orm';
-import { db, TransactionType  } from '../database/connectionPool.js';
-import { replay } from '../database/schema.js';
-import { ReplayFileRequest } from '../types/replay.js';
 import { get } from 'https'; // http 또는 https 모듈
 import { createHash } from 'crypto';
+import { db, TransactionType } from '../database/connectionPool.js';
+import { replay } from '../database/schema.js';
+import { ReplayFileRequest } from '../types/replay.js';
 import { BusinessError, SystemError } from '../types/error.js';
 
-// 시즌 
+// 시즌
 const season = process.env.LOL_SEASON || 'error_season';
 
 /**
@@ -32,10 +32,11 @@ export class ReplayService {
       .from(replay)
       .where(
         and(
-          eq(replay.hashData, hashData), 
+          eq(replay.hashData, hashData),
           eq(replay.guildId, guildId),
-          eq(replay.isDeleted, false)
-        ))
+          eq(replay.isDeleted, false),
+        ),
+      )
       .limit(1);
 
     return result.length > 0;
@@ -167,7 +168,7 @@ export class ReplayService {
         rawData,
         hashData,
         gameType: gameType ?? '1',
-        season: season,
+        season,
         createUser,
         guildId,
       })
@@ -193,4 +194,4 @@ export class ReplayService {
   }
 }
 
- export const replayService = new ReplayService();
+export const replayService = new ReplayService();

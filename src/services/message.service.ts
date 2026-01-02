@@ -9,7 +9,13 @@ export const getMessageByLocaleAndKey = async (languageCode: string, key: string
   const result = await db
     .select()
     .from(message)
-    .where(and(eq(message.languageCode, languageCode), eq(message.key, key), eq(message.isDeleted, false)))
+    .where(
+      and(
+        eq(message.languageCode, languageCode),
+        eq(message.key, key),
+        eq(message.isDeleted, false),
+      ),
+    )
     .limit(1);
 
   return result[0]?.value;

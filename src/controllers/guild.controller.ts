@@ -45,10 +45,7 @@ export const createGuild = async (
  * @route GET /api/guilds/:id
  * @access Public
  */
-export const getGuildById = async (
-  req: Request<{ id: string }>,
-  res: Response<GuildResponse>,
-) => {
+export const getGuildById = async (req: Request<{ id: string }>, res: Response<GuildResponse>) => {
   try {
     const { id } = req.params;
 
@@ -101,7 +98,6 @@ export const getAllGuilds = async (
       message: 'Guilds retrieved successfully',
       data: result,
     });
-
   } catch (error) {
     console.error('Error retrieving guilds:', error);
     res.status(500).json({
@@ -155,10 +151,7 @@ export const updateGuild = async (
  * @route DELETE /api/guilds/:id
  * @access Public
  */
-export const deleteGuild = async (
-  req: Request<{ id: string }>,
-  res: Response<GuildResponse>,
-) => {
+export const deleteGuild = async (req: Request<{ id: string }>, res: Response<GuildResponse>) => {
   try {
     const { id } = req.params;
 

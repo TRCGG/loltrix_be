@@ -2,7 +2,6 @@
 import { CustomMatch } from '../database/schema.js';
 import { GuildMemberAccount } from './guildMember.js';
 
-
 /** 승률 및 KDA 기본 통계 */
 export interface MatchStats {
   totalCount: number;
@@ -30,7 +29,7 @@ export type Member = {
 };
 
 /** 최근 한 달 요약 (상단) */
-export interface MatchSummary extends MatchStats {}
+export type MatchSummary = MatchStats;
 
 /** 라인별 전적 */
 export interface LineStat extends MatchStats {
@@ -44,7 +43,7 @@ export interface MostPick extends MatchStats {
 }
 
 /** 게임 상세 정보 (한 경기 내의 플레이어 정보) */
-export interface GameDetail extends RecentGame {}
+export type GameDetail = RecentGame;
 
 export interface SynergyTeammate extends MatchStats {
   riotName: string;

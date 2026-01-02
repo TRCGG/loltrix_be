@@ -1,4 +1,4 @@
-import { RiotAccount } from "../database/schema";
+import { RiotAccount } from '../database/schema';
 
 export interface RiotAccountResponse {
   status: 'success' | 'error';
@@ -10,7 +10,6 @@ export interface GetRiotAccountsQuery {
   page?: number;
   limit?: number;
   search?: string;
-  
 }
 
 export type { RiotAccount };

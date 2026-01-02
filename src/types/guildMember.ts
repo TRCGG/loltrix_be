@@ -4,8 +4,8 @@ import { GuildMember, RiotAccount } from '../database/schema.js';
 
 export interface GetGuildMemberQuery {
   riotName: string;
-  riotNameTag?: string; 
-  limit?: number; 
+  riotNameTag?: string;
+  limit?: number;
 }
 
 // 부계정 연결 Req
@@ -14,7 +14,7 @@ export interface LinkSubAccountRequest {
   subRiotName: string;
   subRiotTag: string;
   mainRiotName: string;
-  mainRiotTag: string; 
+  mainRiotTag: string;
 }
 
 // 탈퇴, 복귀 req
@@ -47,29 +47,29 @@ export interface SubAccountSummary {
   guildId: string;
   subRiotName: string;
   subRiotNameTag: string;
-  mainRiotName: string | null; 
-  mainRiotNameTag: string | null; 
+  mainRiotName: string | null;
+  mainRiotNameTag: string | null;
 }
 
 // --- 최종 API 응답 인터페이스 ---
 
 export interface GuildMemberResponse {
-  status: 'success' | 'error',
+  status: 'success' | 'error';
   message: string;
-  data?: GuildMember | GuildMember[] | null
+  data?: GuildMember | GuildMember[] | null;
 }
 
 export interface GuildMemberAccountResponse {
-  status: 'success' | 'error',
+  status: 'success' | 'error';
   message: string;
-  data?: GuildMemberAccount | GuildMemberAccount[] | null
+  data?: GuildMemberAccount | GuildMemberAccount[] | null;
 }
 
 /**
  * @desc 부계정 목록 조회 API의 최종 응답 인터페이스 (HTTP Response)
  */
 export interface SubAccountsAPIResponse {
-  status: 'success' | 'error',
+  status: 'success' | 'error';
   message: string;
   data?: SubAccountSummary[] | null;
 }

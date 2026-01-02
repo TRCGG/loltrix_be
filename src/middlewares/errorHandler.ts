@@ -18,7 +18,7 @@ export const errorHandler = async (
     const isBusinessError = err instanceof BusinessError;
     const isSystemError = err instanceof SystemError;
     const showMessage = isBusinessError && err.showMessage;
-    const isLoggable = (isBusinessError || isSystemError) ? err.isLoggable : true;
+    const isLoggable = isBusinessError || isSystemError ? err.isLoggable : true;
 
     // 기본 에러 속성
     const status = err.status || 500;
@@ -31,7 +31,7 @@ export const errorHandler = async (
       errorTrackingCode = await logErrorFromRequest(
         err instanceof Error ? err : new Error(err.message || 'Unknown error'),
         req,
-        status
+        status,
       );
     }
 
@@ -39,7 +39,7 @@ export const errorHandler = async (
     const problem: ProblemDetails = {
       type,
       title,
-      status
+      status,
     };
 
     // 비즈니스 에러인 경우 메시지 노출, 시스템 에러인 경우 에러코드만 노출
@@ -57,11 +57,13 @@ export const errorHandler = async (
 
     // 개발 환경에서만 스택 트레이스 포함
     if (process.env.NODE_ENV === 'development' && err.stack) {
-      problem.errors = [{
-        code: 'stack_trace',
-        value: err.stack,
-        message: 'Stack trace (development only)'
-      }];
+      problem.errors = [
+        {
+          code: 'stack_trace',
+          value: err.stack,
+          message: 'Stack trace (development only)',
+        },
+      ];
       console.error(problem);
     }
 
@@ -74,7 +76,7 @@ export const errorHandler = async (
       type: 'server-error',
       title: 'Internal Server Error',
       status: 500,
-      detail: '오류가 발생했습니다.'
+      detail: '오류가 발생했습니다.',
     });
   }
 };

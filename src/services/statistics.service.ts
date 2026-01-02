@@ -8,7 +8,7 @@ import {
   guildMember,
 } from '../database/schema.js';
 
-const envLoLSeason = process.env.LOL_SEASON || '2026' ;
+const envLoLSeason = process.env.LOL_SEASON || '2026';
 
 export class StatisticsService {
   private getStatSqlChunks() {
@@ -47,8 +47,8 @@ export class StatisticsService {
     position: string | undefined,
     season: string | undefined,
     sortBy: 'totalCount' | 'winRate' = 'totalCount',
-    page: number = 1,
-    limit: number = 50,
+    page = 1,
+    limit = 50,
   ) {
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
@@ -62,14 +62,13 @@ export class StatisticsService {
     const shouldGroupByPosition = !!position;
 
     // 포지션 조건
-    const positionCondition = (position && position !== 'ALL')
-      ? eq(matchParticipant.position, position)
-      : undefined;
-    
+    const positionCondition =
+      position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
+
     // 챔피언 조건
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
 
-    // 시즌 조건 
+    // 시즌 조건
     const seasonCondition =
       season === 'ALL'
         ? undefined
@@ -95,14 +94,14 @@ export class StatisticsService {
       dateCondition,
       champCondition,
       positionCondition,
-      seasonCondition
+      seasonCondition,
     );
 
     const groupByColumns = [
       riotAccount.playerCode,
       riotAccount.riotName,
       riotAccount.riotNameTag,
-      ...(shouldGroupByPosition) ? [matchParticipant.position] : []
+      ...(shouldGroupByPosition ? [matchParticipant.position] : []),
     ];
 
     const result = await db
@@ -145,6 +144,7 @@ export class StatisticsService {
 
     return { result, totalCount };
   }
+
   /**
    * @desc 챔피언별 통계 조회
    */
@@ -155,8 +155,8 @@ export class StatisticsService {
     position: string | undefined,
     season: string | undefined,
     sortBy: 'totalCount' | 'winRate' = 'totalCount',
-    page: number = 1,
-    limit: number = 50,
+    page = 1,
+    limit = 50,
   ) {
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
@@ -170,11 +170,10 @@ export class StatisticsService {
     const shouldGroupByPosition = !!position;
 
     // 포지션 조건
-    const positionCondition = (position && position !== 'ALL')
-      ? eq(matchParticipant.position, position)
-      : undefined;
+    const positionCondition =
+      position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
 
-    // 시즌 조건 
+    // 시즌 조건
     const seasonCondition =
       season === 'ALL'
         ? undefined
@@ -205,7 +204,7 @@ export class StatisticsService {
     const groupByColumns = [
       champion.champName,
       champion.champNameEng,
-      ...(shouldGroupByPosition ? [matchParticipant.position] : [])
+      ...(shouldGroupByPosition ? [matchParticipant.position] : []),
     ];
 
     const result = await db
@@ -228,8 +227,8 @@ export class StatisticsService {
 
     const subQueryGroupBy = [
       matchParticipant.championId,
-      ...(shouldGroupByPosition ? [matchParticipant.position] : [])
-    ];  
+      ...(shouldGroupByPosition ? [matchParticipant.position] : []),
+    ];
 
     const subQuery = db
       .select({

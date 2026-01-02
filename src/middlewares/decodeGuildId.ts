@@ -29,7 +29,7 @@ export const decodeGuildIdMiddleware = (req: Request, res: Response, next: NextF
     if (req.query.guildId && typeof req.query.guildId === 'string') {
       req.query.guildId = decodeBase64(req.query.guildId);
     }
-    
+
     next();
   } catch (error) {
     throw new BusinessError('Invalid Base64 encoded guildId provided', 400);

@@ -3,13 +3,13 @@ import { Guild, InsertGuild } from '../database/schema.js';
 export interface CreateGuildRequest {
   guildId: string;
   guildName: string;
-  languageCode?: string; 
+  languageCode?: string;
 }
 
 export interface UpdateGuildRequest {
   guildName?: string;
   languageCode?: string;
-  isDeleted?: boolean; 
+  isDeleted?: boolean;
 }
 
 export interface GuildResponse {

@@ -6,13 +6,12 @@ import { DiscordGuildAPI } from '../types/discordAuth.js';
 const guildService = new GuildService();
 const discordAuthService = new DiscordAuthService();
 
-
 /**
  * @desc 사용자와 길드 간의 관계 service
- * GUildService 와 DiscordAuthService 두개의 서비스 import 
+ * GUildService 와 DiscordAuthService 두개의 서비스 import
  */
 export class GuildMembershipService {
-  constructor(){}
+  constructor() {}
 
   /**
    * @desc 사용자가 가입한 길드 목록 중,
@@ -38,5 +37,4 @@ export class GuildMembershipService {
 
     return filteredGuilds;
   }
-
 }

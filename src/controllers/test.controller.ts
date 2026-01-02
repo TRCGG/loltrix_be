@@ -16,7 +16,7 @@ export const testValidationError = async (_req: Request, _res: Response, next: N
       status: 400,
       title: 'Validation Error',
       detail: 'Test validation failed',
-      type: 'validation-error'
+      type: 'validation-error',
     };
 
     throw customError;

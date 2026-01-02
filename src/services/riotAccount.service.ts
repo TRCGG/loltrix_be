@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, like, desc, sql, is, inArray} from 'drizzle-orm';
+import { eq, and, like, desc, sql, is, inArray } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { riotAccount, InsertRiotAccount } from '../database/schema.js';
 import { BusinessError, SystemError } from '../types/error.js';
@@ -51,7 +51,7 @@ export class RiotAccountService {
               .returning();
             results.push(updated);
           } else {
-            results.push(existingAccount); 
+            results.push(existingAccount);
           }
         } else {
           // 3. Insert: 계정이 없을 때만 수행 (시퀀스 증가)
@@ -95,12 +95,11 @@ export class RiotAccountService {
     { riotName, riotNameTag }: { riotName: string; riotNameTag: string },
     tx: TransactionType,
   ) {
-    return await tx.query.riotAccount.findFirst({
-      where: 
-      and(
-        eq(riotAccount.riotName, riotName), 
+    return tx.query.riotAccount.findFirst({
+      where: and(
+        eq(riotAccount.riotName, riotName),
         eq(riotAccount.riotNameTag, riotNameTag),
-        eq(riotAccount.isDeleted, false)
+        eq(riotAccount.isDeleted, false),
       ),
     });
   }

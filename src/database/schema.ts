@@ -1,4 +1,14 @@
-import { pgTable, text, varchar, jsonb, char, timestamp, boolean, integer, uuid } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  text,
+  varchar,
+  jsonb,
+  char,
+  timestamp,
+  boolean,
+  integer,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 
 export const guild = pgTable('guild', {
@@ -36,7 +46,9 @@ export const replay = pgTable('replay', {
   gameType: char('game_type', { length: 1 }).notNull().default('1'),
   season: varchar('season', { length: 32 }).notNull(),
   createUser: varchar('create_user', { length: 255 }).notNull(),
-  guildId: varchar('guild_id', { length: 128 }).notNull().references(() => guild.id),
+  guildId: varchar('guild_id', { length: 128 })
+    .notNull()
+    .references(() => guild.id),
   createDate: timestamp('create_date').notNull().defaultNow(),
   updateDate: timestamp('update_date').notNull().defaultNow(),
   isDeleted: boolean('is_deleted').notNull().default(false),
@@ -69,9 +81,10 @@ export type InsertErrorLog = typeof errorLog.$inferInsert;
 export const riotAccount = pgTable('riot_account', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   puuid: varchar('puuid', { length: 128 }).notNull().unique(),
-  playerCode: varchar('player_code', {length: 64 })
-  .generatedAlwaysAs(sql`'PLR_' || lpad(id::text, 6, '0')`, )
-  .notNull().unique(),
+  playerCode: varchar('player_code', { length: 64 })
+    .generatedAlwaysAs(sql`'PLR_' || lpad(id::text, 6, '0')`)
+    .notNull()
+    .unique(),
   riotName: varchar('riot_name', { length: 128 }).notNull(),
   riotNameTag: varchar('riot_name_tag', { length: 128 }).notNull(),
   createDate: timestamp('create_date').notNull().defaultNow(),
@@ -109,13 +122,13 @@ export const discordToken = pgTable('discord_token', {
     .primaryKey()
     .references(() => discordMember.id),
   accessToken: text('access_token').notNull(),
-  acExpiresDate: timestamp('ac_expires_date', { withTimezone: true }).notNull(), 
+  acExpiresDate: timestamp('ac_expires_date', { withTimezone: true }).notNull(),
   refreshToken: text('refresh_token').notNull(),
-  reExpiresDate: timestamp('re_expires_date', { withTimezone: true }).notNull(), 
-  scope: text('scope').notNull(), 
-  tokenType: text('token_type').notNull(), 
-  rotatedDate: timestamp('rotated_date', { withTimezone: true }), 
-  revokedDate: timestamp('revoked_date', { withTimezone: true }), 
+  reExpiresDate: timestamp('re_expires_date', { withTimezone: true }).notNull(),
+  scope: text('scope').notNull(),
+  tokenType: text('token_type').notNull(),
+  rotatedDate: timestamp('rotated_date', { withTimezone: true }),
+  revokedDate: timestamp('revoked_date', { withTimezone: true }),
   createDate: timestamp('create_date', { withTimezone: true }).defaultNow(),
 });
 
@@ -161,7 +174,7 @@ export const matchParticipant = pgTable('match_participant', {
   customMatchId: varchar('custom_match_id', { length: 255 })
     .notNull()
     .references(() => customMatch.id),
-  playerCode: varchar('player_code', { length: 64})
+  playerCode: varchar('player_code', { length: 64 })
     .notNull()
     .references(() => riotAccount.playerCode),
   championId: varchar('champion_id', { length: 16 })
@@ -205,9 +218,7 @@ export const matchParticipant = pgTable('match_participant', {
   neutralMinionsKilled: integer('neutral_minions_killed'),
   neutralMinionsKilledYourJungle: integer('neutral_minions_killed_your_jungle'),
   neutralMinionsKilledEnemyJungle: integer('neutral_minions_killed_enemy_jungle'),
-  createDate: timestamp('create_date', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   updateDate: timestamp('update_date', { withTimezone: true })
     .defaultNow()
     .notNull()
@@ -222,9 +233,7 @@ export const champion = pgTable('champion', {
   id: varchar('id', { length: 16 }).primaryKey(),
   champName: varchar('champ_name', { length: 128 }).notNull(),
   champNameEng: varchar('champ_name_eng', { length: 128 }).notNull(),
-  createDate: timestamp('create_date', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   updateDate: timestamp('update_date', { withTimezone: true })
     .notNull()
     .defaultNow()
@@ -234,48 +243,52 @@ export const champion = pgTable('champion', {
 
 export const guildMember = pgTable('guild_member', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
-  status: char('status', { length: 1}).notNull().default('1'), // 1 가입 2 탈퇴
-  account: varchar('account', {length: 64 }).notNull().references(() => riotAccount.playerCode), // RiotAccount playerCode
+  status: char('status', { length: 1 }).notNull().default('1'), // 1 가입 2 탈퇴
+  account: varchar('account', { length: 64 })
+    .notNull()
+    .references(() => riotAccount.playerCode), // RiotAccount playerCode
   mainAccount: varchar('main_account', { length: 64 }),
   isMain: boolean('is_main').notNull().default(true),
   guildId: varchar('guild_id', { length: 128 }).notNull(),
-  createDate: timestamp('create_date', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   updateDate: timestamp('update_date', { withTimezone: true })
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
-  isDeleted: boolean('is_deleted').notNull().default(false)
+  isDeleted: boolean('is_deleted').notNull().default(false),
 });
 
 export type GuildMember = typeof guildMember.$inferSelect;
 export type InsertGuildMember = typeof guildMember.$inferInsert;
 
 export const summonerSpell = pgTable('summoner_spell', {
-  id: integer('id').primaryKey(), 
-  key: varchar('key', { length: 64 }).notNull(), 
+  id: integer('id').primaryKey(),
+  key: varchar('key', { length: 64 }).notNull(),
   name: varchar('name', { length: 64 }).notNull(),
   createDate: timestamp('create_date').notNull().defaultNow(),
-  updateDate: timestamp('update_date').defaultNow().$onUpdate(() => new Date()),
-  isDeleted: boolean('is_deleted').notNull().default(false)
+  updateDate: timestamp('update_date')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
 });
 
 export type SummonerSpell = typeof summonerSpell.$inferSelect;
 
-export const perks = pgTable('perks', { 
+export const perks = pgTable('perks', {
   id: integer('id').primaryKey(),
-  key: varchar('key', { length: 64 }).notNull(), 
+  key: varchar('key', { length: 64 }).notNull(),
   icon: varchar('icon', { length: 255 }).notNull(),
   name: varchar('name', { length: 64 }).notNull(),
   createDate: timestamp('create_date').notNull().defaultNow(),
-  updateDate: timestamp('update_date').defaultNow().$onUpdate(() => new Date()),
-  isDeleted: boolean('is_deleted').notNull().default(false)
+  updateDate: timestamp('update_date')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
 });
 
 export type Perks = typeof perks.$inferSelect;
 
-// --- relations 정의 --- 
+// --- relations 정의 ---
 export const guildMemberRelations = relations(guildMember, ({ one }) => ({
   // guildMember.account 컬럼이 riotAccount.playerCode 컬럼을 참조
   riotAccount: one(riotAccount, {
@@ -288,4 +301,3 @@ export const riotAccountRelations = relations(riotAccount, ({ many }) => ({
   // 하나의 RiotAccount는 여러 GuildMember에 속할 수 있음
   guildMembers: many(guildMember),
 }));
-
