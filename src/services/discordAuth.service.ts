@@ -26,7 +26,7 @@ function formatNewToken(tokenData: DiscordTokenAPI) {
     accessToken: tokenData.access_token,
     acExpiresDate: new Date(Date.now() + tokenData.expires_in * 1000),
     refreshToken: tokenData.refresh_token,
-    reExpiresDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    reExpiresDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7일
     scope: tokenData.scope,
     tokenType: tokenData.token_type,
   };
