@@ -6,7 +6,7 @@ import { customMatchService } from '../services/customMatch.service.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
 import { Replay, ReplayFileRequest } from '../types/replay.js';
 import { guildMemberService } from '../services/guildMember.service.js';
-import { SystemError } from '../types/error.js'; 
+import { SystemError } from '../types/error.js';
 
 /**
  * @desc 여러 저장 Service 로직 관리
@@ -29,7 +29,7 @@ export class ReplaySaveFacade {
       // 3. Riot 계정 저장
       await riotAccountService.upsertRiotAccount(rawData, tx);
 
-      const rawDataPuuids = new Set<string>(rawData.map((d: {PUUID : string}) => d.PUUID));
+      const rawDataPuuids = new Set<string>(rawData.map((d: { PUUID: string }) => d.PUUID));
 
       // puuid로 player_code 조회
       const riotAccounts = await riotAccountService.findRiotAccountsByPuuids(rawData, tx);

@@ -9,7 +9,7 @@ import {
 } from '../database/schema.js';
 
 const envLoLSeason = process.env.LOL_SEASON || '2026';
-const statsMinGameCount = Number(process.env.STATS_MIN_GAME_COUNT || 20) ;
+const statsMinGameCount = Number(process.env.STATS_MIN_GAME_COUNT || 20);
 
 export class StatisticsService {
   private getStatSqlChunks() {

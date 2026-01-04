@@ -45,8 +45,7 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
     // 1a. 세션 조회 (DB)
     const authSession = await discordAuthService.findAuthSessionByUid(sessionUid);
     if (!authSession) {
-      throw new BusinessError(`Invalid session attempt: ${sessionUid.substring(0, 8)}...`
-      , 401, {
+      throw new BusinessError(`Invalid session attempt: ${sessionUid.substring(0, 8)}...`, 401, {
         isLoggable: true,
       });
     }
