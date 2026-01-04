@@ -9,6 +9,7 @@ import {
 } from '../database/schema.js';
 
 const envLoLSeason = process.env.LOL_SEASON || '2026';
+const statsMinGameCount = Number(process.env.STATS_MIN_GAME_COUNT || 20) ;
 
 export class StatisticsService {
   private getStatSqlChunks() {
@@ -79,7 +80,7 @@ export class StatisticsService {
     }
 
     // 최소게임 조건 (승률)
-    const minGameCount = sortBy === 'winRate' ? 30 : 0;
+    const minGameCount = sortBy === 'winRate' ? statsMinGameCount : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;
 
     // 정렬 조건
@@ -185,7 +186,7 @@ export class StatisticsService {
       seasonCondition = eq(customMatch.season, envLoLSeason);
     }
     // 최소게임 조건 (승률)
-    const minGameCount = sortBy === 'winRate' ? 30 : 0;
+    const minGameCount = sortBy === 'winRate' ? statsMinGameCount : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;
 
     // 정렬 조건
