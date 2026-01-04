@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { BusinessError } from '../types/error.js';
 
+// Guild ID 길이 18자 예시
+const MAX_ALLOWED_SIZE = 2048;
+
 /**
  * Base64 문자열을 디코딩하는 헬퍼 함수
  * @param encodedString 인코딩된 문자열
@@ -8,6 +11,10 @@ import { BusinessError } from '../types/error.js';
  * @throws 에러 발생 시 'Invalid Base64 string'
  */
 const decodeBase64 = (encodedString: string): string => {
+  if (!encodedString || encodedString.length > MAX_ALLOWED_SIZE) {
+    throw new BusinessError(`Payload too large. Limit is ${MAX_ALLOWED_SIZE} bytes.`, 413);
+  }
+
   try {
     return Buffer.from(encodedString, 'base64').toString('utf8');
   } catch (error) {

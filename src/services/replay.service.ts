@@ -9,6 +9,9 @@ import { BusinessError, SystemError } from '../types/error.js';
 // 시즌
 const season = process.env.LOL_SEASON || 'error_season';
 
+// [추가] 리플레이 파일 최대 크기 제한 (25MB)
+const MAX_REPLAY_FILE_SIZE = 25 * 1024 * 1024;
+
 /**
  * @desc 리플레이 파일 서비스
  */
@@ -41,25 +44,56 @@ export class ReplayService {
   }
 
   /**
-   * @desc 디스코드 파일 데이터 가져오기
+   * @desc 디스코드 파일 데이터 가져오기 (메모리 제한 적용)
    */
   private async getInputStreamDiscordFile(fileUrl: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       get(fileUrl, (res) => {
+        // [1차 방어] Content-Length 헤더 확인 (제공되는 경우)
+        const contentLength = res.headers['content-length'];
+        if (contentLength && parseInt(contentLength, 10) > MAX_REPLAY_FILE_SIZE) {
+          res.destroy();
+          return reject(
+            new BusinessError(
+              `File too large. Max size is ${MAX_REPLAY_FILE_SIZE / 1024 / 1024}MB`,
+              413,
+              { isLoggable: false },
+            ),
+          );
+        }
+
         const data: Uint8Array[] = [];
+        let currentSize = 0; // 현재 다운로드 된 크기 누적
+
         res.on('data', (chunk) => {
+          currentSize += chunk.length;
+
+          // [2차 방어] 다운로드 도중 실시간 크기 체크
+          if (currentSize > MAX_REPLAY_FILE_SIZE) {
+            res.destroy();
+            return reject(
+              new BusinessError(
+                `File stream exceeded max size of ${MAX_REPLAY_FILE_SIZE} bytes`,
+                413,
+                { isLoggable: true },
+              ),
+            );
+          }
           data.push(chunk);
         });
+
         res.on('end', () => {
-          const buffer = Buffer.concat(data);
-          if (buffer.length === 0) {
-            throw new SystemError('replay file no data');
+          // 데이터가 비어있거나 스트림이 비정상 종료된 경우 체크
+          if (currentSize === 0) {
+            return reject(new SystemError('Replay file is empty', 500));
           }
+
+          const buffer = Buffer.concat(data);
           resolve(buffer);
         });
       }).on('error', (err) => {
         console.error('Error getInputStreaming replay file', err);
-        throw new SystemError('replay error while getInputStreaming file');
+        reject(new SystemError('Replay error while downloading file', 500));
       });
     });
   }
