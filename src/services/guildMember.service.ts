@@ -19,6 +19,14 @@ export const primaryRiotAccount = alias(riotAccount, 'primary_riot_account');
  */
 export class GuildMemberService {
   /**
+   * @desc LIKE 검색 패턴 이스케이프 처리
+   * %, _, \ 문자를 이스케이프하여 와일드카드 주입 방지
+   */
+  private escapeLikePattern(input: string): string {
+    return input.replace(/[%_\\]/g, '\\$&');
+  }
+
+  /**
    * @desc 리플레이 참여 계정들을 길드 멤버로 등록
    * 'UNIQUE(guild_id, account)' 제약 조건에 따라
    * 이미 길드에 등록된 계정은 무시
@@ -109,13 +117,15 @@ export class GuildMemberService {
   /**
    * @desc 비슷한 계정 검색
    * 1. 대소문자 제거 2. 띄어쓰기, 공백 제거
+   * [Security] LIKE 패턴 이스케이프 적용
    */
   private async findSimilarGuildMember(
     guildId: string,
     { riotName, riotNameTag, limit = 20 }: GetGuildMemberQuery,
   ) {
     const cleanName = riotName.replace(/\s+/g, '').toLowerCase();
-    const searchPattern = `%${cleanName}%`;
+    const escapedName = this.escapeLikePattern(cleanName);
+    const searchPattern = `%${escapedName}%`;
 
     const conditions = [
       eq(guildMember.guildId, guildId),
@@ -126,7 +136,8 @@ export class GuildMemberService {
     ];
 
     if (riotNameTag) {
-      conditions.push(sql`LOWER(${riotAccount.riotNameTag}) = LOWER(${riotNameTag})`);
+      const escapedTag = this.escapeLikePattern(riotNameTag.toLowerCase());
+      conditions.push(sql`LOWER(${riotAccount.riotNameTag}) LIKE ${escapedTag}`);
     }
 
     const result = await db
