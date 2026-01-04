@@ -47,15 +47,15 @@ const generateErrorCode = (): string => {
 /**
  * @desc Request 객체에서 로깅용 데이터 추출
  */
-export const extractRequestData = (req: Request) => ({
+export const extractRequestData = (req: Request): ErrorLogData['request'] => ({
   method: req.method,
   url: req.url,
   originalUrl: req.originalUrl,
   headers: {
     'user-agent': req.get('user-agent'),
     'content-type': req.get('content-type'),
-    'accept': req.get('accept'),
-    'authorization': req.get('authorization') ? '[HIDDEN]' : undefined,
+    accept: req.get('accept'),
+    authorization: req.get('authorization') ? '[HIDDEN]' : undefined,
   },
   body: req.body && Object.keys(req.body).length > 0 ? req.body : undefined,
   query: req.query && Object.keys(req.query).length > 0 ? req.query : undefined,
@@ -82,14 +82,13 @@ export const logError = async (errorData: ErrorLogData): Promise<string> => {
   return errorCode;
 };
 
-
 /**
  * @desc Express Request와 Error로부터 에러 로깅 수행
  */
 export const logErrorFromRequest = async (
   error: Error,
   req: Request,
-  status?: number
+  status?: number,
 ): Promise<string> => {
   const requestData = extractRequestData(req);
 
@@ -102,7 +101,8 @@ export const logErrorFromRequest = async (
   }
 
   // IP 주소 추출
-  const ipAddress = req.ip ||
+  const ipAddress =
+    req.ip ||
     req.socket.remoteAddress ||
     (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim();
 
@@ -122,5 +122,5 @@ export const logErrorFromRequest = async (
     status: status || 500,
   };
 
-  return await logError(errorData);
+  return logError(errorData);
 };

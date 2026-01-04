@@ -104,3 +104,5 @@ export const testConnection = () => dbConnectionPool.testConnection();
 export const initializeDB = () => dbConnectionPool.initialize();
 export const closeDB = () => dbConnectionPool.close();
 export const isDBReady = () => dbConnectionPool.isReady();
+
+export type TransactionType = Parameters<Parameters<typeof db.transaction>[0]>[0];

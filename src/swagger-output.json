@@ -1,0 +1,1105 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Gmok API",
+    "description": "API 명세서",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:19901",
+      "description": "Local Server"
+    },
+    {
+      "url": "https://dev-api.gmok.kr",
+      "description": "Dev Server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "서버 상태 확인"
+    },
+    {
+      "name": "Auth",
+      "description": "인증 관련"
+    },
+    {
+      "name": "Guild",
+      "description": "길드 관리"
+    },
+    {
+      "name": "GuildMember",
+      "description": "길드 멤버 관리"
+    },
+    {
+      "name": "Matches",
+      "description": "전적 및 매치 데이터"
+    },
+    {
+      "name": "Replays",
+      "description": "리플레이 관리"
+    },
+    {
+      "name": "Statistics",
+      "description": "통계"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "성공"
+          }
+        }
+      }
+    },
+    "/api/health/": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "성공"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/login": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "디스코드 로그인 시작",
+        "description": "디스코드 OAuth2 로그인 페이지로 리다이렉트합니다.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/callback": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "디스코드 로그인 콜백",
+        "description": "디스코드 인증 후 리다이렉트되는 콜백 URL입니다.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "로그아웃",
+        "description": "세션 쿠키를 제거하여 로그아웃 처리합니다.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "내 정보 조회",
+        "description": "현재 로그인된 세션 정보를 바탕으로 유저 정보를 조회합니다. (쿠키 또는 봇 헤더 필요)",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/auth/gmokGuilds": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "내 길드 목록 조회",
+        "description": "현재 유저가 속한 GMOK 길드 목록을 조회합니다.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/guilds/": {
+      "post": {
+        "tags": [
+          "Guild"
+        ],
+        "summary": "새 길드 생성",
+        "description": "새로운 길드를 등록합니다.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "길드 정보",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "guildId": {
+                  "type": "string",
+                  "example": "123456"
+                },
+                "guildName": {
+                  "type": "string",
+                  "example": "My Awesome Guild"
+                },
+                "languageCode": {
+                  "type": "string",
+                  "example": "ko"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guildId": {
+                    "example": "any"
+                  },
+                  "guildName": {
+                    "example": "any"
+                  },
+                  "languageCode": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Guild"
+        ],
+        "summary": "길드 목록 조회",
+        "description": "검색어, 페이지, 리밋을 사용하여 길드 목록을 조회합니다.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호 (기본 1)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "한 페이지당 개수 (기본 10)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "길드명 검색어",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/guilds/{id}": {
+      "get": {
+        "tags": [
+          "Guild"
+        ],
+        "summary": "길드 상세 조회",
+        "description": "길드 ID를 이용하여 특정 길드의 정보를 조회합니다.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "조회할 Guild ID"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Guild"
+        ],
+        "summary": "길드 정보 수정",
+        "description": "길드 이름, 언어 코드, 삭제 여부 등을 수정합니다.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "수정할 Guild ID"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "description": "수정할 필드 (선택 입력)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "guildName": {
+                  "type": "string",
+                  "example": "Updated Name"
+                },
+                "languageCode": {
+                  "type": "string",
+                  "example": "en"
+                },
+                "isDeleted": {
+                  "type": "boolean",
+                  "example": false
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Guild"
+        ],
+        "summary": "길드 삭제",
+        "description": "길드 ID를 이용하여 길드를 소프트 삭제(isDeleted=true) 처리합니다.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "삭제할 Guild ID"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/replays/": {
+      "post": {
+        "tags": [
+          "Replays"
+        ],
+        "summary": "리플레이 생성",
+        "description": "리플레이 파일 정보와 길드 정보를 저장합니다.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "리플레이 및 길드 데이터",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "fileName": {
+                  "type": "string",
+                  "example": "example.rofl"
+                },
+                "fileUrl": {
+                  "type": "string",
+                  "example": "https://s3-bucket-url..."
+                },
+                "gameType": {
+                  "type": "string",
+                  "example": "1"
+                },
+                "createUser": {
+                  "type": "string",
+                  "example": "DiscordUser123"
+                },
+                "guild": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "guild_12345"
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "My Awesome Guild"
+                    },
+                    "languageCode": {
+                      "type": "string",
+                      "example": "ko"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/guildMember/sub-account": {
+      "post": {
+        "tags": [
+          "GuildMember"
+        ],
+        "summary": "부계정 연결",
+        "description": "본계정에 부계정을 연결합니다.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "연결할 계정 정보",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "guildId": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "subRiotName": {
+                  "type": "string",
+                  "example": "SubName"
+                },
+                "subRiotTag": {
+                  "type": "string",
+                  "example": "KR1"
+                },
+                "mainRiotName": {
+                  "type": "string",
+                  "example": "MainName"
+                },
+                "mainRiotTag": {
+                  "type": "string",
+                  "example": "KR1"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guildId": {
+                    "example": "any"
+                  },
+                  "subRiotName": {
+                    "example": "any"
+                  },
+                  "subRiotTag": {
+                    "example": "any"
+                  },
+                  "mainRiotName": {
+                    "example": "any"
+                  },
+                  "mainRiotTag": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "GuildMember"
+        ],
+        "summary": "부계정 연결 해제",
+        "description": "부계정이 본계정과의 연결을 해제합니다.",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guildId": {
+                    "type": "string",
+                    "example": "string"
+                  },
+                  "riotName": {
+                    "type": "string",
+                    "example": "string"
+                  },
+                  "riotNameTag": {
+                    "type": "string",
+                    "example": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/guildMember/{guildId}/sub-accounts": {
+      "get": {
+        "tags": [
+          "GuildMember"
+        ],
+        "summary": "부계정 목록 조회",
+        "description": "특정 길드 내의 연결된 부계정 목록을 조회합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/guildMember/{guildId}/{riotName}": {
+      "get": {
+        "tags": [
+          "GuildMember"
+        ],
+        "summary": "길드 멤버 검색",
+        "description": "길드 ID, Riot Name, Tag를 조합하여 멤버를 검색합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "riotName",
+            "in": "path",
+            "description": "Riot Name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "riotNameTag",
+            "in": "query",
+            "description": "Riot Tag (선택)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "조회 개수 제한",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/guildMember/status": {
+      "put": {
+        "tags": [
+          "GuildMember"
+        ],
+        "summary": "멤버 상태 변경",
+        "description": "멤버와 연결된 부계정의 상태를 일괄 변경합니다. (1: 활동, 2: 탈퇴)",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "상태 변경 정보",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "guildId": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "riotName": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "riotNameTag": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guildId": {
+                    "example": "any"
+                  },
+                  "riotName": {
+                    "example": "any"
+                  },
+                  "riotNameTag": {
+                    "example": "any"
+                  },
+                  "status": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/matches/{guildId}/{riotName}/games": {
+      "get": {
+        "tags": [
+          "Matches"
+        ],
+        "summary": "최근 게임 목록 조회",
+        "description": "특정 유저의 최근 게임 전적 리스트를 조회합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "riotName",
+            "in": "path",
+            "description": "Riot Name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "riotNameTag",
+            "in": "query",
+            "description": "Riot Tag (선택)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "시즌 필터 (예: S13)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "페이지당 개수",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/matches/{guildId}/{riotName}/dashboard": {
+      "get": {
+        "tags": [
+          "Matches"
+        ],
+        "summary": "전적 대시보드 조회",
+        "description": "전적 요약, 라인별 통계, 모스트 5 챔피언 정보를 통합 조회합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "riotName",
+            "in": "path",
+            "description": "Riot Name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "riotNameTag",
+            "in": "query",
+            "description": "Riot Tag (선택)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "시즌 필터",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/matches/{guildId}/{riotName}/most-picks": {
+      "get": {
+        "tags": [
+          "Matches"
+        ],
+        "summary": "모스트 픽 상세 조회",
+        "description": "플레이한 챔피언들의 상세 통계 목록을 조회합니다 (페이징 지원).",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "riotName",
+            "in": "path",
+            "description": "Riot Name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "시즌 필터",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "페이지당 개수",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/matches/{guildId}/games/{gameId}": {
+      "get": {
+        "tags": [
+          "Matches"
+        ],
+        "summary": "게임 상세 조회",
+        "description": "특정 게임의 상세 정보(참여자 10명 포함)를 조회합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gameId",
+            "in": "path",
+            "description": "Game ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Matches"
+        ],
+        "summary": "게임 기록 삭제",
+        "description": "특정 게임 기록을 삭제(숨김) 처리합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gameId",
+            "in": "path",
+            "description": "Game ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/statistics/{guildId}/users": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "유저별 게임 통계",
+        "description": "특정 길드 내 유저들의 게임 통계(승률, 판수 등)를 다양한 필터로 조회합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "description": "년도 (YYYY)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "description": "월 (1~12)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "시즌 (예: S14-2)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "position",
+            "in": "query",
+            "description": "포지션 필터",
+            "enum": [
+              "ALL",
+              "TOP",
+              "JUG",
+              "MID",
+              "ADC",
+              "SUP"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "championName",
+            "in": "query",
+            "description": "특정 챔피언 플레이 기록 필터",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "정렬 기준 (판수/승률)",
+            "enum": [
+              "totalCount",
+              "winRate"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "페이지당 개수",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/statistics/{guildId}/champions": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "챔피언별 통계",
+        "description": "길드 내에서 플레이된 챔피언들의 통계를 조회합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "description": "년도 (YYYY)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "description": "월 (1~12)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "시즌",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "position",
+            "in": "query",
+            "description": "포지션 필터",
+            "enum": [
+              "ALL",
+              "TOP",
+              "JUG",
+              "MID",
+              "ADC",
+              "SUP"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "정렬 기준",
+            "enum": [
+              "totalCount",
+              "winRate"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "페이지당 개수",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session_uid",
+        "description": "로그인 후 발급되는 세션 쿠키"
+      },
+      "botAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-discord-bot",
+        "description": "디스코드 봇 인증"
+      }
+    }
+  },
+  "security": [
+    {
+      "cookieAuth": []
+    },
+    {
+      "botAuth": []
+    }
+  ]
+}

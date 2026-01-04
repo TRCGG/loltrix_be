@@ -11,7 +11,8 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "swagger": "tsx src/swagger.ts"
   },
   "keywords": [],
   "author": "xengom",
@@ -34,6 +35,8 @@
     "passport-discord": "^0.1.4",
     "path": "^0.12.7",
     "pg": "^8.16.2",
+    "swagger-autogen": "^2.23.7",
+    "swagger-ui-express": "^5.0.1",
     "zod": "^3.25.64"
   },
   "devDependencies": {
@@ -44,8 +47,9 @@
     "@types/jest": "^30.0.0",
     "@types/morgan": "^1.9.10",
     "@types/pg": "^8.15.4",
-    "@typescript-eslint/eslint-plugin": "^5.62.0",
-    "@typescript-eslint/parser": "^5.62.0",
+    "@types/swagger-ui-express": "^4.1.8",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "drizzle-kit": "^0.31.2",
     "eslint": "^8.57.1",
     "eslint-config-airbnb-base": "^15.0.0",

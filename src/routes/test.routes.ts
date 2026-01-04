@@ -1,11 +1,30 @@
 import { Router } from 'express';
-import { testError, testValidationError, testDatabaseError } from '../controllers/test.controller.js';
+import {
+  testError,
+  testValidationError,
+  testDatabaseError,
+} from '../controllers/test.controller.js';
 
-const router = Router();
+const router: Router = Router();
 
 // 테스트용 에러 발생 라우트들
-router.get('/error/generic', testError);
-router.get('/error/validation', testValidationError);
-router.get('/error/database', testDatabaseError);
+
+router.get(
+  '/error/generic',
+  /* #swagger.ignore = true */
+  testError,
+);
+
+router.get(
+  '/error/validation',
+  /* #swagger.ignore = true */
+  testValidationError,
+);
+
+router.get(
+  '/error/database',
+  /* #swagger.ignore = true */
+  testDatabaseError,
+);
 
 export default router;

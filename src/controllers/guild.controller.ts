@@ -5,7 +5,7 @@ import {
   GetGuildsQuery,
   GuildResponse,
 } from '../types/guild.js';
-import * as GuildService from '../services/guild.service.js';
+import { guildService } from '../services/guild.service.js';
 
 /**
  * @desc 새로운 길드 생성
@@ -19,7 +19,7 @@ export const createGuild = async (
   try {
     const { guildId, guildName, languageCode } = req.body;
 
-    const newGuild = await GuildService.insertGuild({
+    const newGuild = await guildService.insertGuild({
       id: guildId,
       name: guildName,
       languageCode,
@@ -45,14 +45,11 @@ export const createGuild = async (
  * @route GET /api/guilds/:id
  * @access Public
  */
-export const getGuildById = async (
-  req: Request<{ id: string }>,
-  res: Response<GuildResponse>,
-) => {
+export const getGuildById = async (req: Request<{ id: string }>, res: Response<GuildResponse>) => {
   try {
     const { id } = req.params;
 
-    const guildResult = await GuildService.findGuildById(id);
+    const guildResult = await guildService.findGuildById(id);
 
     if (!guildResult) {
       return res.status(404).json({
@@ -89,18 +86,18 @@ export const getAllGuilds = async (
   try {
     const { page, limit, search } = req.query;
 
-    const { result, totalCount } = await GuildService.findAllGuilds({ page, limit, search });
+    const { result, totalCount } = await guildService.findAllGuilds({ page, limit, search });
+
+    res.setHeader('X-Total-Count', totalCount.toString());
+    res.setHeader('X-Page', (page ?? 1).toString());
+    res.setHeader('X-Limit', (limit ?? 10).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 10)).toString());
 
     res.status(200).json({
       status: 'success',
       message: 'Guilds retrieved successfully',
       data: result,
     });
-
-    res.setHeader('X-Total-Count', totalCount.toString());
-    res.setHeader('X-Page', (page ?? 1).toString());
-    res.setHeader('X-Limit', (limit ?? 10).toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 10)).toString());
   } catch (error) {
     console.error('Error retrieving guilds:', error);
     res.status(500).json({
@@ -124,7 +121,7 @@ export const updateGuild = async (
     const { id } = req.params;
     const updateData = req.body;
 
-    const updatedGuild = await GuildService.updateGuild(id, updateData);
+    const updatedGuild = await guildService.updateGuild(id, updateData);
 
     if (!updatedGuild) {
       return res.status(404).json({
@@ -154,14 +151,11 @@ export const updateGuild = async (
  * @route DELETE /api/guilds/:id
  * @access Public
  */
-export const deleteGuild = async (
-  req: Request<{ id: string }>,
-  res: Response<GuildResponse>,
-) => {
+export const deleteGuild = async (req: Request<{ id: string }>, res: Response<GuildResponse>) => {
   try {
     const { id } = req.params;
 
-    const deletedGuild = await GuildService.softDeleteGuild(id);
+    const deletedGuild = await guildService.softDeleteGuild(id);
 
     if (!deletedGuild) {
       return res.status(404).json({

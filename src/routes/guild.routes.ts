@@ -34,7 +34,7 @@ const updateGuildSchema = z.object({
       .max(128, 'Guild name must be less than 128 characters')
       .optional(),
     languageCode: z.string().max(10, 'Language code must be less than 10 characters').optional(),
-    isDeleted: z.boolean().optional(), 
+    isDeleted: z.boolean().optional(),
   }),
   params: z.object({
     id: z
@@ -85,34 +85,99 @@ const deleteGuildSchema = z.object({
  * @desc 새로운 길드 생성
  * @access Public
  */
-router.post('/', validateRequest(createGuildSchema), createGuild);
+router.post(
+  '/',
+  /* #swagger.tags = ['Guild']
+    #swagger.summary = '새 길드 생성'
+    #swagger.description = '새로운 길드를 등록합니다.'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: '길드 정보',
+      required: true,
+      schema: {
+        guildId: '123456',
+        guildName: 'My Awesome Guild',
+        languageCode: 'ko'
+      }
+    }
+  */
+  validateRequest(createGuildSchema),
+  createGuild,
+);
 
 /**
  * @route GET /api/guilds/:id
  * @desc Guild ID로 길드 조회
  * @access Public
  */
-router.get('/:id', validateRequest(getGuildByIdSchema), getGuildById);
+router.get(
+  '/:id',
+  /* #swagger.tags = ['Guild']
+    #swagger.summary = '길드 상세 조회'
+    #swagger.description = '길드 ID를 이용하여 특정 길드의 정보를 조회합니다.'
+    #swagger.parameters['id'] = { description: '조회할 Guild ID' }
+  */
+  validateRequest(getGuildByIdSchema),
+  getGuildById,
+);
 
 /**
  * @route PUT /api/guilds/:id
  * @desc Guild ID로 길드 수정
  * @access Public
  */
-router.put('/:id', validateRequest(updateGuildSchema), updateGuild);
+router.put(
+  '/:id',
+  /* #swagger.tags = ['Guild']
+    #swagger.summary = '길드 정보 수정'
+    #swagger.description = '길드 이름, 언어 코드, 삭제 여부 등을 수정합니다.'
+    #swagger.parameters['id'] = { description: '수정할 Guild ID' }
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: '수정할 필드 (선택 입력)',
+      schema: {
+        guildName: 'Updated Name',
+        languageCode: 'en',
+        isDeleted: false
+      }
+    }
+  */
+  validateRequest(updateGuildSchema),
+  updateGuild,
+);
 
 /**
  * @route GET /api/guilds
  * @desc 페이지네이션과 검색으로 모든 길드 조회
  * @access Public
  */
-router.get('/', validateRequest(getAllGuildsSchema), getAllGuilds);
+router.get(
+  '/',
+  /* #swagger.tags = ['Guild']
+    #swagger.summary = '길드 목록 조회'
+    #swagger.description = '검색어, 페이지, 리밋을 사용하여 길드 목록을 조회합니다.'
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (기본 1)', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '한 페이지당 개수 (기본 10)', type: 'integer' }
+    #swagger.parameters['search'] = { in: 'query', description: '길드명 검색어', type: 'string' }
+  */
+  validateRequest(getAllGuildsSchema),
+  getAllGuilds,
+);
 
 /**
  * @route DELETE /api/guilds/:id
  * @desc Guild ID로 길드 삭제 (소프트 삭제)
  * @access Public
  */
-router.delete('/:id', validateRequest(deleteGuildSchema), deleteGuild);
+router.delete(
+  '/:id',
+  /* #swagger.tags = ['Guild']
+    #swagger.summary = '길드 삭제'
+    #swagger.description = '길드 ID를 이용하여 길드를 소프트 삭제(isDeleted=true) 처리합니다.'
+    #swagger.parameters['id'] = { description: '삭제할 Guild ID' }
+  */
+  validateRequest(deleteGuildSchema),
+  deleteGuild,
+);
 
 export default router;

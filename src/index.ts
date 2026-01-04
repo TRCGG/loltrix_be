@@ -8,6 +8,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
+import swaggerUi from 'swagger-ui-express';
+import { createRequire } from 'module';
 import { initConnectionPool } from './init.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { notFoundHandler } from './middlewares/notFoundHandler.js';
@@ -16,6 +18,9 @@ import apiRoutes from './routes/index.js';
 // Define currentDirname for ES modules
 const currentFilename = fileURLToPath(import.meta.url);
 const currentDirname = dirname(currentFilename);
+
+const require = createRequire(import.meta.url);
+const swaggerDocument = require('./swagger-output.json');
 
 // Load environment-specific .env file first
 const nodeEnv = process.env.NODE_ENV || 'development';
@@ -57,10 +62,26 @@ app.use(
 );
 app.use(helmet()); // Set security-related HTTP headers
 app.use(compression()); // Compress all routes
-app.use(cors()); // Enable CORS
+// Enable CORS
+app.use(
+  cors({
+    origin: ['https://gmok.kr', 'https://dev.gmok.kr'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Origin',
+      'X-Requested-With',
+      'Accept',
+      'x-discord-bot',
+    ],
+  }),
+);
 
 // API routes
 app.use('/api', apiRoutes);
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(currentDirname, './loltrix/index.html'));

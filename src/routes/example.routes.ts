@@ -30,20 +30,34 @@ const getExampleByIdSchema = z.object({
  * @desc 새로운 예제 생성
  * @access Public
  */
-router.post('/', validateRequest(createExampleSchema), createExample);
+router.post(
+  '/',
+  /* #swagger.ignore = true */
+  validateRequest(createExampleSchema),
+  createExample,
+);
 
 /**
  * @route GET /api/examples/:id
  * @desc ID로 예제 조회
  * @access Public
  */
-router.get('/:id', validateRequest(getExampleByIdSchema), getExampleById);
+router.get(
+  '/:id',
+  /* #swagger.ignore = true */
+  validateRequest(getExampleByIdSchema),
+  getExampleById,
+);
 
 /**
  * @route GET /api/examples
  * @desc 모든 예제 조회
  * @access Public
  */
-router.get('/', getAllExamples);
+router.get(
+  '/',
+  /* #swagger.ignore = true */
+  getAllExamples,
+);
 
 export default router;
