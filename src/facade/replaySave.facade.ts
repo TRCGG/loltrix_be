@@ -6,6 +6,7 @@ import { customMatchService } from '../services/customMatch.service.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
 import { Replay, ReplayFileRequest } from '../types/replay.js';
 import { guildMemberService } from '../services/guildMember.service.js';
+import { SystemError } from '../types/error.js'; 
 
 /**
  * @desc 여러 저장 Service 로직 관리
@@ -28,8 +29,21 @@ export class ReplaySaveFacade {
       // 3. Riot 계정 저장
       await riotAccountService.upsertRiotAccount(rawData, tx);
 
+      const rawDataPuuids = new Set<string>(rawData.map((d: {PUUID : string}) => d.PUUID));
+
       // puuid로 player_code 조회
       const riotAccounts = await riotAccountService.findRiotAccountsByPuuids(rawData, tx);
+
+      const foundPuuids = new Set(riotAccounts.map((acc) => acc.puuid));
+      const missingPuuids = [...rawDataPuuids].filter((p) => !foundPuuids.has(p));
+
+      if (missingPuuids.length > 0) {
+        throw new SystemError(
+          `Missing riot accounts for PUUIDs: ${missingPuuids.join(', ')}. ` +
+            `Expected ${rawDataPuuids.size}, found ${foundPuuids.size}.`,
+          500,
+        );
+      }
 
       // 참여자들의 playerCode 목록 추출
       const playerCodes = riotAccounts.map((acc) => acc.playerCode);
