@@ -31,7 +31,7 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
     const botHeader = req.headers['x-discord-bot'];
     if (botHeader) {
       if (botHeader !== botSecret) {
-        throw new BusinessError('Invalid bot secret', 403, { isLoggable: false });
+        throw new BusinessError('Invalid bot secret', 403, { isLoggable: true });
       }
       return next();
     }
@@ -45,7 +45,10 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
     // 1a. 세션 조회 (DB)
     const authSession = await discordAuthService.findAuthSessionByUid(sessionUid);
     if (!authSession) {
-      throw new BusinessError('Invalid or inactive session', 401, { isLoggable: false });
+      throw new BusinessError(`Invalid session attempt: ${sessionUid.substring(0, 8)}...`
+      , 401, {
+        isLoggable: true,
+      });
     }
 
     // 1b. 서비스 레이어에 토큰 검증 및 자동 재발급 위임
