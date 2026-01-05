@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { verifyAuth } from '../middlewares/authHandler.js';
+import { verifyAuth, restrictBotToLocalhost } from '../middlewares/authHandler.js';
 import healthRouter from './health.routes.js';
 import exampleRouter from './example.routes.js';
 import guildRouter from './guild.routes.js';
@@ -19,7 +19,7 @@ router.use('/health', healthRouter);
 router.use('/auth', authRouter);
 
 // --- 아래 API 부터는 모두 세션 검증 ---
-router.use(verifyAuth);
+router.use(restrictBotToLocalhost, verifyAuth);
 
 // Example routes with Zod validation
 router.use('/examples', exampleRouter);
@@ -29,9 +29,6 @@ router.use('/guilds', guildRouter);
 
 // Replay routes
 router.use('/replays', replayRouter);
-
-// discord auth routes
-router.use('/auth', authRouter);
 
 // Guild Meber routes
 router.use('/guildMember', guildMemberRoutes);
