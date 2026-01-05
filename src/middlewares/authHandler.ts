@@ -4,6 +4,7 @@ import { BusinessError } from '../types/error.js';
 
 const discordAuthService = new DiscordAuthService();
 const botSecret = process.env.DISCORD_BOT_SECRET;
+const LOCALHOST_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
 const cookieOptions = {
   domain: '.gmok.kr',
@@ -19,11 +20,32 @@ export interface AuthRequest extends Request {
 }
 
 /**
+ * @desc 봇 접근 제한 (Localhost Only)
+ * 봇과 서버가 같으므로, 외부 IP에서의 접근은 무조건 차단하고
+ * 오직 내부(Localhost)에서 온 요청만 허용합니다.
+ */
+export const restrictBotToLocalhost = (req: Request, res: Response, next: NextFunction) => {
+  // 1. 유저 세션이 있으면(브라우저 접근) IP 검사 스킵 -> 통과
+  if (req.cookies?.session_uid) {
+    return next();
+  }
+
+  // 2. 세션이 없다면 봇 요청으로 간주 -> IP 검사
+  // req.ip가 로컬호스트 주소인지 확인
+  const clientIp = req.ip || '';
+
+  if (!LOCALHOST_IPS.includes(clientIp)) {
+    // 외부에서 봇 API를 찌르려고 하면 차단
+    throw new BusinessError(`Access denied: External access not allowed (${clientIp})`, 403, {
+      isLoggable: true,
+    });
+  }
+
+  return next();
+};
+
+/**
  * @desc 인증 미들웨어 (봇/유저 통합)
- * 1. 봇 헤더 검증
- * 2. 세션 쿠키 검증
- * 3. 서비스 레이어를 통해 토큰 검증 및 자동 재발급
- * 4. req 객체에 discordMemberId, accessToken 주입
  */
 export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
