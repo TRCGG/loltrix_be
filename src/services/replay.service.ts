@@ -9,8 +9,8 @@ import { BusinessError, SystemError } from '../types/error.js';
 // 시즌
 const season = process.env.LOL_SEASON || 'error_season';
 
-// [추가] 리플레이 파일 최대 크기 제한 (25MB)
-const MAX_REPLAY_FILE_SIZE = 25 * 1024 * 1024;
+// [추가] 리플레이 파일 최대 크기 제한 (50MB)
+const MAX_REPLAY_FILE_SIZE = 50 * 1024 * 1024;
 
 /**
  * @desc 리플레이 파일 서비스
