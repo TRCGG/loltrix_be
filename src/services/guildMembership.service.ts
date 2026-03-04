@@ -12,27 +12,28 @@ const discordAuthService = new DiscordAuthService();
  */
 export class GuildMembershipService {
   /**
-   * @desc 사용자가 가입한 길드 목록 중,
-   * Gmok(DB)에 등록된 길드 목록만 필터링하여 반환
+   * @desc 사용자가 가입한 길드 목록 중 Gmok(DB)에 등록된 길드 목록만 필터링하여 반환
+   * - isAdmin=true: Discord 멤버십 무관, DB의 전체 Gmok 길드 반환
+   * - isAdmin=false: 사용자가 가입한 Discord 길드 중 Gmok 길드만 반환
    */
-  public async findUserGmokGuilds(accessToken: string) {
-    const [gmokGuildsResponse, userDiscordGuilds] = await Promise.all([
-      guildService.findAllGuilds({ page: 1, limit: 1000 }),
-      discordAuthService.fetchUserGuilds(accessToken),
-    ]);
+  public async findUserGmokGuilds(accessToken: string, isAdmin: boolean): Promise<DiscordGuildAPI[]> {
+    const gmokGuildsResponse = await guildService.findAllGuilds({ page: 1, limit: 1000 });
+    const allGmokGuilds = gmokGuildsResponse.result;
 
-    // DB에서 조회한 Gmok 길드 목록
-    const allGmokGuilds = gmokGuildsResponse.result; // 타입: Guild[]
+    if (isAdmin) {
+      return allGmokGuilds.map((g) => ({
+        id: g.id,
+        name: g.name,
+        icon: '',
+        banner: '',
+      }));
+    }
 
-    // 비교 로직
-    const gmokGuildIdSet = new Set(allGmokGuilds.map((guild) => guild.id));
+    const userDiscordGuilds = await discordAuthService.fetchUserGuilds(accessToken);
+    const gmokGuildIdSet = new Set(allGmokGuilds.map((g) => g.id));
 
-    // 사용자의 Discord 길드 목록을 순회하며,
-    // Gmok 길드 Set에 ID가 존재하는지 확인
-    const filteredGuilds = userDiscordGuilds.filter((userGuild: DiscordGuildAPI) =>
+    return userDiscordGuilds.filter((userGuild: DiscordGuildAPI) =>
       gmokGuildIdSet.has(userGuild.id),
     );
-
-    return filteredGuilds;
   }
 }

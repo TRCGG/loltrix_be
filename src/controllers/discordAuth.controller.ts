@@ -5,6 +5,7 @@ import { BusinessError, SystemError } from '../types/error.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
 import { GuildMembershipService } from '../services/guildMembership.service.js';
 import { DiscordGuildAPIResponse } from '../types/discordAuth.js';
+import { checkIsAdmin } from '../middlewares/requireRole.js';
 
 const frontendUrl =
   process.env.NODE_ENV === 'development' ? 'https://dev.gmok.kr' : 'https://gmok.kr';
@@ -98,14 +99,15 @@ export const logout = async (req: Request, res: Response<void>) => {
 export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuildAPIResponse>) => {
   try {
     // 1. 유저 요청 처리
-    const { accessToken } = req;
+    const { accessToken, discordMemberId } = req;
 
-    if (!accessToken) {
+    if (!accessToken || !discordMemberId) {
       throw new SystemError('Access token not found after auth middleware');
     }
 
-    // 2. guilds
-    const guildsData = await guildMembershipService.findUserGmokGuilds(accessToken);
+    // 2. admin 여부 확인 후 guilds 조회
+    const isAdmin = await checkIsAdmin(discordMemberId);
+    const guildsData = await guildMembershipService.findUserGmokGuilds(accessToken, isAdmin);
     res.status(200).json({
       status: 'success',
       message: 'gmok Guilds find successfully',
