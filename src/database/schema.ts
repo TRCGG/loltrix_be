@@ -15,6 +15,7 @@ export const guild = pgTable('guild', {
   id: varchar('id', { length: 128 }).primaryKey(),
   name: varchar('name', { length: 128 }).notNull(),
   languageCode: varchar('language_code', { length: 10 }).notNull().default('ko'),
+  allowAllUploads: boolean('allow_all_uploads').notNull().default(true),
   createDate: timestamp('create_date').notNull().defaultNow(),
   updateDate: timestamp('update_date')
     .defaultNow()
@@ -301,3 +302,26 @@ export const riotAccountRelations = relations(riotAccount, ({ many }) => ({
   // 하나의 RiotAccount는 여러 GuildMember에 속할 수 있음
   guildMembers: many(guildMember),
 }));
+
+/**
+ * 멤버 권한 테이블
+ * - adminNormal, adminSuper는 guild_id가 null (전역 권한)
+ * - 나머지는 guild_id 필수 (길드 스코프 권한)
+ */
+export const memberRole = pgTable('discord_member_role', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  memberId: text('member_id')
+    .notNull()
+    .references(() => discordMember.id),
+  role: varchar('role', { length: 32 }).notNull(),
+  guildId: varchar('guild_id', { length: 128 }),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type MemberRole = typeof memberRole.$inferSelect;
+export type InsertMemberRole = typeof memberRole.$inferInsert;
