@@ -8,6 +8,7 @@ import {
   boolean,
   integer,
   uuid,
+  unique,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 
@@ -308,20 +309,24 @@ export const riotAccountRelations = relations(riotAccount, ({ many }) => ({
  * - adminNormal, adminSuper는 guild_id가 null (전역 권한)
  * - 나머지는 guild_id 필수 (길드 스코프 권한)
  */
-export const memberRole = pgTable('discord_member_role', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  memberId: text('member_id')
-    .notNull()
-    .references(() => discordMember.id),
-  role: varchar('role', { length: 32 }).notNull(),
-  guildId: varchar('guild_id', { length: 128 }),
-  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
-  updateDate: timestamp('update_date', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  isDeleted: boolean('is_deleted').notNull().default(false),
-});
+export const discordMemberRole = pgTable(
+  'discord_member_role',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => discordMember.id),
+    role: varchar('role', { length: 32 }).notNull(),
+    guildId: varchar('guild_id', { length: 128 }),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (table) => [unique('uq_member_guild').on(table.memberId, table.guildId)],
+);
 
-export type MemberRole = typeof memberRole.$inferSelect;
-export type InsertMemberRole = typeof memberRole.$inferInsert;
+export type DiscordMemberRole = typeof discordMemberRole.$inferSelect;
+export type InsertDiscordMemberRole = typeof discordMemberRole.$inferInsert;

@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { DiscordAuthService } from '../services/discordAuth.service.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
-import { GuildMembershipService } from '../services/guildMembership.service.js';
+import { DiscordMemberGuildService } from '../services/discordMemberGuild.service.js';
 import { DiscordGuildAPIResponse } from '../types/discordAuth.js';
 import { checkIsAdmin } from '../middlewares/requireRole.js';
 
@@ -11,7 +11,7 @@ const frontendUrl =
   process.env.NODE_ENV === 'development' ? 'https://dev.gmok.kr' : 'https://gmok.kr';
 
 const discordAuthService = new DiscordAuthService();
-const guildMembershipService = new GuildMembershipService();
+const discordMemberGuildService = new DiscordMemberGuildService();
 
 const cookieOptions = {
   domain: '.gmok.kr',
@@ -107,7 +107,7 @@ export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuild
 
     // 2. admin 여부 확인 후 guilds 조회
     const isAdmin = await checkIsAdmin(discordMemberId);
-    const guildsData = await guildMembershipService.findUserGmokGuilds(accessToken, isAdmin);
+    const guildsData = await discordMemberGuildService.findUserGmokGuilds(accessToken, isAdmin);
     res.status(200).json({
       status: 'success',
       message: 'gmok Guilds find successfully',

@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
-import { memberRole } from '../database/schema.js';
+import { discordMemberRole } from '../database/schema.js';
 import { Role, ADMIN_ROLES, hasMinRole } from '../types/role.js';
 import { BusinessError } from '../types/error.js';
 import { AuthRequest } from './authHandler.js';
@@ -19,8 +19,8 @@ const extractGuildId = (req: AuthRequest, source: GuildIdSource): string | undef
 const getActiveRoles = async (memberId: string) =>
   db
     .select()
-    .from(memberRole)
-    .where(and(eq(memberRole.memberId, memberId), eq(memberRole.isDeleted, false)));
+    .from(discordMemberRole)
+    .where(and(eq(discordMemberRole.memberId, memberId), eq(discordMemberRole.isDeleted, false)));
 
 /** memberId가 adminNormal 이상인지 확인 (컨트롤러/서비스 레이어에서 직접 사용) */
 export const checkIsAdmin = async (memberId: string): Promise<boolean> => {

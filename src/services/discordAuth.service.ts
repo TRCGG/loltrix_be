@@ -200,43 +200,6 @@ export class DiscordAuthService {
   }
 
   /**
-   * @desc Discord API로 사용자의 길드 목록 조회 (Get Data)
-   */
-  public async fetchUserGuilds(accessToken: string) {
-    try {
-      const userGuildsResult = await this.fetchWithTimeout(
-        `${discordApiBaseUrl}/users/@me/guilds`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
-      );
-
-      if (!userGuildsResult.ok) {
-        throw new SystemError('Failed to fetch Discord guilds', 500);
-      }
-
-      const fullGuilds: any[] = await userGuildsResult.json();
-
-      const minimalGuilds = fullGuilds.map((guild) => {
-        return {
-          id: guild.id,
-          name: guild.name,
-          icon: guild.icon,
-          banner: guild.banner,
-        };
-      });
-
-      return minimalGuilds;
-    } catch (error) {
-      console.error('fetchUserGuilds service error', error);
-      if (error instanceof SystemError) throw error;
-      throw new SystemError('Failed to get guilds', 500);
-    }
-  }
-
-  /**
    * @desc Discord API로 사용자 정보 조회
    */
   public async fetchUser(accessToken: string) {
@@ -312,6 +275,7 @@ export class DiscordAuthService {
       throw new SystemError('Login transaction failed', 500);
     }
   }
+
 
   /**
    * @desc Discord 토큰 재발급 및 DB 저장 (비공개)
