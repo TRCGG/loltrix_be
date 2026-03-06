@@ -1,4 +1,6 @@
 import { GuildService } from './guild.service.js';
+import { Role, ADMIN_ROLES } from '../types/role.js';
+import { DiscordMemberRole } from '../database/schema.js';
 import { SystemError } from '../types/error.js';
 import { DiscordGuildAPI } from '../types/discordAuth.js';
 
@@ -39,7 +41,7 @@ export class DiscordMemberGuildService {
   /**
    * @desc Discord API로 사용자의 길드 목록 조회
    */
-  public async fetchUserGuilds(accessToken: string): Promise<DiscordGuildAPI[]> {
+  public async fetchUserGuilds(accessToken: string): Promise<Omit<DiscordGuildAPI, 'role'>[]> {
     try {
       const result = await this.fetchWithTimeout(`${discordApiBaseUrl}/users/@me/guilds`, {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -65,27 +67,31 @@ export class DiscordMemberGuildService {
   }
 
   /**
-   * @desc 사용자가 가입한 길드 목록 중 Gmok(DB)에 등록된 길드 목록만 필터링하여 반환
-   * - isAdmin=true: Discord 멤버십 무관, DB의 전체 Gmok 길드 반환
-   * - isAdmin=false: 사용자가 가입한 Discord 길드 중 Gmok 길드만 반환
+   * @desc 사용자가 가입한 Gmok 길드 목록 + 길드별 권한 반환
+   * - admin(adminNormal 이상): 전체 길드 목록, role은 DB 값 그대로
+   * - 일반 유저: 가입한 Discord 길드 중 Gmok 길드만, 길드별 role
    */
-  public async findUserGmokGuilds(accessToken: string, isAdmin: boolean): Promise<DiscordGuildAPI[]> {
+  public async findUserGmokGuilds(
+    accessToken: string,
+    activeRoles: DiscordMemberRole[],
+  ): Promise<DiscordGuildAPI[]> {
     const gmokGuildsResponse = await guildService.findAllGuilds({ page: 1, limit: 1000 });
     const allGmokGuilds = gmokGuildsResponse.result;
 
+    const isAdmin = activeRoles.some((r) => ADMIN_ROLES.includes(r.role as Role));
+    const roleByGuildId = new Map(activeRoles.map((r) => [r.guildId, r.role as Role]));
+
     if (isAdmin) {
-      return allGmokGuilds.map((g) => ({
-        id: g.id,
-        name: g.name,
-        icon: '',
-        banner: '',
-      }));
+      const adminRole = roleByGuildId.get(null) ?? ('adminNormal' as Role);
+      return allGmokGuilds.map((g) => ({ id: g.id, name: g.name, icon: '', banner: '', role: adminRole }));
     }
 
     const userDiscordGuilds = await this.fetchUserGuilds(accessToken);
     const gmokGuildIdSet = new Set(allGmokGuilds.map((g) => g.id));
 
-    return userDiscordGuilds.filter((userGuild) => gmokGuildIdSet.has(userGuild.id));
+    return userDiscordGuilds
+      .filter((g) => gmokGuildIdSet.has(g.id))
+      .map((g) => ({ ...g, role: roleByGuildId.get(g.id) ?? ('userNormal' as Role) }));
   }
 }
 

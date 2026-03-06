@@ -29,7 +29,7 @@ export class DiscordMemberRoleService {
 
     if (existing.length > 0) return;
 
-    const gmokGuilds = await discordMemberGuildService.findUserGmokGuilds(accessToken, false);
+    const gmokGuilds = await discordMemberGuildService.findUserGmokGuilds(accessToken, []);
 
     if (gmokGuilds.length === 0) return;
 

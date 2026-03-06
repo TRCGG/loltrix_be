@@ -1,3 +1,4 @@
+import { Role } from './role.js';
 import {
   DiscordMember,
   InsertDiscordMember,
@@ -37,6 +38,7 @@ export interface DiscordGuildAPI {
   name: string;
   icon: string;
   banner: string;
+  role: Role;
 }
 
 // Discord API Guild 응답 타입
