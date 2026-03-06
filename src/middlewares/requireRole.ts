@@ -1,10 +1,8 @@
 import { Response, NextFunction } from 'express';
-import { eq, and } from 'drizzle-orm';
-import { db } from '../database/connectionPool.js';
-import { discordMemberRole } from '../database/schema.js';
 import { Role, ADMIN_ROLES, hasMinRole } from '../types/role.js';
 import { BusinessError } from '../types/error.js';
 import { AuthRequest } from './authHandler.js';
+import { discordMemberRoleService } from '../services/discordMemberRole.service.js';
 
 type GuildIdSource = { from: 'body' | 'params' | 'query'; key: string };
 
@@ -13,21 +11,6 @@ const extractGuildId = (req: AuthRequest, source: GuildIdSource): string | undef
   const target = req[source.from] as Record<string, unknown>;
   const value = target?.[source.key];
   return typeof value === 'string' ? value : undefined;
-};
-
-/** memberId의 활성 권한 목록 조회 */
-const getActiveRoles = async (memberId: string) =>
-  db
-    .select()
-    .from(discordMemberRole)
-    .where(and(eq(discordMemberRole.memberId, memberId), eq(discordMemberRole.isDeleted, false)));
-
-/** memberId가 adminNormal 이상인지 확인 (컨트롤러/서비스 레이어에서 직접 사용) */
-export const checkIsAdmin = async (memberId: string): Promise<boolean> => {
-  const roles = await getActiveRoles(memberId);
-  return roles
-    .filter((r) => ADMIN_ROLES.includes(r.role as Role))
-    .some((r) => hasMinRole(r.role as Role, 'adminNormal'));
 };
 
 /**
@@ -48,7 +31,7 @@ export const requireAdmin =
         throw new BusinessError('Unauthorized', 401, { isLoggable: true });
       }
 
-      const roles = await getActiveRoles(memberId);
+      const roles = await discordMemberRoleService.getActiveRoles(memberId);
       const adminRoles = roles.filter((r) => ADMIN_ROLES.includes(r.role as Role));
       const hasPermission = adminRoles.some((r) => hasMinRole(r.role as Role, minRole));
 
@@ -87,7 +70,7 @@ export const requireGuildRole =
         throw new BusinessError('guildId is required', 400, { isLoggable: true });
       }
 
-      const roles = await getActiveRoles(memberId);
+      const roles = await discordMemberRoleService.getActiveRoles(memberId);
 
       // Admin bypass: adminNormal 이상이면 guildId 무관하게 통과
       const isAdmin = roles
