@@ -1,6 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
 import { discordMemberRole } from '../database/schema.js';
+import { ADMIN_ROLES, Role } from '../types/role.js';
 import { DiscordMemberGuildService } from './discordMemberGuild.service.js';
 
 const discordMemberGuildService = new DiscordMemberGuildService();
@@ -20,21 +21,28 @@ export class DiscordMemberRoleService {
   }
 
   /**
-   * @desc 최초 로그인 시 기본 권한(userNormal) 삽입
-   * - 이미 활성 role이 있으면 스킵
-   * - 없으면 가입한 Gmok 길드마다 userNormal 삽입
+   * @desc 로그인 시 기본 권한(userNormal) 삽입
+   * - 이미 권한이 있는 길드는 스킵
+   * - 권한이 없는 길드에만 userNormal 삽입
    */
   public async insertDefaultRolesIfNotExists(memberId: string, accessToken: string): Promise<void> {
-    const existing = await this.getActiveRoles(memberId);
-
-    if (existing.length > 0) return;
-
     const gmokGuilds = await discordMemberGuildService.findUserGmokGuilds(accessToken, []);
 
     if (gmokGuilds.length === 0) return;
 
+    const existing = await this.getActiveRoles(memberId);
+
+    // Admin 권한이 있으면 길드별 userNormal 삽입 불필요
+    const isAdmin = existing.some((r) => ADMIN_ROLES.includes(r.role as Role));
+    if (isAdmin) return;
+
+    const existingGuildIds = new Set(existing.map((r) => r.guildId));
+    const newGuilds = gmokGuilds.filter((g) => !existingGuildIds.has(g.id));
+
+    if (newGuilds.length === 0) return;
+
     await db.insert(discordMemberRole).values(
-      gmokGuilds.map((g) => ({ memberId, role: 'userNormal', guildId: g.id })),
+      newGuilds.map((g) => ({ memberId, role: 'userNormal', guildId: g.id })),
     );
   }
 }
