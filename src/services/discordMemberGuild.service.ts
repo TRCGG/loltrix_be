@@ -3,10 +3,10 @@ import { Role, ADMIN_ROLES } from '../types/role.js';
 import { DiscordMemberRole } from '../database/schema.js';
 import { SystemError } from '../types/error.js';
 import { DiscordGuildAPI } from '../types/discordAuth.js';
+import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 
 const guildService = new GuildService();
 
-const DISCORD_API_TIMEOUT = 10000;
 const discordApiBaseUrl = 'https://discord.com/api';
 
 /**
@@ -15,35 +15,11 @@ const discordApiBaseUrl = 'https://discord.com/api';
  */
 export class DiscordMemberGuildService {
   /**
-   * @desc 타임아웃이 적용된 Fetch 헬퍼
-   */
-  private async fetchWithTimeout(
-    url: string,
-    options: RequestInit,
-    timeout: number = DISCORD_API_TIMEOUT,
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      const response = await fetch(url, { ...options, signal: controller.signal });
-      return response;
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        throw new SystemError(`Discord API Request Timed out after ${timeout}ms`, 504);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  /**
    * @desc Discord API로 사용자의 길드 목록 조회
    */
   public async fetchUserGuilds(accessToken: string): Promise<Omit<DiscordGuildAPI, 'role'>[]> {
     try {
-      const result = await this.fetchWithTimeout(`${discordApiBaseUrl}/users/@me/guilds`, {
+      const result = await fetchWithTimeout(`${discordApiBaseUrl}/users/@me/guilds`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
