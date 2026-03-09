@@ -16,7 +16,7 @@ export const guild = pgTable('guild', {
   id: varchar('id', { length: 128 }).primaryKey(),
   name: varchar('name', { length: 128 }).notNull(),
   languageCode: varchar('language_code', { length: 10 }).notNull().default('ko'),
-  allowAllUploads: boolean('allow_all_uploads').notNull().default(true),
+  allowAllUploads: boolean('allow_all_uploads').notNull().default(false),
   createDate: timestamp('create_date').notNull().defaultNow(),
   updateDate: timestamp('update_date')
     .defaultNow()
