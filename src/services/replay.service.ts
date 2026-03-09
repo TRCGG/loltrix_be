@@ -9,8 +9,8 @@ import { BusinessError, SystemError } from '../types/error.js';
 // 시즌
 const season = process.env.LOL_SEASON || 'error_season';
 
-// [추가] 리플레이 파일 최대 크기 제한 (25MB)
-const MAX_REPLAY_FILE_SIZE = 25 * 1024 * 1024;
+// [추가] 리플레이 파일 최대 크기 제한 (50MB)
+const MAX_REPLAY_FILE_SIZE = 50 * 1024 * 1024;
 
 /**
  * @desc 리플레이 파일 서비스
@@ -19,7 +19,7 @@ export class ReplayService {
   /**
    * @desc 주어진 데이터를 사용하여 SHA-256 해시를 생성
    */
-  private generateHash = (data: string | Buffer): string => {
+  public generateHash = (data: string | Buffer): string => {
     return createHash('sha256').update(data).digest('hex');
   };
 
@@ -27,7 +27,7 @@ export class ReplayService {
    * @desc 파일의 해시값과 길드 ID가 일치하는 중복 레코드의 존재 여부를 확인
    * @returns 중복된 레코드가 존재하면 true, 존재하지 않으면 false
    */
-  private async checkDuplicateByHash(hashData: string, guildId: string): Promise<boolean> {
+  public async checkDuplicateByHash(hashData: string, guildId: string): Promise<boolean> {
     const result = await db
       .select({ id: replay.id })
       .from(replay)
@@ -135,7 +135,7 @@ export class ReplayService {
   /**
    * @desc 리플레이 데이터 파싱
    */
-  private async parseReplayData(byte: Buffer): Promise<string> {
+  public async parseReplayData(byte: Buffer): Promise<string> {
     const byteString = byte.toString('utf-8');
     const startIndex = byteString.indexOf('{"gameLength":');
     const endIndex = byteString.lastIndexOf('"}');
@@ -177,9 +177,21 @@ export class ReplayService {
    * @desc 리플레이 저장
    * @param {ReplayFileRequest} fileData
    */
-  public async replaySave(fileData: ReplayFileRequest, rawData: any, tx: TransactionType) {
+  /**
+   * @desc .rofl 파일의 magic bytes 검증 (첫 4바이트가 "RIOT"인지 확인)
+   */
+  public validateMagicBytes(buffer: Buffer): boolean {
+    if (buffer.length < 4) return false;
+    return buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x4f && buffer[3] === 0x54;
+  }
+
+  public async replaySave(
+    fileData: ReplayFileRequest | { fileName: string; fileUrl: string; gameType?: string; createUser: string; guildId: string },
+    rawData: any,
+    tx: TransactionType,
+  ) {
     const { fileName, fileUrl, gameType, createUser } = fileData;
-    const guildId = fileData.guild.id;
+    const guildId = 'guild' in fileData ? fileData.guild.id : fileData.guildId;
 
     const rawDataString = JSON.stringify(rawData);
     const hashData = this.generateHash(rawDataString);

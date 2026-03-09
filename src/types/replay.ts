@@ -14,12 +14,16 @@ export interface ReplayResponse {
   data?: Replay | Replay[] | null;
 }
 
-export interface GetReplaysQuery {
-  page?: number;
-  limit?: number;
-  search?: string;
-  guildId?: string;
-  gameType?: string;
+export interface WebUploadResult {
+  succeeded: Array<{ fileName: string; replayCode: string }>;
+  failed: Array<{ fileName: string; reason: string }>;
+
+}
+
+export interface WebUploadResponse {
+  status: 'success' | 'error';
+  message: string;
+  data?: WebUploadResult;
 }
 
 export type { Replay };

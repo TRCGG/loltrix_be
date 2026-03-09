@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, isNull } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
 import { discordMemberRole } from '../database/schema.js';
 import { ADMIN_ROLES, Role } from '../types/role.js';
@@ -18,6 +18,22 @@ export class DiscordMemberRoleService {
       .select()
       .from(discordMemberRole)
       .where(and(eq(discordMemberRole.memberId, memberId), eq(discordMemberRole.isDeleted, false)));
+  }
+
+  /**
+   * @desc 특정 길드 스코프 + admin(guildId IS NULL) 역할만 조회
+   */
+  public async getActiveRolesByGuild(memberId: string, guildId: string) {
+    return db
+      .select()
+      .from(discordMemberRole)
+      .where(
+        and(
+          eq(discordMemberRole.memberId, memberId),
+          eq(discordMemberRole.isDeleted, false),
+          or(eq(discordMemberRole.guildId, guildId), isNull(discordMemberRole.guildId)),
+        ),
+      );
   }
 
   /**
