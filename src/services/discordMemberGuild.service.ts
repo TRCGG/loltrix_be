@@ -17,7 +17,7 @@ export class DiscordMemberGuildService {
   /**
    * @desc Discord API로 사용자의 길드 목록 조회
    */
-  public async fetchUserGuilds(accessToken: string): Promise<Omit<DiscordGuildAPI, 'role'>[]> {
+  public async fetchUserGuilds(accessToken: string): Promise<Omit<DiscordGuildAPI, 'role' | 'nick'>[]> {
     try {
       const result = await fetchWithTimeout(`${discordApiBaseUrl}/users/@me/guilds`, {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -43,6 +43,36 @@ export class DiscordMemberGuildService {
   }
 
   /**
+   * @desc Gmok 길드에 대해서만 멤버 nickname 조회
+   */
+  private async enrichWithNick(
+    guilds: Omit<DiscordGuildAPI, 'role' | 'nick'>[],
+    accessToken: string,
+  ): Promise<Omit<DiscordGuildAPI, 'role'>[]> {
+    return Promise.all(
+      guilds.map(async (guild) => {
+        let nick: string | undefined = undefined;
+
+        try {
+          const memberResult = await fetchWithTimeout(
+            `${discordApiBaseUrl}/users/@me/guilds/${guild.id}/member`,
+            { headers: { Authorization: `Bearer ${accessToken}` } },
+          );
+
+          if (memberResult.ok) {
+            const member = await memberResult.json();
+            nick = member.nick?.replace(/\s/g, '') ?? undefined;
+          }
+        } catch {
+          // nick 조회 실패 시 undefined
+        }
+
+        return { ...guild, nick };
+      }),
+    );
+  }
+
+  /**
    * @desc 사용자가 가입한 Gmok 길드 목록 + 길드별 권한 반환
    * - admin(adminNormal 이상): 전체 길드 목록, role은 DB 값 그대로
    * - 일반 유저: 가입한 Discord 길드 중 Gmok 길드만, 길드별 role
@@ -65,9 +95,10 @@ export class DiscordMemberGuildService {
     const userDiscordGuilds = await this.fetchUserGuilds(accessToken);
     const gmokGuildIdSet = new Set(allGmokGuilds.map((g) => g.id));
 
-    return userDiscordGuilds
-      .filter((g) => gmokGuildIdSet.has(g.id))
-      .map((g) => ({ ...g, role: roleByGuildId.get(g.id) ?? ('userNormal' as Role) }));
+    const gmokGuilds = userDiscordGuilds.filter((g) => gmokGuildIdSet.has(g.id));
+    const guildsWithNick = await this.enrichWithNick(gmokGuilds, accessToken);
+
+    return guildsWithNick.map((g) => ({ ...g, role: roleByGuildId.get(g.id) ?? ('userNormal' as Role) }));
   }
 }
 

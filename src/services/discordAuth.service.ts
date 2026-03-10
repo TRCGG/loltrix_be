@@ -14,7 +14,7 @@ import { discordMemberRoleService } from './discordMemberRole.service.js';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 
 const discordApiBaseUrl = 'https://discord.com/api';
-const scopes = ['identify', 'guilds'];
+const scopes = ['identify', 'guilds', 'guilds.members.read'];
 const clientId = process.env.DISCORD_CLIENT_ID;
 const clientSecret = process.env.DISCORD_CLIENT_SECRET;
 const redirectUri = process.env.DISCORD_REDIRECT_URI;

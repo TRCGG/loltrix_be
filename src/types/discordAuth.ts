@@ -38,6 +38,7 @@ export interface DiscordGuildAPI {
   name: string;
   icon: string;
   banner: string;
+  nick?: string;
   role: Role;
 }
 
