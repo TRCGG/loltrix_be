@@ -61,7 +61,8 @@ export class DiscordMemberGuildService {
 
           if (memberResult.ok) {
             const member = await memberResult.json();
-            nick = member.nick?.replace(/\s/g, '') ?? undefined;
+            const fallbackName = member.user?.username?.replace(/\s/g, '');
+            nick = member.nick?.replace(/\s/g, '') ?? fallbackName;
           }
         } catch {
           // nick 조회 실패 시 undefined
