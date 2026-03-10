@@ -41,11 +41,11 @@ export class ReplaySaveFacade {
     fileName: string,
     guildId: string,
     gameType: string | undefined,
-    memberId: string,
+    nick: string
   ): Promise<Replay> {
     return db.transaction(async (tx: TransactionType) => {
       const savedReplay = await replayService.replaySave(
-        { fileName, fileUrl: 'web', gameType, createUser: memberId, guildId },
+        { fileName, fileUrl: 'web', gameType, createUser: nick, guildId },
         rawData,
         tx,
       );

@@ -14,6 +14,20 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
 });
 
+const webCreateReplaySchema = z.object({
+  body: z.object({
+    guildId: z
+      .string()
+      .min(1, 'guildId is required')
+      .max(128, 'guildId must be less than 128 characters'),
+    gameType: z.string().length(1, '게임 타입은 1자여야 합니다.').default('1'),
+    nick: z
+      .string()
+      .min(1, 'nick is required')
+      .max(255, 'nick must be less than 255 characters'),
+  }),
+});
+
 // TO-DO replay message
 const createReplaySchema = z.object({
   body: z.object({
@@ -107,6 +121,13 @@ router.post(
       required: false,
       example: '1'
     }
+    #swagger.parameters['nick'] = {
+      in: 'formData',
+      type: 'string',
+      description: '닉네임',
+      required: true,
+      example: 'gmokuser/01'
+    }
     #swagger.responses[201] = {
       description: '업로드 처리 완료 (부분 성공 가능)',
       schema: {
@@ -124,6 +145,7 @@ router.post(
   */
   verifyAuth,
   upload.array('files', 10),
+  validateRequest(webCreateReplaySchema),
   requireUploadPermission({ from: 'body', key: 'guildId' }),
   webCreateReplay,
 );

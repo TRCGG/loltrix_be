@@ -38,8 +38,7 @@ export const webCreateReplay = async (
   next: NextFunction,
 ) => {
   try {
-    const memberId = req.discordMemberId!;
-    const { guildId, gameType } = req.body as { guildId: string; gameType?: string };
+    const { guildId, gameType, nick } = req.body as { guildId: string; gameType?: string; nick: string; };
     const files = Array.isArray(req.files) ? req.files : [];
 
     if (files.length === 0) {
@@ -87,7 +86,7 @@ export const webCreateReplay = async (
 
       // 5. 저장
       try {
-        const savedReplay = await replaySaveFacade.webSave(rawData, fileName, guildId, gameType, memberId);
+        const savedReplay = await replaySaveFacade.webSave(rawData, fileName, guildId, gameType, nick);
         succeeded.push({ fileName, replayCode: savedReplay.replayCode });
       } catch {
         failed.push({ fileName, reason: 'save_failed' });
