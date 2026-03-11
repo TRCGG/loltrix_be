@@ -17,6 +17,7 @@ const cookieOptions = {
 export interface AuthRequest extends Request {
   discordMemberId?: string;
   accessToken?: string;
+  isBot?: boolean;
 }
 
 /**
@@ -55,6 +56,7 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
       if (botHeader !== botSecret) {
         throw new BusinessError('Invalid bot secret', 403, { isLoggable: true });
       }
+      req.isBot = true;
       return next();
     }
 

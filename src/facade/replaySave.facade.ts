@@ -13,8 +13,8 @@ import { SystemError } from '../types/error.js';
  */
 export class ReplaySaveFacade {
   /**
-   * 리플레이 업로드 시작으로 replay, guild, riot_account, custom_match, match_participants,
-   * guild_member 저장 로직 / 하나라도 실패시 전체 rollback
+   * 디스코드 봇 리플레이 업로드
+   * (파일 다운로드 + 길드 upsert + 저장)
    */
   public async allSave(fileData: ReplayFileRequest): Promise<Replay> {
     return db.transaction(async (tx: TransactionType) => {
@@ -26,75 +26,94 @@ export class ReplaySaveFacade {
       // 2. Replay 저장 (원본 데이터)
       const savedReplay = await replayService.replaySave(fileData, rawData, tx);
 
-      // 3. Riot 계정 저장
-      await riotAccountService.upsertRiotAccount(rawData, tx);
-
-      const rawDataPuuids = new Set<string>(rawData.map((d: { PUUID: string }) => d.PUUID));
-
-      // puuid로 player_code 조회
-      const riotAccounts = await riotAccountService.findRiotAccountsByPuuids(rawData, tx);
-
-      const foundPuuids = new Set(riotAccounts.map((acc) => acc.puuid));
-      const missingPuuids = [...rawDataPuuids].filter((p) => !foundPuuids.has(p));
-
-      if (missingPuuids.length > 0) {
-        throw new SystemError(
-          `Missing riot accounts for PUUIDs: ${missingPuuids.join(', ')}. ` +
-            `Expected ${rawDataPuuids.size}, found ${foundPuuids.size}.`,
-          500,
-        );
-      }
-
-      // 참여자들의 playerCode 목록 추출
-      const playerCodes = riotAccounts.map((acc) => acc.playerCode);
-
-      // GuildMemberService를 통해 부캐-본캐 연결 정보 조회
-      const subAccountLinks = await guildMemberService.findMainAccountsForSubMembers(
-        playerCodes,
-        savedReplay.guildId,
-        tx,
-      );
-
-      // 빠른 조회를 위해 부캐 코드를 Key로 하는 Map 생성 (부캐코드 -> 본캐코드)
-      const subToMainMap = new Map<string, string>();
-      subAccountLinks.forEach((link) => {
-        if (link.mainAccount) {
-          subToMainMap.set(link.account, link.mainAccount);
-        }
-      });
-
-      // 최종 매핑 생성 (Map<PUUID, 본캐PlayerCode>)
-      const puuidToPlayerCodeMap = new Map<string, string>();
-
-      riotAccounts.forEach((acc) => {
-        // 부캐 목록에 있으면 본캐 코드로, 없으면 자기 자신 코드로 매핑
-        const targetPlayerCode = subToMainMap.get(acc.playerCode) || acc.playerCode;
-        puuidToPlayerCodeMap.set(acc.puuid, targetPlayerCode);
-      });
-
-      const customMatchData = {
-        id: savedReplay.replayCode,
-        gameType: savedReplay.gameType,
-        guildId: savedReplay.guildId,
-        season: savedReplay.season,
-      };
-
-      // 4. 내전 저장
-      await customMatchService.insertCustomMatch(customMatchData, tx);
-
-      // 5. 내전 참여자 기록 저장
-      await matchParticipantService.insertMatchParticipants(
-        rawData,
-        customMatchData.id,
-        tx,
-        puuidToPlayerCodeMap,
-      );
-
-      // 6. 길드 멤버 저장
-      await guildMemberService.insertGuildMember(riotAccounts, savedReplay.guildId, tx);
+      await this.saveMatchData(rawData, savedReplay, tx);
 
       return savedReplay;
     });
+  }
+
+  /**
+   * 웹 리플레이 업로드
+   * (파싱된 rawData를 직접 받아서 저장, 길드 upsert 생략)
+   */
+  public async webSave(
+    rawData: any[],
+    fileName: string,
+    guildId: string,
+    gameType: string | undefined,
+    nick: string
+  ): Promise<Replay> {
+    return db.transaction(async (tx: TransactionType) => {
+      const savedReplay = await replayService.replaySave(
+        { fileName, fileUrl: 'web', gameType, createUser: nick, guildId },
+        rawData,
+        tx,
+      );
+
+      await this.saveMatchData(rawData, savedReplay, tx);
+
+      return savedReplay;
+    });
+  }
+
+  /**
+   * 공통: riot 계정, 내전, 참여자, 길드멤버 저장
+   */
+  private async saveMatchData(rawData: any[], savedReplay: Replay, tx: TransactionType) {
+    await riotAccountService.upsertRiotAccount(rawData, tx);
+
+    const rawDataPuuids = new Set<string>(rawData.map((d: { PUUID: string }) => d.PUUID));
+    const riotAccounts = await riotAccountService.findRiotAccountsByPuuids(rawData, tx);
+
+    const foundPuuids = new Set(riotAccounts.map((acc) => acc.puuid));
+    const missingPuuids = [...rawDataPuuids].filter((p) => !foundPuuids.has(p));
+
+    if (missingPuuids.length > 0) {
+      throw new SystemError(
+        `Missing riot accounts for PUUIDs: ${missingPuuids.join(', ')}. ` +
+          `Expected ${rawDataPuuids.size}, found ${foundPuuids.size}.`,
+        500,
+      );
+    }
+
+    const playerCodes = riotAccounts.map((acc) => acc.playerCode);
+
+    const subAccountLinks = await guildMemberService.findMainAccountsForSubMembers(
+      playerCodes,
+      savedReplay.guildId,
+      tx,
+    );
+
+    const subToMainMap = new Map<string, string>();
+    subAccountLinks.forEach((link) => {
+      if (link.mainAccount) {
+        subToMainMap.set(link.account, link.mainAccount);
+      }
+    });
+
+    const puuidToPlayerCodeMap = new Map<string, string>();
+    riotAccounts.forEach((acc) => {
+      const targetPlayerCode = subToMainMap.get(acc.playerCode) || acc.playerCode;
+      puuidToPlayerCodeMap.set(acc.puuid, targetPlayerCode);
+    });
+
+    const customMatchData = {
+      id: savedReplay.replayCode,
+      gameType: savedReplay.gameType,
+      guildId: savedReplay.guildId,
+      season: savedReplay.season,
+    };
+
+    await customMatchService.insertCustomMatch(customMatchData, tx);
+
+    await matchParticipantService.insertMatchParticipants(
+      rawData,
+      customMatchData.id,
+      tx,
+      puuidToPlayerCodeMap,
+    );
+
+    await guildMemberService.insertGuildMember(riotAccounts, savedReplay.guildId, tx);
   }
 }
 

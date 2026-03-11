@@ -3,14 +3,15 @@ import { Request, Response, NextFunction } from 'express';
 import { DiscordAuthService } from '../services/discordAuth.service.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
-import { GuildMembershipService } from '../services/guildMembership.service.js';
+import { DiscordMemberGuildService } from '../services/discordMemberGuild.service.js';
+import { discordMemberRoleService } from '../services/discordMemberRole.service.js';
 import { DiscordGuildAPIResponse } from '../types/discordAuth.js';
 
 const frontendUrl =
   process.env.NODE_ENV === 'development' ? 'https://dev.gmok.kr' : 'https://gmok.kr';
 
 const discordAuthService = new DiscordAuthService();
-const guildMembershipService = new GuildMembershipService();
+const discordMemberGuildService = new DiscordMemberGuildService();
 
 const cookieOptions = {
   domain: '.gmok.kr',
@@ -98,14 +99,15 @@ export const logout = async (req: Request, res: Response<void>) => {
 export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuildAPIResponse>) => {
   try {
     // 1. 유저 요청 처리
-    const { accessToken } = req;
+    const { accessToken, discordMemberId } = req;
 
-    if (!accessToken) {
+    if (!accessToken || !discordMemberId) {
       throw new SystemError('Access token not found after auth middleware');
     }
 
-    // 2. guilds
-    const guildsData = await guildMembershipService.findUserGmokGuilds(accessToken);
+    // 2. 활성 권한 조회 후 guilds 조회
+    const activeRoles = await discordMemberRoleService.getActiveRoles(discordMemberId);
+    const guildsData = await discordMemberGuildService.findUserGmokGuilds(accessToken, activeRoles);
     res.status(200).json({
       status: 'success',
       message: 'gmok Guilds find successfully',
