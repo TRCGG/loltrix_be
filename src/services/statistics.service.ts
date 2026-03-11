@@ -54,11 +54,14 @@ export class StatisticsService {
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
 
-    // 날짜 조건
-    const dateCondition = and(
-      year ? sql`TO_CHAR(${customMatch.createDate}, 'YYYY') = ${year}` : undefined,
-      month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
-    );
+    // 날짜 조건: year/month 지정 시 해당 월 필터, 미지정 시 오늘로부터 1개월 전 같은 날 이후
+    const dateCondition =
+      year || month
+        ? and(
+            year ? sql`TO_CHAR(${customMatch.createDate}, 'YYYY') = ${year}` : undefined,
+            month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
+          )
+        : sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
 
     const shouldGroupByPosition = !!position;
 
@@ -164,11 +167,14 @@ export class StatisticsService {
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
 
-    // 날짜조건
-    const dateCondition = and(
-      year ? sql`TO_CHAR(${customMatch.createDate}, 'YYYY') = ${year}` : undefined,
-      month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
-    );
+    // 날짜조건: year/month 지정 시 해당 월 필터, 미지정 시 오늘로부터 1개월 전 같은 날 이후
+    const dateCondition =
+      year || month
+        ? and(
+            year ? sql`TO_CHAR(${customMatch.createDate}, 'YYYY') = ${year}` : undefined,
+            month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
+          )
+        : sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
 
     const shouldGroupByPosition = !!position;
 
