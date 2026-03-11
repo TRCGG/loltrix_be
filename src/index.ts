@@ -81,7 +81,11 @@ app.use(
 
 // API routes
 app.use('/api', apiRoutes);
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// Swagger documentation (only in development)
+if (nodeEnv === 'development') {
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+}
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(currentDirname, './loltrix/index.html'));
