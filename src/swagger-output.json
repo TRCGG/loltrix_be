@@ -428,48 +428,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "files",
-            "in": "formData",
-            "items": {
-              "type": "file"
-            },
-            "description": ".rofl 리플레이 파일 (최대 10개, 파일당 50MB)",
-            "required": true,
-            "schema": {
-              "type": "array"
-            }
-          },
-          {
-            "name": "guildId",
-            "in": "formData",
-            "description": "Discord 길드(서버) ID",
-            "required": true,
-            "example": "123456789012345678",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "gameType",
-            "in": "formData",
-            "description": "게임 타입 (기본값: 1)",
-            "required": false,
-            "example": "1",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "nick",
-            "in": "formData",
-            "description": "닉네임",
-            "required": true,
-            "example": "gmokuser/01",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -599,25 +557,46 @@
           }
         },
         "requestBody": {
+          "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
                 "type": "object",
                 "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": ".rofl 리플레이 파일 (최대 10개, 파일당 50MB)"
+                  },
                   "guildId": {
-                    "example": "any"
+                    "type": "string",
+                    "description": "Discord 길드(서버) ID",
+                    "example": "123456789012345678"
                   },
                   "gameType": {
-                    "example": "any"
+                    "type": "string",
+                    "description": "게임 타입 (기본값: 1)",
+                    "example": "1"
                   },
                   "nick": {
-                    "example": "any"
+                    "type": "string",
+                    "description": "닉네임",
+                    "example": "gmokuser/01"
                   }
-                }
+                },
+                "required": [
+                  "files",
+                  "guildId",
+                  "nick"
+                ]
               }
             }
           }
-        }
+        },
+        "autoBody": false
       }
     },
     "/api/guildMember/sub-account": {

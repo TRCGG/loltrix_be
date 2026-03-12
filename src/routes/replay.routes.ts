@@ -99,34 +99,39 @@ router.post(
   /* #swagger.tags = ['Replays']
     #swagger.summary = '웹 리플레이 업로드'
     #swagger.description = '웹에서 .rofl 파일을 직접 업로드하여 리플레이를 저장합니다. 최대 10개 파일, 파일당 50MB 제한. 인증 필요 + 업로드 권한 필요 (allowAllUploads=true인 길드는 인증만으로 가능).'
-    #swagger.consumes = ['multipart/form-data']
-    #swagger.parameters['files'] = {
-      in: 'formData',
-      type: 'array',
-      items: { type: 'file' },
-      description: '.rofl 리플레이 파일 (최대 10개, 파일당 50MB)',
-      required: true
-    }
-    #swagger.parameters['guildId'] = {
-      in: 'formData',
-      type: 'string',
-      description: 'Discord 길드(서버) ID',
+    #swagger.autoBody = false
+    #swagger.requestBody = {
       required: true,
-      example: '123456789012345678'
-    }
-    #swagger.parameters['gameType'] = {
-      in: 'formData',
-      type: 'string',
-      description: '게임 타입 (기본값: 1)',
-      required: false,
-      example: '1'
-    }
-    #swagger.parameters['nick'] = {
-      in: 'formData',
-      type: 'string',
-      description: '닉네임',
-      required: true,
-      example: 'gmokuser/01'
+      content: {
+        'multipart/form-data': {
+          schema: {
+            type: 'object',
+            properties: {
+              files: {
+                type: 'array',
+                items: { type: 'string', format: 'binary' },
+                description: '.rofl 리플레이 파일 (최대 10개, 파일당 50MB)'
+              },
+              guildId: {
+                type: 'string',
+                description: 'Discord 길드(서버) ID',
+                example: '123456789012345678'
+              },
+              gameType: {
+                type: 'string',
+                description: '게임 타입 (기본값: 1)',
+                example: '1'
+              },
+              nick: {
+                type: 'string',
+                description: '닉네임',
+                example: 'gmokuser/01'
+              }
+            },
+            required: ['files', 'guildId', 'nick']
+          }
+        }
+      }
     }
     #swagger.responses[201] = {
       description: '업로드 처리 완료 (부분 성공 가능)',
