@@ -330,3 +330,75 @@ export const discordMemberRole = pgTable(
 
 export type DiscordMemberRole = typeof discordMemberRole.$inferSelect;
 export type InsertDiscordMemberRole = typeof discordMemberRole.$inferInsert;
+
+// --- 뉴스 시스템 테이블 ---
+
+export const newsGuildConfig = pgTable('news_guild_config', {
+  guildId: varchar('guild_id', { length: 128 })
+    .primaryKey()
+    .references(() => guild.id),
+  newsEnabled: boolean('news_enabled').notNull().default(false),
+  mmrEnabled: boolean('mmr_enabled').notNull().default(false),
+  channelId: varchar('channel_id', { length: 128 }),
+  tone: varchar('tone', { length: 20 }).notNull().default('funny'),
+  createDate: timestamp('create_date').notNull().defaultNow(),
+  updateDate: timestamp('update_date')
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type NewsGuildConfig = typeof newsGuildConfig.$inferSelect;
+export type InsertNewsGuildConfig = typeof newsGuildConfig.$inferInsert;
+
+export const dailyNews = pgTable(
+  'daily_news',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    guildId: varchar('guild_id', { length: 128 })
+      .notNull()
+      .references(() => guild.id),
+    newsDate: timestamp('news_date', { mode: 'date' }).notNull(),
+    title: varchar('title', { length: 256 }),
+    discordContent: text('discord_content'),
+    webContent: text('web_content'),
+    statsJson: jsonb('stats_json'),
+    createDate: timestamp('create_date').notNull().defaultNow(),
+    updateDate: timestamp('update_date')
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (table) => [unique('uq_daily_news_guild_date').on(table.guildId, table.newsDate)],
+);
+
+export type DailyNews = typeof dailyNews.$inferSelect;
+export type InsertDailyNews = typeof dailyNews.$inferInsert;
+
+export const monthlyNews = pgTable(
+  'monthly_news',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    guildId: varchar('guild_id', { length: 128 })
+      .notNull()
+      .references(() => guild.id),
+    year: integer('year').notNull(),
+    month: integer('month').notNull(),
+    title: varchar('title', { length: 256 }),
+    discordContent: text('discord_content'),
+    webContent: text('web_content'),
+    statsJson: jsonb('stats_json'),
+    createDate: timestamp('create_date').notNull().defaultNow(),
+    updateDate: timestamp('update_date')
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (table) => [unique('uq_monthly_news_guild_period').on(table.guildId, table.year, table.month)],
+);
+
+export type MonthlyNews = typeof monthlyNews.$inferSelect;
+export type InsertMonthlyNews = typeof monthlyNews.$inferInsert;
