@@ -189,6 +189,7 @@ export class ReplayService {
     fileData: ReplayFileRequest | { fileName: string; fileUrl: string; gameType?: string; createUser: string; guildId: string },
     rawData: any,
     tx: TransactionType,
+    patchVersion?: string | null,
   ) {
     const { fileName, fileUrl, gameType, createUser } = fileData;
     const guildId = 'guild' in fileData ? fileData.guild.id : fileData.guildId;
@@ -213,6 +214,7 @@ export class ReplayService {
         hashData,
         gameType: gameType ?? '1',
         season,
+        patchVersion: patchVersion ?? undefined,
         createUser,
         guildId,
       })

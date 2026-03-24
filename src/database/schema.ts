@@ -47,6 +47,7 @@ export const replay = pgTable('replay', {
   hashData: varchar('hash_data', { length: 128 }).notNull(),
   gameType: char('game_type', { length: 1 }).notNull().default('1'),
   season: varchar('season', { length: 32 }).notNull(),
+  patchVersion: varchar('patch_version', { length: 32 }),
   createUser: varchar('create_user', { length: 255 }).notNull(),
   guildId: varchar('guild_id', { length: 128 })
     .notNull()

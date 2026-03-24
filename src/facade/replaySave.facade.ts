@@ -7,6 +7,7 @@ import { matchParticipantService } from '../services/matchParticipant.service.js
 import { Replay, ReplayFileRequest } from '../types/replay.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { SystemError } from '../types/error.js';
+import { getCurrentPatchVersion } from '../utils/patchVersion.js';
 
 /**
  * @desc 여러 저장 Service 로직 관리
@@ -17,6 +18,8 @@ export class ReplaySaveFacade {
    * (파일 다운로드 + 길드 upsert + 저장)
    */
   public async allSave(fileData: ReplayFileRequest): Promise<Replay> {
+    const patchVersion = await getCurrentPatchVersion();
+
     return db.transaction(async (tx: TransactionType) => {
       const rawData = await replayService.getRawData(fileData);
 
@@ -24,7 +27,7 @@ export class ReplaySaveFacade {
       await guildService.upsertGuild(fileData.guild, tx);
 
       // 2. Replay 저장 (원본 데이터)
-      const savedReplay = await replayService.replaySave(fileData, rawData, tx);
+      const savedReplay = await replayService.replaySave(fileData, rawData, tx, patchVersion);
 
       await this.saveMatchData(rawData, savedReplay, tx);
 
@@ -43,11 +46,14 @@ export class ReplaySaveFacade {
     gameType: string | undefined,
     nick: string
   ): Promise<Replay> {
+    const patchVersion = await getCurrentPatchVersion();
+
     return db.transaction(async (tx: TransactionType) => {
       const savedReplay = await replayService.replaySave(
         { fileName, fileUrl: 'web', gameType, createUser: nick, guildId },
         rawData,
         tx,
+        patchVersion,
       );
 
       await this.saveMatchData(rawData, savedReplay, tx);
