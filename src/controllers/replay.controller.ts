@@ -99,9 +99,11 @@ export const webCreateReplay = async (
 
       // 3. 리플레이 데이터 파싱
       let rawData: any[];
+      let patchVersion: string;
       try {
-        const rawDataString = await replayService.parseReplayData(file.buffer);
-        rawData = JSON.parse(rawDataString);
+        const parsed = await replayService.parseReplayData(file.buffer);
+        rawData = parsed.stats;
+        patchVersion = parsed.patchVersion;
       } catch {
         failed.push({ fileName, reason: 'parse_failed' });
         continue;
@@ -116,7 +118,7 @@ export const webCreateReplay = async (
 
       // 5. 저장
       try {
-        const savedReplay = await replaySaveFacade.webSave(rawData, fileName, guildId, gameType, nick);
+        const savedReplay = await replaySaveFacade.webSave(rawData, fileName, guildId, gameType, nick, patchVersion);
         succeeded.push({ fileName, replayCode: savedReplay.replayCode });
       } catch {
         failed.push({ fileName, reason: 'save_failed' });

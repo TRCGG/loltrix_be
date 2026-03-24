@@ -135,7 +135,24 @@ export class ReplayService {
   /**
    * @desc 리플레이 데이터 파싱
    */
-  public async parseReplayData(byte: Buffer): Promise<string> {
+  public async parseReplayData(byte: Buffer): Promise<{ patchVersion: string; stats: any[] }> {
+
+    // 1) 헤더에서 패치 버전 추출
+    let patchVersion = 'unknown';
+    try {
+      const versionLength = byte[0x0e];
+      if (versionLength > 0) {
+        const gameVersion = byte.subarray(0x0f, 0x0f + versionLength).toString('ascii');
+        const [major, minor] = gameVersion.split('.');
+        if (major && minor) {
+          patchVersion = `${major}.${minor}`;
+        }
+      }
+    } catch {
+      console.warn('Failed to extract patch version from replay header');
+    }
+
+    // 2) JSON 스탯 데이터 파싱
     const byteString = byte.toString('utf-8');
     const startIndex = byteString.indexOf('{"gameLength":');
     const endIndex = byteString.lastIndexOf('"}');
@@ -150,7 +167,7 @@ export class ReplayService {
       const rootNode = JSON.parse(data);
       const statsArray = rootNode.statsJson;
 
-      return JSON.stringify(statsArray);
+      return { patchVersion, stats: statsArray };
     } catch (error) {
       console.error('Error parsing replay data', error);
       throw new SystemError('replay error while parsing data');
@@ -167,10 +184,9 @@ export class ReplayService {
     const fileBuffer = await this.getInputStreamDiscordFile(fileUrl);
 
     // 2. 파일 파싱
-    const rawDataString = await this.parseReplayData(fileBuffer);
-    const rawDataes = JSON.parse(rawDataString);
+    const parsed = await this.parseReplayData(fileBuffer);
 
-    return rawDataes;
+    return { rawData: parsed.stats, patchVersion: parsed.patchVersion };
   }
 
   /**
