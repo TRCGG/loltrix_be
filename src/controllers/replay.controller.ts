@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ReplayResponse, ReplayFileRequest, WebUploadResponse } from '../types/replay.js';
+import { ReplayResponse, ReplayFileRequest, WebUploadResponse, ReplayListResponse, GetReplaysQuery } from '../types/replay.js';
 import { replaySaveFacade } from '../facade/replaySave.facade.js';
 import { replayService } from '../services/replay.service.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
@@ -22,6 +22,36 @@ export const createReplay = async (
       status: 'success',
       message: 'Replay created successfully',
       data: savedReplay,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * @route GET /api/replays/:guildId
+ * @desc 길드별 리플레이 목록 조회
+ */
+export const getReplayList = async (
+  req: Request<{ guildId: string }, ReplayListResponse, Record<string, never>, GetReplaysQuery>,
+  res: Response<ReplayListResponse>,
+  next: NextFunction,
+) => {
+  try {
+    const { guildId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    const { result, totalCount } = await replayService.findReplaysByGuild(guildId, Number(page), Number(limit));
+
+    res.setHeader('X-Total-Count', totalCount.toString());
+    res.setHeader('X-Page', page.toString());
+    res.setHeader('X-Limit', limit.toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / Number(limit)).toString());
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Replays retrieved successfully',
+      data: result,
     });
   } catch (error) {
     return next(error);

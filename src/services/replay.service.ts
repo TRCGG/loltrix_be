@@ -1,4 +1,4 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { get } from 'https';
 import { createHash } from 'crypto';
 import { db, TransactionType } from '../database/connectionPool.js';
@@ -218,9 +218,57 @@ export class ReplayService {
         createUser,
         guildId,
       })
-      .returning();
+      .returning({
+        id: replay.id,
+        replayCode: replay.replayCode,
+        fileName: replay.fileName,
+        fileUrl: replay.fileUrl,
+        hashData: replay.hashData,
+        gameType: replay.gameType,
+        season: replay.season,
+        patchVersion: replay.patchVersion,
+        createUser: replay.createUser,
+        guildId: replay.guildId,
+        createDate: replay.createDate,
+        updateDate: replay.updateDate,
+        isDeleted: replay.isDeleted,
+      });
 
     return newReplay[0];
+  }
+
+  /**
+   * @desc 길드별 리플레이 목록 조회 (최신순, 페이지네이션)
+   */
+  public async findReplaysByGuild(guildId: string, page: number = 1, limit: number = 10) {
+    const offset = (page - 1) * limit;
+
+    const result = await db
+      .select({
+        id: replay.id,
+        replayCode: replay.replayCode,
+        fileName: replay.fileName,
+        gameType: replay.gameType,
+        season: replay.season,
+        patchVersion: replay.patchVersion,
+        createUser: replay.createUser,
+        guildId: replay.guildId,
+        createDate: replay.createDate,
+      })
+      .from(replay)
+      .where(and(eq(replay.guildId, guildId), eq(replay.isDeleted, false)))
+      .orderBy(desc(replay.createDate))
+      .limit(limit)
+      .offset(offset);
+
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(replay)
+      .where(and(eq(replay.guildId, guildId), eq(replay.isDeleted, false)));
+
+    const totalCount = countResult[0]?.count || 0;
+
+    return { result, totalCount };
   }
 
   /**
