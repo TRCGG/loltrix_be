@@ -4,7 +4,7 @@ import { replayService } from '../services/replay.service.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
 import { customMatchService } from '../services/customMatch.service.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
-import { Replay, ReplayFileRequest } from '../types/replay.js';
+import { ReplaySaveResult, ReplayFileRequest } from '../types/replay.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { SystemError } from '../types/error.js';
 import { getCurrentPatchVersion } from '../utils/patchVersion.js';
@@ -17,7 +17,7 @@ export class ReplaySaveFacade {
    * 디스코드 봇 리플레이 업로드
    * (파일 다운로드 + 길드 upsert + 저장)
    */
-  public async allSave(fileData: ReplayFileRequest): Promise<Replay> {
+  public async allSave(fileData: ReplayFileRequest): Promise<ReplaySaveResult> {
     const patchVersion = await getCurrentPatchVersion();
 
     return db.transaction(async (tx: TransactionType) => {
@@ -26,7 +26,7 @@ export class ReplaySaveFacade {
       // 1. 길드 저장
       await guildService.upsertGuild(fileData.guild, tx);
 
-      // 2. Replay 저장 (원본 데이터)
+      // 2. ReplaySaveResult 저장 (원본 데이터)
       const savedReplay = await replayService.replaySave(fileData, rawData, tx, patchVersion);
 
       await this.saveMatchData(rawData, savedReplay, tx);
@@ -45,7 +45,7 @@ export class ReplaySaveFacade {
     guildId: string,
     gameType: string | undefined,
     nick: string
-  ): Promise<Replay> {
+  ): Promise<ReplaySaveResult> {
     const patchVersion = await getCurrentPatchVersion();
 
     return db.transaction(async (tx: TransactionType) => {
@@ -65,7 +65,7 @@ export class ReplaySaveFacade {
   /**
    * 공통: riot 계정, 내전, 참여자, 길드멤버 저장
    */
-  private async saveMatchData(rawData: any[], savedReplay: Replay, tx: TransactionType) {
+  private async saveMatchData(rawData: any[], savedReplay: ReplaySaveResult, tx: TransactionType) {
     await riotAccountService.upsertRiotAccount(rawData, tx);
 
     const rawDataPuuids = new Set<string>(rawData.map((d: { PUUID: string }) => d.PUUID));
