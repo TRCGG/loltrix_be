@@ -11,8 +11,7 @@ import {
 } from '../types/matchParticipant.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
 import { guildMemberService } from '../services/guildMember.service.js';
-
-const envLoLSeason = process.env.LOL_SEASON || '2026';
+import { systemConfigService } from '../services/systemConfig.service.js';
 
 const formatMember = (members: any[]) => {
   return members.map((member) => ({
@@ -40,7 +39,8 @@ export const getRecentGames = async (
     const { guildId, riotName } = req.params;
     const { riotNameTag, season, page, limit } = req.query;
 
-    const lolSeason = season || envLoLSeason;
+    const defaultSeason = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
+    const lolSeason = season || defaultSeason;
 
     const members = await guildMemberService.searchGuildMemberByRiotId(guildId, {
       riotName,
@@ -112,7 +112,8 @@ export const getMatchDashboard = async (
     const { guildId, riotName } = req.params;
     const { riotNameTag, season } = req.query;
 
-    const lolSeason = season || envLoLSeason;
+    const defaultSeason = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
+    const lolSeason = season || defaultSeason;
 
     const members = await guildMemberService.searchGuildMemberByRiotId(guildId, {
       riotName,
@@ -183,7 +184,8 @@ export const getMostPicks = async (
     const { guildId, riotName } = req.params;
     const { riotNameTag, season, page, limit } = req.query;
 
-    const lolSeason = season || envLoLSeason;
+    const defaultSeason = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
+    const lolSeason = season || defaultSeason;
 
     const members = await guildMemberService.searchGuildMemberByRiotId(guildId, {
       riotName,

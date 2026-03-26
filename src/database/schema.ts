@@ -331,3 +331,13 @@ export const discordMemberRole = pgTable(
 
 export type DiscordMemberRole = typeof discordMemberRole.$inferSelect;
 export type InsertDiscordMemberRole = typeof discordMemberRole.$inferInsert;
+
+export const systemConfig = pgTable('system_config', {
+  key: varchar('key', { length: 128 }).primaryKey(),
+  value: text('value').notNull(),
+  description: text('description'),
+  updateDate: timestamp('update_date', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type SystemConfig = typeof systemConfig.$inferSelect;
+export type InsertSystemConfig = typeof systemConfig.$inferInsert;
