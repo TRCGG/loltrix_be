@@ -12,9 +12,9 @@ import {
 import { BusinessError, SystemError } from '../types/error.js';
 import { discordMemberRoleService } from './discordMemberRole.service.js';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
+import { systemConfigService } from './systemConfig.service.js';
 
 const discordApiBaseUrl = 'https://discord.com/api';
-const scopes = ['identify', 'guilds', 'guilds.members.read'];
 const clientId = process.env.DISCORD_CLIENT_ID;
 const clientSecret = process.env.DISCORD_CLIENT_SECRET;
 const redirectUri = process.env.DISCORD_REDIRECT_URI;
@@ -58,13 +58,15 @@ export class DiscordAuthService {
   /**
    * @desc Discord OAuth2 인증 URL 생성 (로그인용)
    */
-  public getDiscordAuthorizeUrl(): string {
+  public async getDiscordAuthorizeUrl(): Promise<string> {
     try {
+      const scopes = await systemConfigService.getListConfig('DISCORD_OAUTH_SCOPES');
+      const scopeStr = scopes.length > 0 ? scopes.join(' ') : 'identify guilds guilds.members.read';
       const authorizeUrl = `${discordApiBaseUrl}/oauth2/authorize?${querystring.stringify({
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
-        scope: scopes.join(' '),
+        scope: scopeStr,
       })}`;
       return authorizeUrl;
     } catch (error) {

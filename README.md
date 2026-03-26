@@ -64,10 +64,32 @@ pnpm install
 
 `.env.development` 또는 `.env.production` 파일을 생성하고 필요한 환경 변수를 설정합니다.
 
-필수 환경 변수:
-- `DB_URL` - PostgreSQL 데이터베이스 연결 URL
-- `COOKIE_SECRET` - 세션 쿠키 암호화 키
-- 기타 데이터베이스 연결 설정
+```env
+# Server
+NODE_ENV=development
+PORT=3000
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=loltrix
+DB_USER=postgres
+DB_PASSWORD=your_password
+DB_SSL=false
+DB_SSL_REJECT_UNAUTHORIZED=true
+DB_MAX_CONNECTIONS=20
+DB_IDLE_TIMEOUT=30000
+DB_CONNECTION_TIMEOUT=2000
+
+# Session
+COOKIE_SECRET=your_cookie_secret
+
+# Discord OAuth
+DISCORD_CLIENT_ID=your_discord_client_id
+DISCORD_CLIENT_SECRET=your_discord_client_secret
+DISCORD_REDIRECT_URI=http://localhost:3000/api/auth/callback
+DISCORD_BOT_SECRET=your_bot_secret
+```
 
 4. 개발 서버 실행
 
@@ -100,8 +122,27 @@ pnpm dev
 
 ## 환경 변수 (Environment Variables)
 
-- `PORT` - 서버 포트 (기본값: 3000)
-- `NODE_ENV` - 애플리케이션 환경 (development, production)
+| 변수 | 필수 | 기본값 | 설명 |
+|------|------|--------|------|
+| `NODE_ENV` | X | `development` | 애플리케이션 환경 |
+| `PORT` | X | `3000` | 서버 포트 |
+| `DB_HOST` | O | - | PostgreSQL 호스트 |
+| `DB_PORT` | X | `5432` | PostgreSQL 포트 |
+| `DB_NAME` | O | - | 데이터베이스 이름 |
+| `DB_USER` | O | - | 데이터베이스 사용자 |
+| `DB_PASSWORD` | O | - | 데이터베이스 비밀번호 |
+| `DB_SSL` | X | `false` | SSL 연결 사용 여부 |
+| `DB_SSL_REJECT_UNAUTHORIZED` | X | `true` | SSL 인증서 검증 여부 |
+| `DB_MAX_CONNECTIONS` | X | `20` | 최대 커넥션 수 |
+| `DB_IDLE_TIMEOUT` | X | `30000` | 유휴 타임아웃 (ms) |
+| `DB_CONNECTION_TIMEOUT` | X | `2000` | 연결 타임아웃 (ms) |
+| `COOKIE_SECRET` | O | - | 세션 쿠키 암호화 키 |
+| `DISCORD_CLIENT_ID` | O | - | Discord OAuth 앱 ID |
+| `DISCORD_CLIENT_SECRET` | O | - | Discord OAuth 시크릿 |
+| `DISCORD_REDIRECT_URI` | O | - | Discord OAuth 콜백 URI |
+| `DISCORD_BOT_SECRET` | O | - | 봇 인증 헤더 시크릿 |
+
+> 비즈니스 설정값(LOL_SEASON, STATS_MIN_GAME_COUNT, COOKIE_DOMAIN 등)은 `system_config` 테이블에서 관리됩니다.
 
 ## 라이센스 (License)
 
