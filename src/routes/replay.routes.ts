@@ -5,7 +5,7 @@ import { validateRequest } from '../middlewares/validateRequest.js';
 import { verifyAuth } from '../middlewares/authHandler.js';
 import { requireUploadPermission } from '../middlewares/requireRole.js';
 
-import { createReplay, webCreateReplay } from '../controllers/replay.controller.js';
+import { createReplay, getReplayList, webCreateReplay } from '../controllers/replay.controller.js';
 
 const router: Router = Router();
 
@@ -26,6 +26,17 @@ const webCreateReplaySchema = z.object({
       .min(1, 'nick is required')
       .max(255, 'nick must be less than 255 characters'),
   }),
+});
+
+const getReplayListSchema = z.object({
+  params: z.object({
+    guildId: z.string().min(1, 'guildId is required').max(128),
+  }),
+  query: z.object({
+    page: z.string().regex(/^\d+$/, 'Page must be a positive number').transform(Number).optional(),
+    limit: z.string().regex(/^\d+$/, 'Limit must be a positive number').transform(Number)
+      .refine((v) => v >= 1 && v <= 10, 'Limit must be between 1 and 10').optional(),
+  }).optional(),
 });
 
 // TO-DO replay message
@@ -57,6 +68,23 @@ const createReplaySchema = z.object({
     }),
   }),
 });
+
+/**
+ * @route GET /api/replays/:guildId
+ * @desc 길드별 리플레이 목록 조회
+ */
+router.get(
+  '/:guildId',
+  /* #swagger.tags = ['Replays']
+    #swagger.summary = '리플레이 목록 조회'
+    #swagger.description = '길드별 리플레이 목록을 최신순으로 조회합니다. (최대 10개)'
+    #swagger.parameters['guildId'] = { in: 'path', description: 'Discord 길드 ID', required: true }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (기본값: 1)', required: false }
+    #swagger.parameters['limit'] = { in: 'query', description: '조회 개수 (1~10, 기본값: 10)', required: false }
+  */
+  validateRequest(getReplayListSchema),
+  getReplayList,
+);
 
 /**
  * @route POST /api/replays

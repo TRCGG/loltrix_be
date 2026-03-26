@@ -44,6 +44,7 @@ app.set('port', process.env.PORT || 3000);
 
 // middlewares
 app.use(morgan('dev')); // HTTP request logger
+app.use(helmet()); // Set security-related HTTP headers
 app.use(express.static(path.join(currentDirname, '../loltrix'))); // set static resources
 app.use(express.json()); // Parse JSON request body
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded request body
@@ -60,7 +61,6 @@ app.use(
     },
   }),
 );
-app.use(helmet()); // Set security-related HTTP headers
 app.use(compression()); // Compress all routes
 // Enable CORS
 app.use(

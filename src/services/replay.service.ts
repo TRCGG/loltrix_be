@@ -1,4 +1,4 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { get } from 'https';
 import { createHash } from 'crypto';
 import { db, TransactionType } from '../database/connectionPool.js';
@@ -135,7 +135,24 @@ export class ReplayService {
   /**
    * @desc 리플레이 데이터 파싱
    */
-  public async parseReplayData(byte: Buffer): Promise<string> {
+  public async parseReplayData(byte: Buffer): Promise<{ patchVersion: string; stats: any[] }> {
+
+    // 1) 헤더에서 패치 버전 추출
+    let patchVersion = 'unknown';
+    try {
+      const versionLength = byte[0x0e];
+      if (versionLength > 0) {
+        const gameVersion = byte.subarray(0x0f, 0x0f + versionLength).toString('ascii');
+        const [major, minor] = gameVersion.split('.');
+        if (major && minor) {
+          patchVersion = `${major}.${minor}`;
+        }
+      }
+    } catch {
+      console.warn('Failed to extract patch version from replay header');
+    }
+
+    // 2) JSON 스탯 데이터 파싱
     const byteString = byte.toString('utf-8');
     const startIndex = byteString.indexOf('{"gameLength":');
     const endIndex = byteString.lastIndexOf('"}');
@@ -150,7 +167,7 @@ export class ReplayService {
       const rootNode = JSON.parse(data);
       const statsArray = rootNode.statsJson;
 
-      return JSON.stringify(statsArray);
+      return { patchVersion, stats: statsArray };
     } catch (error) {
       console.error('Error parsing replay data', error);
       throw new SystemError('replay error while parsing data');
@@ -167,10 +184,9 @@ export class ReplayService {
     const fileBuffer = await this.getInputStreamDiscordFile(fileUrl);
 
     // 2. 파일 파싱
-    const rawDataString = await this.parseReplayData(fileBuffer);
-    const rawDataes = JSON.parse(rawDataString);
+    const parsed = await this.parseReplayData(fileBuffer);
 
-    return rawDataes;
+    return { rawData: parsed.stats, patchVersion: parsed.patchVersion };
   }
 
   /**
@@ -189,6 +205,7 @@ export class ReplayService {
     fileData: ReplayFileRequest | { fileName: string; fileUrl: string; gameType?: string; createUser: string; guildId: string },
     rawData: any,
     tx: TransactionType,
+    patchVersion?: string | null,
   ) {
     const { fileName, fileUrl, gameType, createUser } = fileData;
     const guildId = 'guild' in fileData ? fileData.guild.id : fileData.guildId;
@@ -213,12 +230,61 @@ export class ReplayService {
         hashData,
         gameType: gameType ?? '1',
         season,
+        patchVersion: patchVersion ?? undefined,
         createUser,
         guildId,
       })
-      .returning();
+      .returning({
+        id: replay.id,
+        replayCode: replay.replayCode,
+        fileName: replay.fileName,
+        fileUrl: replay.fileUrl,
+        hashData: replay.hashData,
+        gameType: replay.gameType,
+        season: replay.season,
+        patchVersion: replay.patchVersion,
+        createUser: replay.createUser,
+        guildId: replay.guildId,
+        createDate: replay.createDate,
+        updateDate: replay.updateDate,
+        isDeleted: replay.isDeleted,
+      });
 
     return newReplay[0];
+  }
+
+  /**
+   * @desc 길드별 리플레이 목록 조회 (최신순, 페이지네이션)
+   */
+  public async findReplaysByGuild(guildId: string, page: number = 1, limit: number = 10) {
+    const offset = (page - 1) * limit;
+
+    const result = await db
+      .select({
+        id: replay.id,
+        replayCode: replay.replayCode,
+        fileName: replay.fileName,
+        gameType: replay.gameType,
+        season: replay.season,
+        patchVersion: replay.patchVersion,
+        createUser: replay.createUser,
+        guildId: replay.guildId,
+        createDate: replay.createDate,
+      })
+      .from(replay)
+      .where(and(eq(replay.guildId, guildId), eq(replay.isDeleted, false)))
+      .orderBy(desc(replay.createDate))
+      .limit(limit)
+      .offset(offset);
+
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(replay)
+      .where(and(eq(replay.guildId, guildId), eq(replay.isDeleted, false)));
+
+    const totalCount = countResult[0]?.count || 0;
+
+    return { result, totalCount };
   }
 
   /**
