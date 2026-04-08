@@ -341,3 +341,68 @@ export const systemConfig = pgTable('system_config', {
 
 export type SystemConfig = typeof systemConfig.$inferSelect;
 export type InsertSystemConfig = typeof systemConfig.$inferInsert;
+
+// --- 팀 관리 ---
+export const team = pgTable('team', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  teamCode: varchar('team_code', { length: 64 })
+    .generatedAlwaysAs(sql`'TM_' || lpad(id::text, 6, '0')`)
+    .notNull()
+    .unique(),
+  name: varchar('name', { length: 128 }).notNull(),
+  guildId: varchar('guild_id', { length: 128 })
+    .notNull()
+    .references(() => guild.id),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type Team = typeof team.$inferSelect;
+export type InsertTeam = typeof team.$inferInsert;
+
+export const teamMember = pgTable(
+  'team_member',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    teamId: integer('team_id')
+      .notNull()
+      .references(() => team.id),
+    playerCode: varchar('player_code', { length: 64 })
+      .notNull()
+      .references(() => riotAccount.playerCode),
+    position: varchar('position', { length: 16 }),
+    isActive: boolean('is_active').notNull().default(true),
+    joinDate: timestamp('join_date', { withTimezone: true }).notNull().defaultNow(),
+    leaveDate: timestamp('leave_date', { withTimezone: true }),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (table) => [unique('uq_team_member_active').on(table.teamId, table.playerCode)],
+);
+
+export type TeamMember = typeof teamMember.$inferSelect;
+export type InsertTeamMember = typeof teamMember.$inferInsert;
+
+// --- 팀 relations ---
+export const teamRelations = relations(team, ({ many }) => ({
+  members: many(teamMember),
+}));
+
+export const teamMemberRelations = relations(teamMember, ({ one }) => ({
+  team: one(team, {
+    fields: [teamMember.teamId],
+    references: [team.id],
+  }),
+  riotAccount: one(riotAccount, {
+    fields: [teamMember.playerCode],
+    references: [riotAccount.playerCode],
+  }),
+}));
