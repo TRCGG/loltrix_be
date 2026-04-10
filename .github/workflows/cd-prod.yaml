@@ -1,0 +1,57 @@
+name: CD (prod)
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: cd-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm swagger
+      - run: pnpm build
+
+      - name: Prepare artifacts
+        run: |
+          zip -r dist.zip dist
+          cp src/swagger-output.json ./swagger-output.json
+
+      - name: Upload to prod server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PROD_SSH_HOST }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: ${{ secrets.PROD_SSH_PORT || 22 }}
+          source: "dist.zip,package.json,swagger-output.json,deploy.sh"
+          target: "/home/gtrix/gtrix/gmok"
+
+      - name: Run deploy script on prod server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_SSH_HOST }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: ${{ secrets.PROD_SSH_PORT || 22 }}
+          script: |
+            cd /home/gtrix/gtrix/gmok
+            chmod +x deploy.sh
+            bash deploy.sh

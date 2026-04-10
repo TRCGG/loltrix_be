@@ -1,0 +1,57 @@
+name: CD (dev)
+
+on:
+  push:
+    branches: [dev]
+
+concurrency:
+  group: cd-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: development
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm swagger
+      - run: pnpm build
+
+      - name: Prepare artifacts
+        run: |
+          zip -r dist.zip dist
+          cp src/swagger-output.json ./swagger-output.json
+
+      - name: Upload to dev server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.DEV_SSH_USER }}
+          key: ${{ secrets.DEV_SSH_KEY }}
+          port: ${{ secrets.DEV_SSH_PORT || 22 }}
+          source: "dist.zip,package.json,swagger-output.json,deploy.sh"
+          target: "/home/gtrix/gtrix/loltrix"
+
+      - name: Run deploy script on dev server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.DEV_SSH_USER }}
+          key: ${{ secrets.DEV_SSH_KEY }}
+          port: ${{ secrets.DEV_SSH_PORT || 22 }}
+          script: |
+            cd /home/gtrix/gtrix/loltrix
+            chmod +x deploy.sh
+            bash deploy.sh
