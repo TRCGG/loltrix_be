@@ -3,6 +3,7 @@ import { z } from 'zod';
 import multer from 'multer';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { verifyAuth } from '../middlewares/authHandler.js';
+import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 import { requireUploadPermission } from '../middlewares/requireRole.js';
 
 import { createReplay, getReplayList, webCreateReplay } from '../controllers/replay.controller.js';
@@ -82,6 +83,7 @@ router.get(
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (기본값: 1)', required: false }
     #swagger.parameters['limit'] = { in: 'query', description: '조회 개수 (1~10, 기본값: 10)', required: false }
   */
+  decodeGuildIdMiddleware,
   validateRequest(getReplayListSchema),
   getReplayList,
 );
