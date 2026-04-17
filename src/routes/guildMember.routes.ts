@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
+import { requireGuildRole } from '../middlewares/requireRole.js';
 import {
   searchGuildMembers,
   linkSubAccount,
@@ -163,12 +164,14 @@ router.get(
 /**
  * @route PUT /api/guildMember/status
  * @desc 길드 멤버 상태 변경 (활동 1 / 탈퇴 2) - 부캐 포함 일괄 처리
+ * @access guildManager 이상 (admin bypass)
  */
 router.put(
   '/status',
   /* #swagger.tags = ['GuildMember']
     #swagger.summary = '멤버 상태 변경'
-    #swagger.description = '멤버와 연결된 부계정의 상태를 일괄 변경합니다. (1: 활동, 2: 탈퇴)'
+    #swagger.description = '멤버와 연결된 부계정의 상태를 일괄 변경합니다. (1: 활동, 2: 탈퇴) (guildManager 이상 권한 필요)'
+    #swagger.security = [{ "session": [] }]
     #swagger.parameters['body'] = {
       in: 'body',
       description: '상태 변경 정보',
@@ -181,6 +184,7 @@ router.put(
       }
     }
   */
+  requireGuildRole('guildManager', { from: 'body', key: 'guildId' }),
   validateRequest(updateMemberStatusSchema),
   updateMemberStatus,
 );
@@ -188,12 +192,14 @@ router.put(
 /**
  * @route DELETE /api/guildMember/sub-account
  * @desc 부계정 연결 해제 (Hard Delete)
+ * @access guildManager 이상 (admin bypass)
  */
 router.delete(
   '/sub-account',
   /* #swagger.tags = ['GuildMember']
     #swagger.summary = '부계정 연결 해제'
-    #swagger.description = '부계정이 본계정과의 연결을 해제합니다.'
+    #swagger.description = '부계정이 본계정과의 연결을 해제합니다. (guildManager 이상 권한 필요)'
+    #swagger.security = [{ "session": [] }]
     #swagger.requestBody = {
       required: true,
       content: {
@@ -210,6 +216,7 @@ router.delete(
       }
     }
   */
+  requireGuildRole('guildManager', { from: 'body', key: 'guildId' }),
   validateRequest(removeSubAccountSchema),
   removeSubAccount,
 );

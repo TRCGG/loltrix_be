@@ -1,22 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import { DiscordAuthService } from '../services/discordAuth.service.js';
 import { BusinessError } from '../types/error.js';
+import { getCookieOptions } from '../utils/cookieOptions.js';
 
 const discordAuthService = new DiscordAuthService();
 const botSecret = process.env.DISCORD_BOT_SECRET;
 const LOCALHOST_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
-const cookieOptions = {
-  domain: '.gmok.kr',
-  path: '/',
-  secure: true,
-  httpOnly: true,
-  sameSite: 'none' as const,
-};
-
 export interface AuthRequest extends Request {
   discordMemberId?: string;
   accessToken?: string;
+  isBot?: boolean;
 }
 
 /**
@@ -55,6 +49,7 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
       if (botHeader !== botSecret) {
         throw new BusinessError('Invalid bot secret', 403, { isLoggable: true });
       }
+      req.isBot = true;
       return next();
     }
 
@@ -83,6 +78,7 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
     return next();
   } catch (error) {
     if (error instanceof BusinessError && error.status === 401) {
+      const cookieOptions = await getCookieOptions();
       res.clearCookie('session_uid', cookieOptions);
     }
     return next(error);

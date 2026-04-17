@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
+import { requireAdmin } from '../middlewares/requireRole.js';
 import {
   createGuild,
   getGuildById,
@@ -83,13 +84,14 @@ const deleteGuildSchema = z.object({
 /**
  * @route POST /api/guilds
  * @desc 새로운 길드 생성
- * @access Public
+ * @access adminNormal 이상
  */
 router.post(
   '/',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '새 길드 생성'
-    #swagger.description = '새로운 길드를 등록합니다.'
+    #swagger.description = '새로운 길드를 등록합니다. (adminNormal 이상 권한 필요)'
+    #swagger.security = [{ "session": [] }]
     #swagger.parameters['body'] = {
       in: 'body',
       description: '길드 정보',
@@ -101,6 +103,7 @@ router.post(
       }
     }
   */
+  requireAdmin('adminNormal'),
   validateRequest(createGuildSchema),
   createGuild,
 );
@@ -124,13 +127,14 @@ router.get(
 /**
  * @route PUT /api/guilds/:id
  * @desc Guild ID로 길드 수정
- * @access Public
+ * @access adminNormal 이상
  */
 router.put(
   '/:id',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '길드 정보 수정'
-    #swagger.description = '길드 이름, 언어 코드, 삭제 여부 등을 수정합니다.'
+    #swagger.description = '길드 이름, 언어 코드, 삭제 여부 등을 수정합니다. (adminNormal 이상 권한 필요)'
+    #swagger.security = [{ "session": [] }]
     #swagger.parameters['id'] = { description: '수정할 Guild ID' }
     #swagger.parameters['body'] = {
       in: 'body',
@@ -142,6 +146,7 @@ router.put(
       }
     }
   */
+  requireAdmin('adminNormal'),
   validateRequest(updateGuildSchema),
   updateGuild,
 );
@@ -167,15 +172,17 @@ router.get(
 /**
  * @route DELETE /api/guilds/:id
  * @desc Guild ID로 길드 삭제 (소프트 삭제)
- * @access Public
+ * @access adminNormal 이상
  */
 router.delete(
   '/:id',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '길드 삭제'
-    #swagger.description = '길드 ID를 이용하여 길드를 소프트 삭제(isDeleted=true) 처리합니다.'
+    #swagger.description = '길드 ID를 이용하여 길드를 소프트 삭제(isDeleted=true) 처리합니다. (adminNormal 이상 권한 필요)'
+    #swagger.security = [{ "session": [] }]
     #swagger.parameters['id'] = { description: '삭제할 Guild ID' }
   */
+  requireAdmin('adminNormal'),
   validateRequest(deleteGuildSchema),
   deleteGuild,
 );

@@ -8,6 +8,7 @@ import {
   boolean,
   integer,
   uuid,
+  unique,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 
@@ -15,6 +16,7 @@ export const guild = pgTable('guild', {
   id: varchar('id', { length: 128 }).primaryKey(),
   name: varchar('name', { length: 128 }).notNull(),
   languageCode: varchar('language_code', { length: 10 }).notNull().default('ko'),
+  allowAllUploads: boolean('allow_all_uploads').notNull().default(false),
   createDate: timestamp('create_date').notNull().defaultNow(),
   updateDate: timestamp('update_date')
     .defaultNow()
@@ -45,6 +47,7 @@ export const replay = pgTable('replay', {
   hashData: varchar('hash_data', { length: 128 }).notNull(),
   gameType: char('game_type', { length: 1 }).notNull().default('1'),
   season: varchar('season', { length: 32 }).notNull(),
+  patchVersion: varchar('patch_version', { length: 32 }),
   createUser: varchar('create_user', { length: 255 }).notNull(),
   guildId: varchar('guild_id', { length: 128 })
     .notNull()
@@ -301,3 +304,40 @@ export const riotAccountRelations = relations(riotAccount, ({ many }) => ({
   // 하나의 RiotAccount는 여러 GuildMember에 속할 수 있음
   guildMembers: many(guildMember),
 }));
+
+/**
+ * 멤버 권한 테이블
+ * - adminNormal, adminSuper는 guild_id가 null (전역 권한)
+ * - 나머지는 guild_id 필수 (길드 스코프 권한)
+ */
+export const discordMemberRole = pgTable(
+  'discord_member_role',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => discordMember.id),
+    role: varchar('role', { length: 32 }).notNull(),
+    guildId: varchar('guild_id', { length: 128 }),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (table) => [unique('uq_member_guild').on(table.memberId, table.guildId)],
+);
+
+export type DiscordMemberRole = typeof discordMemberRole.$inferSelect;
+export type InsertDiscordMemberRole = typeof discordMemberRole.$inferInsert;
+
+export const systemConfig = pgTable('system_config', {
+  key: varchar('key', { length: 128 }).primaryKey(),
+  value: text('value').notNull(),
+  description: text('description'),
+  updateDate: timestamp('update_date', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type SystemConfig = typeof systemConfig.$inferSelect;
+export type InsertSystemConfig = typeof systemConfig.$inferInsert;

@@ -3,31 +3,29 @@ import { Request, Response, NextFunction } from 'express';
 import { DiscordAuthService } from '../services/discordAuth.service.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
-import { GuildMembershipService } from '../services/guildMembership.service.js';
+import { DiscordMemberGuildService } from '../services/discordMemberGuild.service.js';
+import { discordMemberRoleService } from '../services/discordMemberRole.service.js';
 import { DiscordGuildAPIResponse } from '../types/discordAuth.js';
-
-const frontendUrl =
-  process.env.NODE_ENV === 'development' ? 'https://dev.gmok.kr' : 'https://gmok.kr';
+import { systemConfigService } from '../services/systemConfig.service.js';
+import { getCookieOptions } from '../utils/cookieOptions.js';
 
 const discordAuthService = new DiscordAuthService();
-const guildMembershipService = new GuildMembershipService();
+const discordMemberGuildService = new DiscordMemberGuildService();
 
-const cookieOptions = {
-  domain: '.gmok.kr',
-  path: '/',
-  secure: true,
-  httpOnly: true,
-  sameSite: 'none' as const, // 'as const' 추가 (TypeScript)
-};
+async function getFrontendUrl(): Promise<string> {
+  const key = process.env.NODE_ENV === 'development' ? 'FRONTEND_URL_DEV' : 'FRONTEND_URL_PROD';
+  const fallback = process.env.NODE_ENV === 'development' ? 'https://dev.gmok.kr' : 'https://gmok.kr';
+  return systemConfigService.getConfigOrDefault(key, fallback);
+}
 
 /**
  * @route GET /api/auth/login
  * @desc 디스코드 로그인 시작 (디스코드로 리디렉션)
  * @access Public
  */
-export const login = (req: Request, res: Response<void>, next: NextFunction): void => {
+export const login = async (req: Request, res: Response<void>, next: NextFunction): Promise<void> => {
   try {
-    const authorizeUrl = discordAuthService.getDiscordAuthorizeUrl();
+    const authorizeUrl = await discordAuthService.getDiscordAuthorizeUrl();
     res.redirect(authorizeUrl);
   } catch (error) {
     next();
@@ -47,6 +45,7 @@ export const callback = async (
   const { code, error } = req.query;
 
   if (error === 'access_denied') {
+    const frontendUrl = await getFrontendUrl();
     return res.redirect(frontendUrl);
   }
 
@@ -61,6 +60,7 @@ export const callback = async (
       (req.ip || req.connection.remoteAddress) as string,
     );
 
+    const [frontendUrl, cookieOptions] = await Promise.all([getFrontendUrl(), getCookieOptions()]);
     res.cookie('session_uid', sessionUid, cookieOptions);
     return res.redirect(frontendUrl);
   } catch (err) {
@@ -76,6 +76,7 @@ export const callback = async (
 export const logout = async (req: Request, res: Response<void>) => {
   try {
     const sessionUid = req.cookies.session_uid;
+    const [frontendUrl, cookieOptions] = await Promise.all([getFrontendUrl(), getCookieOptions()]);
     res.clearCookie('session_uid', cookieOptions);
 
     if (sessionUid) {
@@ -85,6 +86,7 @@ export const logout = async (req: Request, res: Response<void>) => {
     return res.redirect(frontendUrl);
   } catch (error) {
     console.error('error during logout process', error);
+    const [frontendUrl, cookieOptions] = await Promise.all([getFrontendUrl(), getCookieOptions()]);
     res.clearCookie('session_uid', cookieOptions);
     return res.redirect(frontendUrl);
   }
@@ -98,14 +100,15 @@ export const logout = async (req: Request, res: Response<void>) => {
 export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuildAPIResponse>) => {
   try {
     // 1. 유저 요청 처리
-    const { accessToken } = req;
+    const { accessToken, discordMemberId } = req;
 
-    if (!accessToken) {
+    if (!accessToken || !discordMemberId) {
       throw new SystemError('Access token not found after auth middleware');
     }
 
-    // 2. guilds
-    const guildsData = await guildMembershipService.findUserGmokGuilds(accessToken);
+    // 2. 활성 권한 조회 후 guilds 조회
+    const activeRoles = await discordMemberRoleService.getActiveRoles(discordMemberId);
+    const guildsData = await discordMemberGuildService.findUserGmokGuilds(accessToken, activeRoles);
     res.status(200).json({
       status: 'success',
       message: 'gmok Guilds find successfully',

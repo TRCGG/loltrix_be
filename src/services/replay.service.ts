@@ -1,16 +1,11 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { get } from 'https';
 import { createHash } from 'crypto';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { replay } from '../database/schema.js';
 import { ReplayFileRequest } from '../types/replay.js';
 import { BusinessError, SystemError } from '../types/error.js';
-
-// 시즌
-const season = process.env.LOL_SEASON || 'error_season';
-
-// [추가] 리플레이 파일 최대 크기 제한 (25MB)
-const MAX_REPLAY_FILE_SIZE = 25 * 1024 * 1024;
+import { systemConfigService } from './systemConfig.service.js';
 
 /**
  * @desc 리플레이 파일 서비스
@@ -19,7 +14,7 @@ export class ReplayService {
   /**
    * @desc 주어진 데이터를 사용하여 SHA-256 해시를 생성
    */
-  private generateHash = (data: string | Buffer): string => {
+  public generateHash = (data: string | Buffer): string => {
     return createHash('sha256').update(data).digest('hex');
   };
 
@@ -27,7 +22,7 @@ export class ReplayService {
    * @desc 파일의 해시값과 길드 ID가 일치하는 중복 레코드의 존재 여부를 확인
    * @returns 중복된 레코드가 존재하면 true, 존재하지 않으면 false
    */
-  private async checkDuplicateByHash(hashData: string, guildId: string): Promise<boolean> {
+  public async checkDuplicateByHash(hashData: string, guildId: string): Promise<boolean> {
     const result = await db
       .select({ id: replay.id })
       .from(replay)
@@ -47,15 +42,17 @@ export class ReplayService {
    * @desc 디스코드 파일 데이터 가져오기 (메모리 제한 적용)
    */
   private async getInputStreamDiscordFile(fileUrl: string): Promise<Buffer> {
+    const maxFileSize = await systemConfigService.getNumberConfig('MAX_REPLAY_FILE_SIZE', 52428800);
+
     return new Promise((resolve, reject) => {
       get(fileUrl, (res) => {
         // [1차 방어] Content-Length 헤더 확인 (제공되는 경우)
         const contentLength = res.headers['content-length'];
-        if (contentLength && parseInt(contentLength, 10) > MAX_REPLAY_FILE_SIZE) {
+        if (contentLength && parseInt(contentLength, 10) > maxFileSize) {
           res.destroy();
           return reject(
             new BusinessError(
-              `File too large. Max size is ${MAX_REPLAY_FILE_SIZE / 1024 / 1024}MB`,
+              `File too large. Max size is ${maxFileSize / 1024 / 1024}MB`,
               413,
               { isLoggable: false },
             ),
@@ -69,11 +66,11 @@ export class ReplayService {
           currentSize += chunk.length;
 
           // [2차 방어] 다운로드 도중 실시간 크기 체크
-          if (currentSize > MAX_REPLAY_FILE_SIZE) {
+          if (currentSize > maxFileSize) {
             res.destroy();
             return reject(
               new BusinessError(
-                `File stream exceeded max size of ${MAX_REPLAY_FILE_SIZE} bytes`,
+                `File stream exceeded max size of ${maxFileSize} bytes`,
                 413,
                 { isLoggable: true },
               ),
@@ -135,7 +132,24 @@ export class ReplayService {
   /**
    * @desc 리플레이 데이터 파싱
    */
-  private async parseReplayData(byte: Buffer): Promise<string> {
+  public async parseReplayData(byte: Buffer): Promise<{ patchVersion: string; stats: any[] }> {
+
+    // 1) 헤더에서 패치 버전 추출
+    let patchVersion = 'unknown';
+    try {
+      const versionLength = byte[0x0e];
+      if (versionLength > 0) {
+        const gameVersion = byte.subarray(0x0f, 0x0f + versionLength).toString('ascii');
+        const [major, minor] = gameVersion.split('.');
+        if (major && minor) {
+          patchVersion = `${major}.${minor}`;
+        }
+      }
+    } catch {
+      console.warn('Failed to extract patch version from replay header');
+    }
+
+    // 2) JSON 스탯 데이터 파싱
     const byteString = byte.toString('utf-8');
     const startIndex = byteString.indexOf('{"gameLength":');
     const endIndex = byteString.lastIndexOf('"}');
@@ -150,7 +164,7 @@ export class ReplayService {
       const rootNode = JSON.parse(data);
       const statsArray = rootNode.statsJson;
 
-      return JSON.stringify(statsArray);
+      return { patchVersion, stats: statsArray };
     } catch (error) {
       console.error('Error parsing replay data', error);
       throw new SystemError('replay error while parsing data');
@@ -167,19 +181,31 @@ export class ReplayService {
     const fileBuffer = await this.getInputStreamDiscordFile(fileUrl);
 
     // 2. 파일 파싱
-    const rawDataString = await this.parseReplayData(fileBuffer);
-    const rawDataes = JSON.parse(rawDataString);
+    const parsed = await this.parseReplayData(fileBuffer);
 
-    return rawDataes;
+    return { rawData: parsed.stats, patchVersion: parsed.patchVersion };
   }
 
   /**
    * @desc 리플레이 저장
    * @param {ReplayFileRequest} fileData
    */
-  public async replaySave(fileData: ReplayFileRequest, rawData: any, tx: TransactionType) {
+  /**
+   * @desc .rofl 파일의 magic bytes 검증 (첫 4바이트가 "RIOT"인지 확인)
+   */
+  public validateMagicBytes(buffer: Buffer): boolean {
+    if (buffer.length < 4) return false;
+    return buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x4f && buffer[3] === 0x54;
+  }
+
+  public async replaySave(
+    fileData: ReplayFileRequest | { fileName: string; fileUrl: string; gameType?: string; createUser: string; guildId: string },
+    rawData: any,
+    tx: TransactionType,
+    patchVersion?: string | null,
+  ) {
     const { fileName, fileUrl, gameType, createUser } = fileData;
-    const guildId = fileData.guild.id;
+    const guildId = 'guild' in fileData ? fileData.guild.id : fileData.guildId;
 
     const rawDataString = JSON.stringify(rawData);
     const hashData = this.generateHash(rawDataString);
@@ -190,6 +216,7 @@ export class ReplayService {
     }
 
     const replayCode = await this.generateReplayCode(fileName);
+    const season = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
 
     const newReplay = await tx
       .insert(replay)
@@ -201,12 +228,61 @@ export class ReplayService {
         hashData,
         gameType: gameType ?? '1',
         season,
+        patchVersion: patchVersion ?? undefined,
         createUser,
         guildId,
       })
-      .returning();
+      .returning({
+        id: replay.id,
+        replayCode: replay.replayCode,
+        fileName: replay.fileName,
+        fileUrl: replay.fileUrl,
+        hashData: replay.hashData,
+        gameType: replay.gameType,
+        season: replay.season,
+        patchVersion: replay.patchVersion,
+        createUser: replay.createUser,
+        guildId: replay.guildId,
+        createDate: replay.createDate,
+        updateDate: replay.updateDate,
+        isDeleted: replay.isDeleted,
+      });
 
     return newReplay[0];
+  }
+
+  /**
+   * @desc 길드별 리플레이 목록 조회 (최신순, 페이지네이션)
+   */
+  public async findReplaysByGuild(guildId: string, page: number = 1, limit: number = 10) {
+    const offset = (page - 1) * limit;
+
+    const result = await db
+      .select({
+        id: replay.id,
+        replayCode: replay.replayCode,
+        fileName: replay.fileName,
+        gameType: replay.gameType,
+        season: replay.season,
+        patchVersion: replay.patchVersion,
+        createUser: replay.createUser,
+        guildId: replay.guildId,
+        createDate: replay.createDate,
+      })
+      .from(replay)
+      .where(and(eq(replay.guildId, guildId), eq(replay.isDeleted, false)))
+      .orderBy(desc(replay.createDate))
+      .limit(limit)
+      .offset(offset);
+
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(replay)
+      .where(and(eq(replay.guildId, guildId), eq(replay.isDeleted, false)));
+
+    const totalCount = countResult[0]?.count || 0;
+
+    return { result, totalCount };
   }
 
   /**

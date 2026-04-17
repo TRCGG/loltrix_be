@@ -7,9 +7,7 @@ import {
   champion,
   guildMember,
 } from '../database/schema.js';
-
-const envLoLSeason = process.env.LOL_SEASON || '2026';
-const statsMinGameCount = Number(process.env.STATS_MIN_GAME_COUNT || 20);
+import { systemConfigService } from './systemConfig.service.js';
 
 export class StatisticsService {
   private getStatSqlChunks() {
@@ -54,11 +52,14 @@ export class StatisticsService {
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
 
-    // 날짜 조건
-    const dateCondition = and(
-      year ? sql`TO_CHAR(${customMatch.createDate}, 'YYYY') = ${year}` : undefined,
-      month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
-    );
+    // 날짜 조건: year/month 지정 시 해당 월 필터, 미지정 시 오늘로부터 1개월 전 같은 날 이후
+    const dateCondition =
+      year || month
+        ? and(
+            year ? sql`TO_CHAR(${customMatch.createDate}, 'YYYY') = ${year}` : undefined,
+            month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
+          )
+        : sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
 
     const shouldGroupByPosition = !!position;
 
@@ -70,6 +71,7 @@ export class StatisticsService {
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
 
     // 시즌 조건
+    const envLoLSeason = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
     let seasonCondition;
     if (season === 'ALL') {
       seasonCondition = undefined;
@@ -80,6 +82,7 @@ export class StatisticsService {
     }
 
     // 최소게임 조건 (승률)
+    const statsMinGameCount = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
     const minGameCount = sortBy === 'winRate' ? statsMinGameCount : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;
 
@@ -164,11 +167,14 @@ export class StatisticsService {
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
 
-    // 날짜조건
-    const dateCondition = and(
-      year ? sql`TO_CHAR(${customMatch.createDate}, 'YYYY') = ${year}` : undefined,
-      month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
-    );
+    // 날짜조건: year/month 지정 시 해당 월 필터, 미지정 시 오늘로부터 1개월 전 같은 날 이후
+    const dateCondition =
+      year || month
+        ? and(
+            year ? sql`TO_CHAR(${customMatch.createDate}, 'YYYY') = ${year}` : undefined,
+            month ? sql`TO_CHAR(${customMatch.createDate}, 'MM') = ${month.padStart(2, '0')}` : undefined,
+          )
+        : sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
 
     const shouldGroupByPosition = !!position;
 
@@ -177,16 +183,18 @@ export class StatisticsService {
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
 
     // 시즌 조건
+    const envLoLSeason2 = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
     let seasonCondition;
     if (season === 'ALL') {
       seasonCondition = undefined;
     } else if (season) {
       seasonCondition = eq(customMatch.season, season);
     } else {
-      seasonCondition = eq(customMatch.season, envLoLSeason);
+      seasonCondition = eq(customMatch.season, envLoLSeason2);
     }
     // 최소게임 조건 (승률)
-    const minGameCount = sortBy === 'winRate' ? statsMinGameCount : 0;
+    const statsMinGameCount2 = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
+    const minGameCount = sortBy === 'winRate' ? statsMinGameCount2 : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;
 
     // 정렬 조건

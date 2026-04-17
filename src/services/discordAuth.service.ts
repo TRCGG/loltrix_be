@@ -10,14 +10,14 @@ import {
   DiscordTokenAPI,
 } from '../types/discordAuth.js';
 import { BusinessError, SystemError } from '../types/error.js';
+import { discordMemberRoleService } from './discordMemberRole.service.js';
+import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
+import { systemConfigService } from './systemConfig.service.js';
 
 const discordApiBaseUrl = 'https://discord.com/api';
-const scopes = ['identify', 'guilds'];
 const clientId = process.env.DISCORD_CLIENT_ID;
 const clientSecret = process.env.DISCORD_CLIENT_SECRET;
 const redirectUri = process.env.DISCORD_REDIRECT_URI;
-
-const DISCORD_API_TIMEOUT = 10000;
 
 /**
  * @desc 최초 로그인 시 토큰 포맷
@@ -53,45 +53,20 @@ function formatRefreshedToken(tokenData: DiscordTokenAPI, oldRefreshToken: strin
  * @desc discord API 호출 및 DB 작업 처리
  */
 export class DiscordAuthService {
-  /**
-   * @desc 타임아웃이 적용된 Fetch 헬퍼 메서드
-   */
-  private async fetchWithTimeout(
-    url: string,
-    options: RequestInit,
-    timeout: number = DISCORD_API_TIMEOUT,
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-      });
-      return response;
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        throw new SystemError(`Discord API Request Timed out after ${timeout}ms`, 504);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
   // --- 1. Public Methods (컨트롤러에서 호출) ---
 
   /**
    * @desc Discord OAuth2 인증 URL 생성 (로그인용)
    */
-  public getDiscordAuthorizeUrl(): string {
+  public async getDiscordAuthorizeUrl(): Promise<string> {
     try {
+      const scopes = await systemConfigService.getListConfig('DISCORD_OAUTH_SCOPES');
+      const scopeStr = scopes.length > 0 ? scopes.join(' ') : 'identify guilds guilds.members.read';
       const authorizeUrl = `${discordApiBaseUrl}/oauth2/authorize?${querystring.stringify({
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
-        scope: scopes.join(' '),
+        scope: scopeStr,
       })}`;
       return authorizeUrl;
     } catch (error) {
@@ -111,7 +86,7 @@ export class DiscordAuthService {
   ): Promise<string> {
     try {
       // 1. Discord API로 토큰 요청
-      const tokenResult = await this.fetchWithTimeout(`${discordApiBaseUrl}/oauth2/token`, {
+      const tokenResult = await fetchWithTimeout(`${discordApiBaseUrl}/oauth2/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: querystring.stringify({
@@ -130,7 +105,7 @@ export class DiscordAuthService {
       const { access_token, token_type } = tokenData;
 
       // 2. Discord API로 유저 정보 요청
-      const userResult = await this.fetchWithTimeout(`${discordApiBaseUrl}/users/@me`, {
+      const userResult = await fetchWithTimeout(`${discordApiBaseUrl}/users/@me`, {
         headers: { Authorization: `${token_type} ${access_token}` },
       });
 
@@ -161,6 +136,9 @@ export class DiscordAuthService {
         { ...formattedToken, id: userData.id },
         newAuthData,
       );
+
+      // 5. 최초 로그인 시 기본 권한 삽입 (트랜잭션 외부)
+      await discordMemberRoleService.insertDefaultRolesIfNotExists(userData.id, access_token);
 
       return sessionUid;
     } catch (error) {
@@ -200,48 +178,11 @@ export class DiscordAuthService {
   }
 
   /**
-   * @desc Discord API로 사용자의 길드 목록 조회 (Get Data)
-   */
-  public async fetchUserGuilds(accessToken: string) {
-    try {
-      const userGuildsResult = await this.fetchWithTimeout(
-        `${discordApiBaseUrl}/users/@me/guilds`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
-      );
-
-      if (!userGuildsResult.ok) {
-        throw new SystemError('Failed to fetch Discord guilds', 500);
-      }
-
-      const fullGuilds: any[] = await userGuildsResult.json();
-
-      const minimalGuilds = fullGuilds.map((guild) => {
-        return {
-          id: guild.id,
-          name: guild.name,
-          icon: guild.icon,
-          banner: guild.banner,
-        };
-      });
-
-      return minimalGuilds;
-    } catch (error) {
-      console.error('fetchUserGuilds service error', error);
-      if (error instanceof SystemError) throw error;
-      throw new SystemError('Failed to get guilds', 500);
-    }
-  }
-
-  /**
    * @desc Discord API로 사용자 정보 조회
    */
   public async fetchUser(accessToken: string) {
     try {
-      const userResult = await this.fetchWithTimeout(`${discordApiBaseUrl}/users/@me`, {
+      const userResult = await fetchWithTimeout(`${discordApiBaseUrl}/users/@me`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -313,6 +254,7 @@ export class DiscordAuthService {
     }
   }
 
+
   /**
    * @desc Discord 토큰 재발급 및 DB 저장 (비공개)
    */
@@ -321,7 +263,7 @@ export class DiscordAuthService {
     currentToken: DiscordToken,
   ): Promise<string> {
     try {
-      const result = await this.fetchWithTimeout(`${discordApiBaseUrl}/oauth2/token`, {
+      const result = await fetchWithTimeout(`${discordApiBaseUrl}/oauth2/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: querystring.stringify({
@@ -353,7 +295,7 @@ export class DiscordAuthService {
    */
   private async revokeDiscordToken(accessToken: string): Promise<void> {
     try {
-      const result = await this.fetchWithTimeout(`${discordApiBaseUrl}/oauth2/token/revoke`, {
+      const result = await fetchWithTimeout(`${discordApiBaseUrl}/oauth2/token/revoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: querystring.stringify({
