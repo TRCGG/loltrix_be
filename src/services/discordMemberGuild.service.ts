@@ -23,6 +23,7 @@ export class DiscordMemberGuildService {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
+      // TODO: Discord 길드 목록 조회 실패 시 실제 응답 상세를 error_log에 남기도록 로깅 보강
       if (!result.ok) {
         throw new SystemError('Failed to fetch Discord guilds', 500);
       }

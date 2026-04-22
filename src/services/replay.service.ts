@@ -89,6 +89,7 @@ export class ReplayService {
           resolve(buffer);
         });
       }).on('error', (err) => {
+        // TODO: 외부 파일 다운로드 실패 시 URL 식별 정보와 원본 에러 메시지를 error_log에서 추적 가능하도록 로깅 보강
         console.error('Error getInputStreaming replay file', err);
         reject(new SystemError('Replay error while downloading file', 500));
       });

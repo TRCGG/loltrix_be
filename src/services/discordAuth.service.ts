@@ -98,6 +98,7 @@ export class DiscordAuthService {
         }),
       });
 
+      // TODO: Discord OAuth 토큰 발급 실패 시 status/statusText/body를 SystemError.message에 담아 error_log에 저장
       if (!tokenResult.ok) {
         throw new SystemError('Failed to fetch discord token', 500);
       }
@@ -109,6 +110,7 @@ export class DiscordAuthService {
         headers: { Authorization: `${token_type} ${access_token}` },
       });
 
+      // TODO: Discord 사용자 정보 조회 실패 시 실제 응답 상세를 error_log에서 추적 가능하도록 로깅 보강
       if (!userResult.ok) {
         throw new SystemError('Failed to fetch discord user', 500);
       }
@@ -274,6 +276,7 @@ export class DiscordAuthService {
         }),
       });
 
+      // TODO: Discord 토큰 갱신 실패 시 status/statusText/body를 포함한 상세 원인 로깅 추가
       if (!result.ok) {
         throw new BusinessError('Failed to refresh session. Please log in again.', 401);
       }
