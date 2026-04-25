@@ -1,10 +1,7 @@
 import { eq, and, or, isNull } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
-import { discordMemberRole } from '../database/schema.js';
+import { DiscordMemberRole, discordMemberRole } from '../database/schema.js';
 import { ADMIN_ROLES, Role } from '../types/role.js';
-import { DiscordMemberGuildService } from './discordMemberGuild.service.js';
-
-const discordMemberGuildService = new DiscordMemberGuildService();
 
 /**
  * @desc discord_member_role DB 조작 서비스
@@ -37,29 +34,28 @@ export class DiscordMemberRoleService {
   }
 
   /**
-   * @desc 로그인 시 기본 권한(userNormal) 삽입
-   * - 이미 권한이 있는 길드는 스킵
-   * - 권한이 없는 길드에만 userNormal 삽입
+   * @desc 가입한 Gmok 길드 중 권한이 없는 길드에 기본 권한(userNormal) 삽입
    */
-  public async insertDefaultRolesIfNotExists(memberId: string, accessToken: string): Promise<void> {
-    const gmokGuilds = await discordMemberGuildService.findUserGmokGuilds(accessToken, []);
+  public async ensureDefaultRolesForGuilds(
+    memberId: string,
+    guildIds: string[],
+    activeRoles: DiscordMemberRole[],
+  ): Promise<DiscordMemberRole[]> {
+    const isAdmin = activeRoles.some((r) => ADMIN_ROLES.includes(r.role as Role));
+    if (isAdmin) return activeRoles;
 
-    if (gmokGuilds.length === 0) return;
+    const uniqueGuildIds = [...new Set(guildIds)];
+    const existingGuildIds = new Set(activeRoles.map((r) => r.guildId));
+    const missingGuildIds = uniqueGuildIds.filter((guildId) => !existingGuildIds.has(guildId));
 
-    const existing = await this.getActiveRoles(memberId);
+    if (missingGuildIds.length === 0) return activeRoles;
 
-    // Admin 권한이 있으면 길드별 userNormal 삽입 불필요
-    const isAdmin = existing.some((r) => ADMIN_ROLES.includes(r.role as Role));
-    if (isAdmin) return;
+    await db
+      .insert(discordMemberRole)
+      .values(missingGuildIds.map((guildId) => ({ memberId, role: 'userNormal', guildId })))
+      .onConflictDoNothing();
 
-    const existingGuildIds = new Set(existing.map((r) => r.guildId));
-    const newGuilds = gmokGuilds.filter((g) => !existingGuildIds.has(g.id));
-
-    if (newGuilds.length === 0) return;
-
-    await db.insert(discordMemberRole).values(
-      newGuilds.map((g) => ({ memberId, role: 'userNormal', guildId: g.id })),
-    );
+    return this.getActiveRoles(memberId);
   }
 }
 

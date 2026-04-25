@@ -42,6 +42,8 @@ export interface DiscordGuildAPI {
   role: Role;
 }
 
+export type DiscordGuildWithoutRole = Omit<DiscordGuildAPI, 'role'>;
+
 // Discord API Guild 응답 타입
 export interface DiscordGuildAPIResponse {
   status: 'success' | 'error';
