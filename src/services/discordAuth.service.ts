@@ -10,7 +10,6 @@ import {
   DiscordTokenAPI,
 } from '../types/discordAuth.js';
 import { BusinessError, SystemError } from '../types/error.js';
-import { discordMemberRoleService } from './discordMemberRole.service.js';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 import { systemConfigService } from './systemConfig.service.js';
 
@@ -136,9 +135,6 @@ export class DiscordAuthService {
         { ...formattedToken, id: userData.id },
         newAuthData,
       );
-
-      // 5. 최초 로그인 시 기본 권한 삽입 (트랜잭션 외부)
-      await discordMemberRoleService.insertDefaultRolesIfNotExists(userData.id, access_token);
 
       return sessionUid;
     } catch (error) {

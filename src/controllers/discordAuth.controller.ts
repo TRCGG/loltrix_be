@@ -5,9 +5,10 @@ import { BusinessError, SystemError } from '../types/error.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
 import { DiscordMemberGuildService } from '../services/discordMemberGuild.service.js';
 import { discordMemberRoleService } from '../services/discordMemberRole.service.js';
-import { DiscordGuildAPIResponse } from '../types/discordAuth.js';
+import { DiscordGuildAPI, DiscordGuildAPIResponse } from '../types/discordAuth.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
 import { getCookieOptions } from '../utils/cookieOptions.js';
+import { ADMIN_ROLES, Role } from '../types/role.js';
 
 const discordAuthService = new DiscordAuthService();
 const discordMemberGuildService = new DiscordMemberGuildService();
@@ -108,7 +109,20 @@ export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuild
 
     // 2. 활성 권한 조회 후 guilds 조회
     const activeRoles = await discordMemberRoleService.getActiveRoles(discordMemberId);
-    const guildsData = await discordMemberGuildService.findUserGmokGuilds(accessToken, activeRoles);
+    const isAdmin = activeRoles.some((r) => ADMIN_ROLES.includes(r.role as Role));
+    let guildsData: DiscordGuildAPI[];
+
+    if (isAdmin) {
+      guildsData = await discordMemberGuildService.findAdminGmokGuilds(activeRoles);
+    } else {
+      const joinedGmokGuilds = await discordMemberGuildService.findJoinedGmokGuilds(accessToken);
+      const ensuredRoles = await discordMemberRoleService.ensureDefaultRolesForGuilds(
+        discordMemberId,
+        joinedGmokGuilds.map((g) => g.id),
+        activeRoles,
+      );
+      guildsData = discordMemberGuildService.applyRolesToGuilds(joinedGmokGuilds, ensuredRoles);
+    }
     res.status(200).json({
       status: 'success',
       message: 'gmok Guilds find successfully',
