@@ -3,7 +3,7 @@ import { statisticsService } from '../services/statistics.service.js';
 import {
   StatisticsResponse,
   UserGameStatistic,
-  GetStatisticsQuery,
+  StatisticsRequestQuery,
   ChampionStatistic,
 } from '../types/statistics.js';
 
@@ -16,25 +16,26 @@ export const getUserGameStats = async (
     { guildId: string },
     StatisticsResponse<UserGameStatistic>,
     Record<string, never>,
-    GetStatisticsQuery
+    StatisticsRequestQuery
   >,
   res: Response<StatisticsResponse<UserGameStatistic>>,
 ) => {
   try {
     const { guildId } = req.params;
-    const { year, month, championName, position, season, sortBy, page, limit } = req.query;
+    const { datePreset, fromMonth, toMonth, championName, position, season, sortBy, page, limit } =
+      req.query;
 
-    const { result, totalCount } = await statisticsService.getUserGameStatistics(
-      guildId,
-      year,
-      month,
+    const { result, totalCount } = await statisticsService.getUserGameStatistics(guildId, {
+      datePreset,
+      fromMonth,
+      toMonth,
       championName,
       position,
       season,
-      (sortBy as 'totalCount' | 'winRate') || 'totalCount',
-      Number(page) || 1,
-      Number(limit) || 50,
-    );
+      sortBy: (sortBy as 'totalCount' | 'winRate') || 'totalCount',
+      page: Number(page) || 1,
+      limit: Number(limit) || 50,
+    });
 
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
@@ -57,7 +58,7 @@ export const getUserGameStats = async (
 };
 
 /**
- * @desc 챔피언별 통계 조
+ * @desc 챔피언별 통계 조회
  * @route GET /api/statistics/:guildId/champions
  */
 export const getChampionStats = async (
@@ -65,24 +66,24 @@ export const getChampionStats = async (
     { guildId: string },
     StatisticsResponse<ChampionStatistic>,
     Record<string, never>,
-    GetStatisticsQuery
+    StatisticsRequestQuery
   >,
   res: Response<StatisticsResponse<ChampionStatistic>>,
 ) => {
   try {
     const { guildId } = req.params;
-    const { year, month, position, season, sortBy, page, limit } = req.query;
+    const { datePreset, fromMonth, toMonth, position, season, sortBy, page, limit } = req.query;
 
-    const { result, totalCount } = await statisticsService.getChampionStatistics(
-      guildId,
-      year,
-      month,
+    const { result, totalCount } = await statisticsService.getChampionStatistics(guildId, {
+      datePreset,
+      fromMonth,
+      toMonth,
       position,
       season,
-      (sortBy as 'totalCount' | 'winRate') || 'totalCount',
-      Number(page) || 1,
-      Number(limit) || 20,
-    );
+      sortBy: (sortBy as 'totalCount' | 'winRate') || 'totalCount',
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+    });
 
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
