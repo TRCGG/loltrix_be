@@ -104,7 +104,8 @@ export const webCreateReplay = async (
         const parsed = await replayService.parseReplayData(file.buffer);
         rawData = parsed.stats;
         patchVersion = parsed.patchVersion;
-      } catch {
+      } catch (error) {
+        console.error('Web replay parse failed', { fileName, error });
         failed.push({ fileName, reason: 'parse_failed' });
         continue;
       }
@@ -120,7 +121,8 @@ export const webCreateReplay = async (
       try {
         const savedReplay = await replaySaveFacade.webSave(rawData, fileName, guildId, gameType, nick, patchVersion);
         succeeded.push({ fileName, replayCode: savedReplay.replayCode });
-      } catch {
+      } catch (error) {
+        console.error('Web replay save failed', { fileName, guildId, error });
         failed.push({ fileName, reason: 'save_failed' });
       }
     }
