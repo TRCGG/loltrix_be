@@ -43,7 +43,21 @@ const app: express.Application = express();
 app.set('port', process.env.PORT || 3000);
 
 // middlewares
-app.use(morgan('dev')); // HTTP request logger
+app.use(
+  morgan((tokens, req, res) =>
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      type: 'http_request',
+      method: tokens.method(req, res),
+      url: tokens.url(req, res),
+      statusCode: Number(tokens.status(req, res) || 0),
+      responseTimeMs: Number(tokens['response-time'](req, res) || 0),
+      contentLength: Number(tokens.res(req, res, 'content-length') || 0),
+      userAgent: tokens['user-agent'](req, res),
+    }),
+  ),
+); // HTTP request logger
 app.use(helmet()); // Set security-related HTTP headers
 app.use(express.static(path.join(currentDirname, '../loltrix'))); // set static resources
 app.use(express.json()); // Parse JSON request body
