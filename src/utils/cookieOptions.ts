@@ -5,8 +5,8 @@ export async function getCookieOptions() {
   return {
     domain,
     path: '/',
-    secure: true,
+    secure: false,
     httpOnly: true,
-    sameSite: 'none' as const,
+    sameSite: 'lax' as const,
   };
 }

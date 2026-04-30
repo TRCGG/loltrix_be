@@ -65,7 +65,7 @@ app.use(compression()); // Compress all routes
 // Enable CORS
 app.use(
   cors({
-    origin: ['https://gmok.kr', 'https://dev.gmok.kr'],
+    origin: ['http://52.59.124.66:3000', 'http://52-59-124-66.nip.io:3000', 'http://52-59-124-66.nip.io:19901'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: [
