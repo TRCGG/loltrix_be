@@ -4,6 +4,7 @@ import { replayService } from '../services/replay.service.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
 import { customMatchService } from '../services/customMatch.service.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
+import { matchOutboxService } from '../services/matchOutbox.service.js';
 import { ReplaySaveResult, ReplayFileRequest } from '../types/replay.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { SystemError } from '../types/error.js';
@@ -51,7 +52,7 @@ export class ReplaySaveFacade {
         patchVersion,
       );
 
-      await this.saveMatchData(rawData, savedReplay, tx);
+      await this.saveMatchData(rawData, savedReplay, tx, true);
 
       return savedReplay;
     });
@@ -60,7 +61,12 @@ export class ReplaySaveFacade {
   /**
    * 공통: riot 계정, 내전, 참여자, 길드멤버 저장
    */
-  private async saveMatchData(rawData: any[], savedReplay: ReplaySaveResult, tx: TransactionType) {
+  private async saveMatchData(
+    rawData: any[],
+    savedReplay: ReplaySaveResult,
+    tx: TransactionType,
+    createOutbox = false,
+  ) {
     await riotAccountService.upsertRiotAccount(rawData, tx);
 
     const rawDataPuuids = new Set<string>(rawData.map((d: { PUUID: string }) => d.PUUID));
@@ -107,12 +113,16 @@ export class ReplaySaveFacade {
 
     await customMatchService.insertCustomMatch(customMatchData, tx);
 
-    await matchParticipantService.insertMatchParticipants(
+    const participants = await matchParticipantService.insertMatchParticipants(
       rawData,
       customMatchData.id,
       tx,
       puuidToPlayerCodeMap,
     );
+
+    if (createOutbox) {
+      await matchOutboxService.insertMatchOutbox(savedReplay, participants, rawData, tx);
+    }
 
     await guildMemberService.insertGuildMember(riotAccounts, savedReplay.guildId, tx);
   }

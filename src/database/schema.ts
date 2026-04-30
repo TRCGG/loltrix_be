@@ -7,8 +7,11 @@ import {
   timestamp,
   boolean,
   integer,
+  bigint,
   uuid,
+  index,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 
@@ -243,6 +246,28 @@ export const matchParticipant = pgTable('match_participant', {
 
 export type MatchParticipant = typeof matchParticipant.$inferSelect;
 export type InsertMatchParticipant = typeof matchParticipant.$inferInsert;
+
+export const matchOutbox = pgTable(
+  'match_outbox',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    customMatchId: varchar('custom_match_id', { length: 255 })
+      .notNull()
+      .references(() => customMatch.id),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    payload: jsonb('payload').notNull(),
+    published: boolean('published').notNull().default(false),
+    publishedDate: timestamp('published_date', { withTimezone: true }),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_match_outbox_unpublished').on(table.id).where(sql`${table.published} = false`),
+    uniqueIndex('idx_match_outbox_match_id').on(table.customMatchId),
+  ],
+);
+
+export type MatchOutbox = typeof matchOutbox.$inferSelect;
+export type InsertMatchOutbox = typeof matchOutbox.$inferInsert;
 
 export const guildMember = pgTable('guild_member', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
