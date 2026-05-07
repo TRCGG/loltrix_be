@@ -29,6 +29,7 @@ export class MmrService {
         and(
           eq(mmrHistory.customMatchId, playerMmr.lastMatchId),
           eq(mmrHistory.puuid, playerMmr.puuid),
+          eq(mmrHistory.guildId, playerMmr.guildId),
         ),
       )
       .where(

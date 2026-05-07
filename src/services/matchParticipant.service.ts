@@ -10,6 +10,7 @@ import {
   customMatch,
   summonerSpell,
   perks,
+  mmrHistory,
 } from '../database/schema.js'; // 스키마 import 추가
 import { SystemError } from '../types/error.js';
 import { replayService } from './replay.service.js';
@@ -454,6 +455,11 @@ export class MatchParticipantService {
         keystoneName: keystone.name,
         substyleIcon: substyle.icon,
         substyleName: substyle.name,
+
+        // MMR
+        mmrDelta: mmrHistory.delta,
+        preMmr: mmrHistory.preMmr,
+        postMmr: mmrHistory.postMmr,
       })
       .from(matchParticipant)
       // Standard Joins
@@ -465,6 +471,14 @@ export class MatchParticipantService {
       .leftJoin(sp2, eq(matchParticipant.summonerSpell2, sp2.id))
       .leftJoin(keystone, eq(matchParticipant.keyStoneId, keystone.id))
       .leftJoin(substyle, eq(matchParticipant.perkSubStyle, substyle.id))
+      .leftJoin(
+        mmrHistory,
+        and(
+          eq(mmrHistory.customMatchId, customMatch.id),
+          eq(mmrHistory.puuid, riotAccount.puuid),
+          eq(mmrHistory.guildId, customMatch.guildId),
+        ),
+      )
       // Conditions
       .where(whereCondition)
       .orderBy(desc(customMatch.createDate))
@@ -545,6 +559,11 @@ export class MatchParticipantService {
         keystoneName: keystone.name,
         substyleIcon: substyle.icon,
         substyleName: substyle.name,
+
+        // MMR
+        mmrDelta: mmrHistory.delta,
+        preMmr: mmrHistory.preMmr,
+        postMmr: mmrHistory.postMmr,
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
@@ -554,6 +573,14 @@ export class MatchParticipantService {
       .leftJoin(sp2, eq(matchParticipant.summonerSpell2, sp2.id))
       .leftJoin(keystone, eq(matchParticipant.keyStoneId, keystone.id))
       .leftJoin(substyle, eq(matchParticipant.perkSubStyle, substyle.id))
+      .leftJoin(
+        mmrHistory,
+        and(
+          eq(mmrHistory.customMatchId, customMatch.id),
+          eq(mmrHistory.puuid, riotAccount.puuid),
+          eq(mmrHistory.guildId, customMatch.guildId),
+        ),
+      )
       .where(
         and(
           eq(customMatch.id, gameId),

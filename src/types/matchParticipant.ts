@@ -102,6 +102,11 @@ export interface RecentGame {
   keystoneName: string | null;
   substyleIcon: string | null;
   substyleName: string | null;
+
+  // MMR
+  mmrDelta: number | null;
+  preMmr: number | null;
+  postMmr: number | null;
 }
 
 /** 대시보드 통합 데이터 */
