@@ -261,13 +261,62 @@ export const matchOutbox = pgTable(
     createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index('idx_match_outbox_unpublished').on(table.id).where(sql`${table.published} = false`),
+    index('idx_match_outbox_unpublished')
+      .on(table.id)
+      .where(sql`${table.published} = false`),
     uniqueIndex('idx_match_outbox_match_id').on(table.customMatchId),
   ],
 );
 
 export type MatchOutbox = typeof matchOutbox.$inferSelect;
 export type InsertMatchOutbox = typeof matchOutbox.$inferInsert;
+
+export const playerMmr = pgTable(
+  'player_mmr',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    puuid: varchar('puuid', { length: 128 }).notNull(),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    mmr: integer('mmr').notNull().default(1300),
+    gamesPlayed: integer('games_played').notNull().default(0),
+    wins: integer('wins').notNull().default(0),
+    losses: integer('losses').notNull().default(0),
+    lastMatchId: varchar('last_match_id', { length: 255 }),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (table) => [unique('player_mmr_puuid_guild_unq').on(table.puuid, table.guildId)],
+);
+
+export type PlayerMmr = typeof playerMmr.$inferSelect;
+export type InsertPlayerMmr = typeof playerMmr.$inferInsert;
+
+export const mmrHistory = pgTable(
+  'mmr_history',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    customMatchId: varchar('custom_match_id', { length: 255 }).notNull(),
+    puuid: varchar('puuid', { length: 128 }).notNull(),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    preMmr: integer('pre_mmr').notNull(),
+    postMmr: integer('post_mmr').notNull(),
+    delta: integer('delta').notNull(),
+    gameResult: varchar('game_result', { length: 8 }).notNull(),
+    position: varchar('position', { length: 16 }).notNull(),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('mmr_history_match_puuid_unq').on(table.customMatchId, table.puuid),
+    index('idx_mmr_history_puuid_guild_date').on(table.puuid, table.guildId, table.createDate),
+  ],
+);
+
+export type MmrHistory = typeof mmrHistory.$inferSelect;
+export type InsertMmrHistory = typeof mmrHistory.$inferInsert;
 
 export const guildMember = pgTable('guild_member', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),

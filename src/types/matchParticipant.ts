@@ -12,12 +12,14 @@ export interface MatchStats {
 
 export interface MultipleMember {
   playerCode: string;
+  puuid: string;
   riotName: string;
   riotNameTag: string;
 }
 
 export type Member = {
   playerCode: string;
+  puuid: string;
   riotName: string;
   riotNameTag: string;
   isMain: boolean;

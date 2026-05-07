@@ -43,6 +43,10 @@
     {
       "name": "Statistics",
       "description": "통계"
+    },
+    {
+      "name": "MMR",
+      "description": "MMR 조회"
     }
   ],
   "paths": {
@@ -1359,6 +1363,40 @@
             "description": "페이지당 개수",
             "schema": {
               "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/mmr/players/{puuid}": {
+      "get": {
+        "tags": [
+          "MMR"
+        ],
+        "summary": "플레이어 MMR 조회",
+        "description": "puuid와 guildId로 길드별 현재 MMR 및 마지막 매치 변동값을 조회합니다.",
+        "parameters": [
+          {
+            "name": "puuid",
+            "in": "path",
+            "description": "Riot PUUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "guildId",
+            "in": "query",
+            "description": "Base64 encoded Discord guild ID",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],

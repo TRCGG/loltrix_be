@@ -99,6 +99,7 @@ export class GuildMemberService {
     const result = await db
       .select({
         playerCode: riotAccount.playerCode,
+        puuid: riotAccount.puuid,
         riotName: riotAccount.riotName,
         riotNameTag: riotAccount.riotNameTag,
         isMain: guildMember.isMain,
@@ -143,6 +144,7 @@ export class GuildMemberService {
     const result = await db
       .select({
         playerCode: riotAccount.playerCode,
+        puuid: riotAccount.puuid,
         riotName: riotAccount.riotName,
         riotNameTag: riotAccount.riotNameTag,
         isMain: guildMember.isMain,

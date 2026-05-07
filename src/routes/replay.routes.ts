@@ -22,10 +22,7 @@ const webCreateReplaySchema = z.object({
       .min(1, 'guildId is required')
       .max(128, 'guildId must be less than 128 characters'),
     gameType: z.string().length(1, '게임 타입은 1자여야 합니다.').default('1'),
-    nick: z
-      .string()
-      .min(1, 'nick is required')
-      .max(255, 'nick must be less than 255 characters'),
+    nick: z.string().min(1, 'nick is required').max(255, 'nick must be less than 255 characters'),
   }),
 });
 
@@ -33,11 +30,21 @@ const getReplayListSchema = z.object({
   params: z.object({
     guildId: z.string().min(1, 'guildId is required').max(128),
   }),
-  query: z.object({
-    page: z.string().regex(/^\d+$/, 'Page must be a positive number').transform(Number).optional(),
-    limit: z.string().regex(/^\d+$/, 'Limit must be a positive number').transform(Number)
-      .refine((v) => v >= 1 && v <= 10, 'Limit must be between 1 and 10').optional(),
-  }).optional(),
+  query: z
+    .object({
+      page: z
+        .string()
+        .regex(/^\d+$/, 'Page must be a positive number')
+        .transform(Number)
+        .optional(),
+      limit: z
+        .string()
+        .regex(/^\d+$/, 'Limit must be a positive number')
+        .transform(Number)
+        .refine((v) => v >= 1 && v <= 10, 'Limit must be between 1 and 10')
+        .optional(),
+    })
+    .optional(),
 });
 
 // TO-DO replay message
