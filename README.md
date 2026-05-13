@@ -142,7 +142,7 @@ pnpm dev
 | `DISCORD_REDIRECT_URI` | O | - | Discord OAuth 콜백 URI |
 | `DISCORD_BOT_SECRET` | O | - | 봇 인증 헤더 시크릿 |
 
-> 비즈니스 설정값(LOL_SEASON, STATS_MIN_GAME_COUNT, COOKIE_DOMAIN 등)은 `system_config` 테이블에서 관리됩니다.
+> 비즈니스 설정값(LOL_SEASON, STATS_MIN_GAME_COUNT, COOKIE_DOMAIN, COOKIE_MAX_AGE_MS 등)은 `system_config` 테이블에서 관리됩니다.
 
 ## 라이센스 (License)
 

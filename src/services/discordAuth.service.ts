@@ -17,6 +17,7 @@ const discordApiBaseUrl = 'https://discord.com/api';
 const clientId = process.env.DISCORD_CLIENT_ID;
 const clientSecret = process.env.DISCORD_CLIENT_SECRET;
 const redirectUri = process.env.DISCORD_REDIRECT_URI;
+const DEFAULT_SESSION_MAX_AGE_MS = 29 * 24 * 60 * 60 * 1000;
 
 /**
  * @desc 최초 로그인 시 토큰 포맷
@@ -26,7 +27,7 @@ function formatNewToken(tokenData: DiscordTokenAPI) {
     accessToken: tokenData.access_token,
     acExpiresDate: new Date(Date.now() + tokenData.expires_in * 1000),
     refreshToken: tokenData.refresh_token,
-    reExpiresDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7일
+    reExpiresDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     scope: tokenData.scope,
     tokenType: tokenData.token_type,
   };
@@ -122,11 +123,16 @@ export class DiscordAuthService {
           ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
           : null,
       };
+      const sessionMaxAge = await systemConfigService.getNumberConfig(
+        'COOKIE_MAX_AGE_MS',
+        DEFAULT_SESSION_MAX_AGE_MS,
+      );
       const newAuthData: InsertAuthSession = {
         discordMemberId: userData.id,
         userAgent,
         ipAddr,
         isActive: true,
+        expiresDate: new Date(Date.now() + sessionMaxAge),
       };
 
       // 4. DB 트랜잭션 호출
@@ -249,7 +255,6 @@ export class DiscordAuthService {
       throw new SystemError('Login transaction failed', 500);
     }
   }
-
 
   /**
    * @desc Discord 토큰 재발급 및 DB 저장 (비공개)

@@ -150,6 +150,7 @@ export const authSession = pgTable('auth_session', {
   ipAddr: text('ip_addr'),
   deviceName: text('device_name'),
   isActive: boolean('is_active').default(true),
+  expiresDate: timestamp('expires_date', { withTimezone: true }).notNull(),
   createDate: timestamp('create_date', { withTimezone: true }).defaultNow(),
   updateDate: timestamp('update_date', { withTimezone: true }).defaultNow(),
 });
