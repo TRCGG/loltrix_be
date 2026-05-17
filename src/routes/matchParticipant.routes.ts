@@ -29,7 +29,12 @@ const matchListSchema = z.object({
   query: z.object({
     riotNameTag: z.string().max(128, 'riotNameTag must be less than 128 characters').optional(),
     season: z.string().max(32, 'season must be less than 32 characters').optional(),
-    page: z.string().regex(/^\d+$/, 'Page must be a positive number').transform(Number).optional(),
+    page: z
+      .string()
+      .regex(/^\d+$/, 'Page must be a positive number')
+      .refine((val) => Number(val) >= 1, { message: 'Page must be 1 or greater' })
+      .transform(Number)
+      .optional(),
     limit: z
       .string()
       .regex(/^\d+$/, 'Limit must be a positive number')
