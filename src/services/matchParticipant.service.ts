@@ -334,10 +334,13 @@ export class MatchParticipantService {
     guildId: string,
     page = 1,
     limit = 10,
+    position?: string,
   ) {
     const offset = (page - 1) * limit;
     // 통계 쿼리 실행
     const statColumns = this.getStatSqlChunks();
+    const positionCondition =
+      position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
 
     const whereCondition = and(
       eq(matchParticipant.playerCode, playerCode),
@@ -345,6 +348,7 @@ export class MatchParticipantService {
       eq(customMatch.isDeleted, false),
       eq(customMatch.guildId, guildId),
       eq(customMatch.season, season),
+      positionCondition,
     );
 
     const picksQuery = db

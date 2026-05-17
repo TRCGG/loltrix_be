@@ -1060,6 +1060,22 @@
             }
           },
           {
+            "name": "position",
+            "in": "query",
+            "description": "라인 필터",
+            "enum": [
+              "ALL",
+              "TOP",
+              "JUG",
+              "MID",
+              "ADC",
+              "SUP"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "페이지 번호",

@@ -38,6 +38,12 @@ const matchListSchema = z.object({
   }),
 });
 
+const mostPickSchema = matchListSchema.extend({
+  query: matchListSchema.shape.query.extend({
+    position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
+  }),
+});
+
 const matchDashboardSchema = z.object({
   params: z.object({
     guildId: z
@@ -153,11 +159,17 @@ router.get(
       type: 'string'
     }
     #swagger.parameters['season'] = { in: 'query', description: '시즌 필터', type: 'string' }
+    #swagger.parameters['position'] = {
+      in: 'query',
+      description: '라인 필터',
+      type: 'string',
+      enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']
+    }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
   */
   decodeGuildIdMiddleware,
-  validateRequest(matchListSchema),
+  validateRequest(mostPickSchema),
   getMostPicks,
 );
 
