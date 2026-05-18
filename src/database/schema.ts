@@ -85,9 +85,9 @@ export const riotAccount = pgTable('riot_account', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   puuid: varchar('puuid', { length: 128 }).notNull().unique(),
   playerCode: varchar('player_code', { length: 64 })
-    .generatedAlwaysAs(sql`'PLR_' || lpad(id::text, 6, '0')`)
     .notNull()
-    .unique(),
+    .unique()
+    .default(sql`'PLR_' || lpad(nextval('player_code_seq')::text, 6, '0')`),
   riotName: varchar('riot_name', { length: 128 }).notNull(),
   riotNameTag: varchar('riot_name_tag', { length: 128 }).notNull(),
   createDate: timestamp('create_date').notNull().defaultNow(),
