@@ -8,6 +8,7 @@ import {
   getSubAccounts,
   removeSubAccount,
   updateMemberStatus,
+  getMembers,
 } from '../controllers/guildMember.controller.js';
 import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 
@@ -59,6 +60,21 @@ const getSubAccountsSchema = z.object({
   }),
 });
 
+const getMembersSchema = z.object({
+  params: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128),
+  }),
+  query: z.object({
+    status: z.enum(['1', '2', 'all']).optional().default('1'),
+    page: z.string().regex(/^\d+$/, 'Page must be a positive number').transform(Number).optional(),
+    limit: z
+      .string()
+      .regex(/^\d+$/, 'Limit must be a positive number')
+      .transform(Number)
+      .optional(),
+  }),
+});
+
 const removeSubAccountSchema = z.object({
   body: z.object({
     guildId: z.string().min(1, 'Guild ID is required').max(128),
@@ -104,6 +120,26 @@ router.post(
   */
   validateRequest(linkSubAccountSchema),
   linkSubAccount,
+);
+
+/**
+ * @route GET /api/guildMember/:guildId/members
+ * @desc 길드 멤버 목록 조회 (status: 1=활성, 2=탈퇴, all=전체)
+ */
+router.get(
+  '/:guildId/members',
+  /* #swagger.auto = false
+    #swagger.tags = ['GuildMember']
+    #swagger.summary = '멤버 목록 조회'
+    #swagger.description = '길드 멤버 목록을 조회합니다. status=1(활성, 기본값), status=2(탈퇴), status=all(전체)'
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID', required: true, type: 'string' }
+    #swagger.parameters['status'] = { in: 'query', description: '1: 활성 (기본값), 2: 탈퇴, all: 전체', type: 'string', enum: ['1', '2', 'all'] }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (기본값: 50)', type: 'integer' }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(getMembersSchema),
+  getMembers,
 );
 
 /**
