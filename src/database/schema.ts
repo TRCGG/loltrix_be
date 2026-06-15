@@ -9,6 +9,10 @@ import {
   integer,
   uuid,
   unique,
+  bigserial,
+  smallint,
+  numeric,
+  index,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 
@@ -342,3 +346,115 @@ export const systemConfig = pgTable('system_config', {
 
 export type SystemConfig = typeof systemConfig.$inferSelect;
 export type InsertSystemConfig = typeof systemConfig.$inferInsert;
+
+/**
+ * MMR / 상대전적 지표 테이블
+ * 한 row = 한 경기의 한 참가자(player-game). 정상 경기 = 10 row.
+ * 원천 = replay.raw_data(JSONB 배열). 값은 변환값 저장(game_team blue/red, position enum, game_result 1/0).
+ * 자연키 = (custom_match_id, puuid). raw 49 + 파생 14 + 파이프라인.
+ */
+// raw 지표: nullable INTEGER (키 누락·구포맷 대응)
+const metricRaw = (name: string) => integer(name);
+
+export const mmrParticipantMetric = pgTable(
+  'mmr_participant_metric',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    // 식별 / 메타
+    customMatchId: varchar('custom_match_id', { length: 255 }).notNull(), // = replay.replay_code
+    puuid: varchar('puuid', { length: 128 }).notNull(),
+    // 본계정 병합 식별자 (match_participant.player_code와 동일 규칙: 부계정이면 본계정 playerCode).
+    // 자연키는 puuid라 nullable 유지. H2H 식별은 이 컬럼 기준.
+    playerCode: varchar('player_code', { length: 64 }),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    season: varchar('season', { length: 32 }).notNull(),
+    championId: varchar('champion_id', { length: 16 }), // SKIN→champion.id (실패 시 NULL)
+    gameTeam: varchar('game_team', { length: 8 }).notNull(), // blue/red
+    position: varchar('position', { length: 8 }).notNull(), // TOP/JUG/MID/ADC/SUP
+    gameResult: smallint('game_result').notNull(), // 1/0
+    playedDate: timestamp('played_date', { withTimezone: true }).notNull(), // 업로드 시각
+    // raw 49 (nullable)
+    kills: metricRaw('kills'),
+    deaths: metricRaw('deaths'),
+    assists: metricRaw('assists'),
+    doubleKills: metricRaw('double_kills'),
+    tripleKills: metricRaw('triple_kills'),
+    quadraKills: metricRaw('quadra_kills'),
+    pentaKills: metricRaw('penta_kills'),
+    killingSprees: metricRaw('killing_sprees'),
+    largestKillingSpree: metricRaw('largest_killing_spree'),
+    goldEarned: metricRaw('gold_earned'),
+    ccTime: metricRaw('cc_time'),
+    gameDuration: metricRaw('game_duration'),
+    damageToChampions: metricRaw('damage_to_champions'),
+    damageTaken: metricRaw('damage_taken'),
+    damageSelfMitigated: metricRaw('damage_self_mitigated'),
+    visionScore: metricRaw('vision_score'),
+    wardsPlaced: metricRaw('wards_placed'),
+    wardsKilled: metricRaw('wards_killed'),
+    detectorWardsPlaced: metricRaw('detector_wards_placed'),
+    controlWardsBought: metricRaw('control_wards_bought'),
+    minionsKilled: metricRaw('minions_killed'),
+    neutralMinionsKilled: metricRaw('neutral_minions_killed'),
+    timeSpentDead: metricRaw('time_spent_dead'),
+    longestTimeLiving: metricRaw('longest_time_living'),
+    damageToTurrets: metricRaw('damage_to_turrets'),
+    damageToObjectives: metricRaw('damage_to_objectives'),
+    dragonKills: metricRaw('dragon_kills'),
+    baronKills: metricRaw('baron_kills'),
+    heraldKills: metricRaw('herald_kills'),
+    hordeKills: metricRaw('horde_kills'),
+    lastTakedownTime: metricRaw('last_takedown_time'),
+    turretsKilled: metricRaw('turrets_killed'),
+    turretTakedowns: metricRaw('turret_takedowns'),
+    level: metricRaw('level'),
+    exp: metricRaw('exp'),
+    turretPlatesDestroyed: metricRaw('turret_plates_destroyed'),
+    takedownsUnderTurret: metricRaw('takedowns_under_turret'),
+    takedownsBefore15Min: metricRaw('takedowns_before_15min'),
+    jungleCsOwn: metricRaw('jungle_cs_own'),
+    jungleCsEnemy: metricRaw('jungle_cs_enemy'),
+    damageToEpicMonsters: metricRaw('damage_to_epic_monsters'),
+    objectivesStolen: metricRaw('objectives_stolen'),
+    barracksKilled: metricRaw('barracks_killed'),
+    healOnTeammates: metricRaw('heal_on_teammates'),
+    shieldOnTeammates: metricRaw('shield_on_teammates'),
+    enemyMissingPings: metricRaw('enemy_missing_pings'),
+    retreatPings: metricRaw('retreat_pings'),
+    onMyWayPings: metricRaw('on_my_way_pings'),
+    commandPings: metricRaw('command_pings'),
+    // 파생 14 (nullable NUMERIC) — Drizzle numeric은 string 추론
+    goldPerMin: numeric('gold_per_min'),
+    dpm: numeric('dpm'),
+    damageTakenPerMin: numeric('damage_taken_per_min'),
+    ccTimePerMin: numeric('cc_time_per_min'),
+    expPerMin: numeric('exp_per_min'),
+    damageToTurretsPerMin: numeric('damage_to_turrets_per_min'),
+    csPerMin: numeric('cs_per_min'),
+    wardsPlacedPerMin: numeric('wards_placed_per_min'),
+    wardsKilledPerMin: numeric('wards_killed_per_min'),
+    kda: numeric('kda'),
+    damageTakenPerDeath: numeric('damage_taken_per_death'),
+    damageDealtPerDeath: numeric('damage_dealt_per_death'),
+    deadTimePct: numeric('dead_time_pct'),
+    laneGoldDiff: numeric('lane_gold_diff'),
+    // 파이프라인
+    isMmrEligible: boolean('is_mmr_eligible').notNull().default(true),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    unique('uq_mmr_participant_metric_match_puuid').on(t.customMatchId, t.puuid),
+    index('idx_mpm_guild_season_played').on(t.guildId, t.season, t.playedDate),
+    index('idx_mpm_custom_match').on(t.customMatchId),
+    index('idx_mpm_puuid_season').on(t.puuid, t.season),
+    index('idx_mpm_guild_player').on(t.guildId, t.playerCode),
+  ],
+);
+
+export type MmrParticipantMetric = typeof mmrParticipantMetric.$inferSelect;
+export type InsertMmrParticipantMetric = typeof mmrParticipantMetric.$inferInsert;

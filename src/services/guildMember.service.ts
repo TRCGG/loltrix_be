@@ -5,6 +5,7 @@ import {
   guildMember,
   InsertGuildMember,
   matchParticipant,
+  mmrParticipantMetric,
   riotAccount,
   RiotAccount,
 } from '../database/schema.js';
@@ -282,6 +283,15 @@ export class GuildMemberService {
           updateDate: new Date(),
         })
         .where(eq(matchParticipant.playerCode, secRiot.playerCode));
+
+      // 5. mmr_participant_metric도 동일하게 병합 (match_participant와 상태 일치 유지)
+      await tx
+        .update(mmrParticipantMetric)
+        .set({
+          playerCode: priRiot.playerCode,
+          updateDate: new Date(),
+        })
+        .where(eq(mmrParticipantMetric.playerCode, secRiot.playerCode));
 
       return result[0];
     });
