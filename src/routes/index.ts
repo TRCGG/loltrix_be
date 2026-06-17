@@ -9,7 +9,6 @@ import authRouter from './discordAuth.routes.js';
 import guildMemberRoutes from './guildMember.routes.js';
 import matchParticipantRoutes from './matchParticipant.routes.js';
 import statisticsRoutes from './statistics.route.js';
-import encounterRoutes from './encounter.routes.js';
 import h2hRoutes from './h2h.routes.js';
 
 const router: Router = Router();
@@ -39,8 +38,6 @@ router.use('/guildMember', guildMemberRoutes);
 router.use('/matches', matchParticipantRoutes);
 
 router.use('/statistics', statisticsRoutes);
-
-router.use('/encounter', encounterRoutes);
 
 router.use('/h2h', h2hRoutes);
 

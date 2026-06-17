@@ -6,7 +6,7 @@ import { H2hResponse, FrequentH2hItem, MemberCandidate, H2hDetail } from '../typ
 
 /**
  * @desc riotName/riotNameTag로 길드 멤버를 조회하고 단일 playerCode 반환
- * 멤버를 찾지 못하면 null, 여러 명이면 후보 목록 반환 (기존 encounter 방식과 동일)
+ * 멤버를 찾지 못하면 null, 여러 명이면 후보 목록 반환 (길드 멤버 닉네임 검색)
  */
 async function resolveSingleMember(
   guildId: string,
