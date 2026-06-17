@@ -5,6 +5,7 @@ import { db, TransactionType } from '../database/connectionPool.js';
 import {
   InsertMatchParticipant,
   matchParticipant,
+  mmrParticipantMetric,
   champion,
   riotAccount,
   customMatch,
@@ -671,6 +672,20 @@ export class MatchParticipantService {
         })
         .where(
           and(eq(matchParticipant.customMatchId, gameId), eq(matchParticipant.isDeleted, false)),
+        );
+
+      // 2-1. mmr_participant_metric도 동일 soft delete (H2H가 삭제 경기 제외하도록)
+      await tx
+        .update(mmrParticipantMetric)
+        .set({
+          isDeleted: true,
+          updateDate: new Date(),
+        })
+        .where(
+          and(
+            eq(mmrParticipantMetric.customMatchId, gameId),
+            eq(mmrParticipantMetric.isDeleted, false),
+          ),
         );
 
       // 3. 연관된 replays 삭제

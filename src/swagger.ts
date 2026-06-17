@@ -51,6 +51,7 @@ const doc = {
     { name: 'Matches', description: '전적 및 매치 데이터' },
     { name: 'Replays', description: '리플레이 관리' },
     { name: 'Statistics', description: '통계' },
+    { name: 'H2H', description: '상대전적 (맞붙은/함께한)' },
   ],
 };
 

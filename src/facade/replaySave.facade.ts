@@ -4,6 +4,7 @@ import { replayService } from '../services/replay.service.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
 import { customMatchService } from '../services/customMatch.service.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
+import { mmrMetricService } from '../services/mmrMetric.service.js';
 import { ReplaySaveResult, ReplayFileRequest } from '../types/replay.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { SystemError } from '../types/error.js';
@@ -105,7 +106,7 @@ export class ReplaySaveFacade {
       season: savedReplay.season,
     };
 
-    await customMatchService.insertCustomMatch(customMatchData, tx);
+    const savedCustomMatch = await customMatchService.insertCustomMatch(customMatchData, tx);
 
     await matchParticipantService.insertMatchParticipants(
       rawData,
@@ -115,6 +116,18 @@ export class ReplaySaveFacade {
     );
 
     await guildMemberService.insertGuildMember(riotAccounts, savedReplay.guildId, tx);
+
+    // mmr_participant_metric 적재 — 모든 길드 (구독 여부 무관).
+    // raw에 게임시각이 없어 played_date는 업로드 시각(custom_match.create_date) 사용.
+    const metricRows = await mmrMetricService.buildMetricRows({
+      rawData,
+      customMatchId: customMatchData.id,
+      guildId: savedReplay.guildId,
+      season: savedReplay.season,
+      playedDate: savedCustomMatch.createDate,
+      puuidToPlayerCodeMap,
+    });
+    await mmrMetricService.insertMetrics(metricRows, tx);
   }
 }
 
