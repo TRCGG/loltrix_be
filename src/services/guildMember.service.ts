@@ -352,6 +352,51 @@ export class GuildMemberService {
   }
 
   /**
+   * @desc 길드 멤버 목록 조회 (status 필터 + 페이지네이션)
+   */
+  public async findMembersByGuildId(
+    guildId: string,
+    status: '1' | '2' | 'all',
+    page: number = 1,
+    limit: number = 50,
+  ) {
+    const offset = (page - 1) * limit;
+    const statusCondition = status === 'all' ? undefined : eq(guildMember.status, status);
+
+    const whereCondition = and(
+      eq(guildMember.guildId, guildId),
+      eq(guildMember.isMain, true),
+      eq(guildMember.isDeleted, false),
+      statusCondition,
+    );
+
+    const [result, [countResult]] = await Promise.all([
+      db
+        .select({
+          playerCode: riotAccount.playerCode,
+          riotName: riotAccount.riotName,
+          riotNameTag: riotAccount.riotNameTag,
+          status: guildMember.status,
+          createDate: guildMember.createDate,
+          updateDate: guildMember.updateDate,
+        })
+        .from(guildMember)
+        .innerJoin(riotAccount, eq(guildMember.account, riotAccount.playerCode))
+        .where(whereCondition)
+        .orderBy(desc(guildMember.createDate))
+        .limit(limit)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`count(*)::integer` })
+        .from(guildMember)
+        .innerJoin(riotAccount, eq(guildMember.account, riotAccount.playerCode))
+        .where(whereCondition),
+    ]);
+
+    return { result, totalCount: countResult?.count || 0 };
+  }
+
+  /**
    * @desc GuildMember 복귀, 탈퇴 업데이트
    */
   public async updateGuildMemberStatusByRiotId(
