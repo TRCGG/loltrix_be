@@ -30,8 +30,9 @@ INSERT INTO mmr_participant_metric (
 WITH base AS (
   SELECT
     r.replay_code                                         AS custom_match_id,
-    r.guild_id, r.season,
-    r.create_date                                         AS played_date,
+    -- guild_id·season·played_date는 custom_match 기준(canonical). replay는 guild id 이관 시 stale 가능.
+    cm.guild_id, cm.season,
+    cm.create_date                                        AS played_date,
     (p->>'PUUID')                                         AS puuid,
     (p->>'SKIN')                                          AS skin,
     CASE p->>'TEAM' WHEN '100' THEN 'blue' WHEN '200' THEN 'red' END  AS game_team,
@@ -90,6 +91,7 @@ WITH base AS (
     NULLIF(p->>'ON_MY_WAY_PINGS','')::int                 AS on_my_way_pings,
     NULLIF(p->>'COMMAND_PINGS','')::int                   AS command_pings
   FROM replay r
+  JOIN custom_match cm ON cm.id = r.replay_code AND cm.is_deleted = false
   CROSS JOIN LATERAL jsonb_array_elements(r.raw_data) AS p
   WHERE r.is_deleted = false
     AND NOT EXISTS (SELECT 1 FROM mmr_participant_metric m WHERE m.custom_match_id = r.replay_code)
