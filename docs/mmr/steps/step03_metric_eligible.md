@@ -11,6 +11,8 @@
 
 **이 step의 책임은 여기까지다 — MMR 계산은 하지 않는다.** 계산은 worker(step08)가 1시간 뒤 가져간다.
 
+> ⚠️ **dev 현황**: metric 빌드·`is_mmr_eligible` 판정은 **상대전적이 dev에 이미 구현**했다 — `src/services/mmrMetric.service.ts`(`buildMetricRows`·`insertMetrics`·`judgeIsMmrEligible`·`isMatchEligibleForMmr`) + facade hook(모든 길드 metric 적재). 산출물의 metric service는 신규 작성이 아니라 **이 파일 재사용**. **이 step에서 실제로 새로 할 것은 구독 게이트(`isMmrActive`) + `mmr_match_queue` 등록(wait/skip)** 뿐이다.
+
 ### 범위에 포함
 - **metric 생성: 모든 길드** (구독 게이트 밖)
 - `replay.raw_data`에서 raw 49 + 파생 14 조립(categoricals·championId는 `match_participant` 변환값 재사용)

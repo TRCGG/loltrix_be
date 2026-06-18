@@ -293,7 +293,7 @@ loltrix_be가 준비:               gmok_mmr이 처리:
   - 동시성 제어
 ```
 
-통계는 `match_participant`를 직접 사용. `mmr_participant_metric`은 MMR 계산 전용.
+통계는 `match_participant`를 직접 사용. `mmr_participant_metric`은 통계·상대전적·MMR이 공유하는 정제 테이블(마이그레이션 007 소유). MMR 계산은 그 위에 얹는다.
 
 gmok_mmr은 DB에 직접 접근하지 않는다. 매 요청이 독립적이며 상태를 보유하지 않는다.
 

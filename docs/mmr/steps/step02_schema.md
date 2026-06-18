@@ -164,6 +164,8 @@ export type InsertMmrMatchQueue = typeof mmrMatchQueue.$inferInsert;
 
 ### 3.6 mmr_participant_metric
 
+> ⚠️ **dev에 이미 있음** — `src/database/schema.ts`의 `mmrParticipantMetric`(마이그레이션 007, 상대전적). **재작성 말고 재사용.** dev 버전엔 상대전적용 `player_code`(+ `idx_mpm_guild_player`)가 추가돼 있다(MMR은 미사용). 아래 매핑은 참고용.
+
 > 구조 기준: [match_participant_metric_table_spec.md](../match_participant_metric_table_spec.md) (raw 49 + 파생 14). categoricals는 **변환값** 저장(`game_team`/`position` enum/`game_result`). raw·파생은 nullable.
 
 ```ts

@@ -29,6 +29,7 @@
 | `id` | BIGSERIAL | NOT NULL | PK |
 | `replay_code` | VARCHAR(128) | NOT NULL | 경기 식별자 (`league/replay.game_id`) |
 | `puuid` | VARCHAR(64) | NOT NULL | 유저 식별자 |
+| `player_code` | VARCHAR(64) | NULL | **(loltrix 추가, 정의서 외)** 상대전적 본계정 병합 식별자. MMR 계산은 puuid 기반이라 미사용 |
 | `guild_id` | VARCHAR(64) | NULL | 길드 |
 | `champion_id` | VARCHAR(16) | NULL | 챔피언 id (`SKIN` → Champion 테이블 매핑) |
 | `team` | VARCHAR(8) | NULL | 팀 (raw `TEAM`) |

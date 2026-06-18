@@ -1,7 +1,8 @@
 -- =============================================================================
--- 005_add_mmr_system.sql  —  MMR 시스템 테이블 9종
+-- 008_add_mmr_system.sql  —  MMR 시스템 테이블 8종
 -- 설계 SoT: docs/mmr/steps/step01_migration.md (테이블/컬럼명 기준)
 --
+-- · mmr_participant_metric은 007_add_mmr_participant_metric.sql이 소유(canonical). 여기엔 없음
 -- · 통계 도메인(replay/custom_match/match_participant)은 건드리지 않음
 -- · MMR 테이블 상호간 FK 없음 (guild/custom_match 까지만 FK). 논리키로 join
 -- · mmr_history 는 monthly RANGE partition
@@ -89,102 +90,7 @@ CREATE TABLE IF NOT EXISTS mmr_match_queue (
 CREATE INDEX IF NOT EXISTS idx_mmr_match_queue_guild_season_status
   ON mmr_match_queue (guild_id, season, status, create_date);
 
--- 6. mmr_participant_metric ───────────────────────────────────────────────────
--- 구조: match_participant_metric 정의서(raw 49 + 파생 14). categoricals는 변환값 저장.
--- 자연키 (custom_match_id, puuid). raw/파생은 NULL 허용.
-CREATE TABLE IF NOT EXISTS mmr_participant_metric (
-  id                          BIGSERIAL PRIMARY KEY,
-  -- 식별 / 메타
-  custom_match_id             VARCHAR(255) NOT NULL,   -- = replay.replay_code
-  puuid                       VARCHAR(128) NOT NULL,   -- rawData PUUID
-  guild_id                    VARCHAR(128) NOT NULL,
-  season                      VARCHAR(32)  NOT NULL,
-  champion_id                 VARCHAR(16),             -- SKIN→champion.champ_name_eng (실패 시 NULL)
-  game_team                   VARCHAR(8)   NOT NULL,   -- 변환값: TEAM 100→blue, 200→red
-  position                    VARCHAR(8)   NOT NULL,   -- 변환값: JUNGLE→JUG/MIDDLE→MID/BOTTOM→ADC/UTILITY→SUP/TOP→TOP
-  game_result                 SMALLINT     NOT NULL,   -- 변환값: WIN='Win'→1, else 0
-  played_date                 TIMESTAMPTZ  NOT NULL,   -- 업로드 시각(raw에 게임시각 없음), 처리 순서 ASC 기준
-  -- raw 지표 (JSON 키)
-  kills                       INTEGER,   -- CHAMPIONS_KILLED
-  deaths                      INTEGER,   -- NUM_DEATHS
-  assists                     INTEGER,   -- ASSISTS
-  double_kills                INTEGER,   -- DOUBLE_KILLS
-  triple_kills                INTEGER,   -- TRIPLE_KILLS
-  quadra_kills                INTEGER,   -- QUADRA_KILLS
-  penta_kills                 INTEGER,   -- PENTA_KILLS
-  killing_sprees              INTEGER,   -- KILLING_SPREES
-  largest_killing_spree       INTEGER,   -- LARGEST_KILLING_SPREE
-  gold_earned                 INTEGER,   -- GOLD_EARNED
-  cc_time                     INTEGER,   -- TIME_CCING_OTHERS (초)
-  game_duration               INTEGER,   -- TIME_PLAYED (초)
-  damage_to_champions         INTEGER,   -- TOTAL_DAMAGE_DEALT_TO_CHAMPIONS
-  damage_taken                INTEGER,   -- TOTAL_DAMAGE_TAKEN
-  damage_self_mitigated       INTEGER,   -- TOTAL_DAMAGE_SELF_MITIGATED
-  vision_score                INTEGER,   -- VISION_SCORE
-  wards_placed                INTEGER,   -- WARD_PLACED
-  wards_killed                INTEGER,   -- WARD_KILLED
-  detector_wards_placed       INTEGER,   -- WARD_PLACED_DETECTOR
-  control_wards_bought        INTEGER,   -- VISION_WARDS_BOUGHT_IN_GAME
-  minions_killed              INTEGER,   -- MINIONS_KILLED
-  neutral_minions_killed      INTEGER,   -- NEUTRAL_MINIONS_KILLED
-  time_spent_dead             INTEGER,   -- TOTAL_TIME_SPENT_DEAD (초)
-  longest_time_living         INTEGER,   -- LONGEST_TIME_SPENT_LIVING (초)
-  damage_to_turrets           INTEGER,   -- TOTAL_DAMAGE_DEALT_TO_BUILDINGS
-  damage_to_objectives        INTEGER,   -- TOTAL_DAMAGE_DEALT_TO_OBJECTIVES
-  dragon_kills                INTEGER,   -- DRAGON_KILLS
-  baron_kills                 INTEGER,   -- BARON_KILLS
-  herald_kills                INTEGER,   -- RIFT_HERALD_KILLS
-  horde_kills                 INTEGER,   -- HORDE_KILLS (공허 유충)
-  last_takedown_time          INTEGER,   -- LAST_TAKEDOWN_TIME (마지막 처치 관여 시각, 초)
-  turrets_killed              INTEGER,   -- TURRETS_KILLED (막타 파괴)
-  turret_takedowns            INTEGER,   -- TURRET_TAKEDOWNS (철거 관여)
-  level                       INTEGER,   -- LEVEL
-  exp                         INTEGER,   -- EXP
-  turret_plates_destroyed     INTEGER,   -- Missions_TurretPlatesDestroyed
-  takedowns_under_turret      INTEGER,   -- Missions_TakedownsUnderTurret (포탑 아래 처치 관여)
-  takedowns_before_15min      INTEGER,   -- Missions_TakedownsBefore15Min (15분 이전 처치 관여)
-  jungle_cs_own               INTEGER,   -- NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE
-  jungle_cs_enemy             INTEGER,   -- NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE
-  damage_to_epic_monsters     INTEGER,   -- TOTAL_DAMAGE_DEALT_TO_EPIC_MONSTERS (신포맷만)
-  objectives_stolen           INTEGER,   -- OBJECTIVES_STOLEN
-  barracks_killed             INTEGER,   -- BARRACKS_KILLED (억제기)
-  heal_on_teammates           INTEGER,   -- TOTAL_HEAL_ON_TEAMMATES
-  shield_on_teammates         INTEGER,   -- TOTAL_DAMAGE_SHIELDED_ON_TEAMMATES
-  enemy_missing_pings         INTEGER,   -- ENEMY_MISSING_PINGS
-  retreat_pings               INTEGER,   -- RETREAT_PINGS
-  on_my_way_pings             INTEGER,   -- ON_MY_WAY_PINGS
-  command_pings               INTEGER,   -- COMMAND_PINGS
-  -- 파생 지표 (raw에서 계산, 소수 2자리. canonical = backfill SQL)
-  gold_per_min                NUMERIC,
-  dpm                         NUMERIC,
-  damage_taken_per_min        NUMERIC,
-  cc_time_per_min             NUMERIC,
-  exp_per_min                 NUMERIC,
-  damage_to_turrets_per_min   NUMERIC,
-  cs_per_min                  NUMERIC,
-  wards_placed_per_min        NUMERIC,
-  wards_killed_per_min        NUMERIC,
-  kda                         NUMERIC,
-  damage_taken_per_death      NUMERIC,
-  damage_dealt_per_death      NUMERIC,
-  dead_time_pct               NUMERIC,
-  lane_gold_diff              NUMERIC,
-  -- 파이프라인
-  is_mmr_eligible             BOOLEAN      NOT NULL DEFAULT TRUE,  -- MMR 계산 적격 여부
-  is_deleted                  BOOLEAN      NOT NULL DEFAULT FALSE, -- 리플 삭제 시 soft delete
-  create_date                 TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  update_date                 TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  CONSTRAINT uq_mmr_participant_metric_match_puuid UNIQUE (custom_match_id, puuid)
-);
-
-CREATE INDEX IF NOT EXISTS idx_mpm_guild_season_played
-  ON mmr_participant_metric (guild_id, season, played_date DESC);
-CREATE INDEX IF NOT EXISTS idx_mpm_custom_match
-  ON mmr_participant_metric (custom_match_id);
-CREATE INDEX IF NOT EXISTS idx_mpm_puuid_season
-  ON mmr_participant_metric (puuid, season);
-
--- 7. mmr_match_result ─────────────────────────────────────────────────────────
+-- 6. mmr_match_result ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS mmr_match_result (
   id                    BIGSERIAL PRIMARY KEY,
   calculation_id        VARCHAR(64)  NOT NULL,
@@ -214,7 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_mmr_result_guild_season_puuid_calc
 CREATE INDEX IF NOT EXISTS idx_mmr_result_custom_match
   ON mmr_match_result (custom_match_id);
 
--- 8. mmr_history (partitioned) ────────────────────────────────────────────────
+-- 7. mmr_history (partitioned) ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS mmr_history (
   id                      BIGSERIAL,
   guild_id                VARCHAR(128) NOT NULL,
@@ -250,7 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_mmr_history_202610_guild_season_puuid_create ON m
 CREATE INDEX IF NOT EXISTS idx_mmr_history_202611_guild_season_puuid_create ON mmr_history_202611 (guild_id, season, puuid, create_date DESC);
 CREATE INDEX IF NOT EXISTS idx_mmr_history_202612_guild_season_puuid_create ON mmr_history_202612 (guild_id, season, puuid, create_date DESC);
 
--- 9. mmr_member_summary ───────────────────────────────────────────────────────
+-- 8. mmr_member_summary ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS mmr_member_summary (
   guild_id          VARCHAR(128) NOT NULL,
   season            VARCHAR(32)  NOT NULL,

@@ -13,7 +13,7 @@
 | `mmr_season_baseline` | 시즌별 전체 길드 통합 baseline | `guild_id` 없음 |
 | `mmr_job` | 비동기 작업 큐 | 유지 확정. `INCREMENTAL_BATCH`/`RECALC`/`CLEANUP` (BASELINE은 동기 admin API) |
 | `mmr_match_queue` | 경기별 MMR 처리 상태/큐 | `create_date` 기준 1시간 딜레이(config) |
-| `mmr_participant_metric` | 정제 참가자 데이터(통계/MMR 공통) | **모든 길드 생성**, MMR 계산은 구독 길드만 |
+| `mmr_participant_metric` | 정제 참가자 데이터(통계/상대전적/MMR 공통) | **마이그레이션 007 소유**(상대전적이 먼저 생성). 모든 길드 생성, MMR 계산은 구독 길드만 |
 | `mmr_match_result` | 경기별 MMR 계산 결과 | |
 | `mmr_history` | MMR 변동 시계열 | monthly range partition |
 | `mmr_member_summary` | 유저별 현재 MMR (SoT) | incremental 전제 상태 |
@@ -174,6 +174,7 @@ GROUP BY guild_id
 | `id` | bigserial | PK | |
 | `custom_match_id` | varchar(255) | NOT NULL | = `replay.replay_code` |
 | `puuid` | varchar(128) | NOT NULL | |
+| `player_code` | varchar(64) | NULL | 상대전적 본계정 병합 식별자. **MMR은 미사용**(puuid 기반, [00 §9](00_overview.md)) |
 | `guild_id` | varchar(128) | NOT NULL | |
 | `season` | varchar(32) | NOT NULL | |
 | `champion_id` | varchar(16) | NULL | SKIN→champion 매핑 실패 시 NULL |
@@ -208,6 +209,7 @@ GROUP BY guild_id
 - `(guild_id, season, played_date DESC)`
 - `(custom_match_id)`
 - `(puuid, season)`
+- `(guild_id, player_code)` — 상대전적 H2H 셀프 조인용 (MMR 미사용)
 
 ---
 
@@ -386,11 +388,12 @@ CREATE INDEX ON mmr_job (guild_id, job_type, status);
 -- mmr_match_queue
 CREATE INDEX ON mmr_match_queue (guild_id, season, status, create_date);
 
--- mmr_participant_metric
+-- mmr_participant_metric (마이그레이션 007 소유)
 CREATE UNIQUE INDEX ON mmr_participant_metric (custom_match_id, puuid);
 CREATE INDEX ON mmr_participant_metric (guild_id, season, played_date DESC);
 CREATE INDEX ON mmr_participant_metric (custom_match_id);
 CREATE INDEX ON mmr_participant_metric (puuid, season);
+CREATE INDEX ON mmr_participant_metric (guild_id, player_code);  -- 상대전적 H2H (MMR 미사용)
 
 -- mmr_match_result
 CREATE UNIQUE INDEX ON mmr_match_result (calculation_id, match_participant_id);

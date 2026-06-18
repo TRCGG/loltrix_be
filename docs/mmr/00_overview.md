@@ -301,7 +301,7 @@
 |---|---|
 | **이 문서** | 왜/무엇/어떻게 (개요) |
 | [01_architecture.md](./01_architecture.md) | 아키텍처 결정사항, 컴포넌트 상세, 데이터 흐름도 |
-| [02_data_model.md](./02_data_model.md) | 테이블 9종 스키마, 상태 머신, 인덱스 전략 |
+| [02_data_model.md](./02_data_model.md) | 테이블 스키마(MMR 전용 8종 + 공유 metric), 상태 머신, 인덱스 전략 |
 | [03_api_contract.md](./03_api_contract.md) | 백엔드 ↔ MMR 서비스 통신 계약, payload 명세, 에러 코드 |
 | [steps/step01_migration.md](./steps/step01_migration.md) | DB 마이그레이션 구현 스펙 |
 | [steps/step02_schema.md](./steps/step02_schema.md) | Drizzle ORM 스키마 구현 스펙 |
