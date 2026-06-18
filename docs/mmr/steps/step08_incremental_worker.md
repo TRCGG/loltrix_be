@@ -128,7 +128,7 @@ async processMatch(customMatchId, guildId, season, baseline) {
 
 **`getMatchRows` — metric→interface 변환**([03 §3](../03_api_contract.md)): `mmr_participant_metric`은 변환값(blue/red·enum·1/0)을 이미 저장하므로 변환은 **(a) 필드명 리네임** + **(b) `match_participant_id` 부착** 둘뿐이다.
 - (a) 리네임: `kills→kill`, `gold_earned→gold`, `game_duration→time_played`, `damage_to_champions→total_damage_champions`, `damage_to_turrets→total_damage_dealt_to_buildings`, `control_wards_bought→vision_bought` 등. metric의 raw 49개 중 **interface가 요구하는 필드만** 골라 보냄(나머지는 저장 전용).
-- (b) `match_participant_id`: metric엔 없음(자연키 `(custom_match_id, puuid)`). `mmr_match_result`/`mmr_history` 멱등 키라 payload엔 필수 → `match_participant`를 `custom_match_id` + `puuid→player_code`(riot_account)로 join해 부착.
+- (b) `match_participant_id`: metric엔 없음(자연키 `(custom_match_id, puuid)`). `mmr_match_result`/`mmr_history` 멱등 키라 payload엔 필수 → `match_participant`를 **`(custom_match_id, player_code)`** 로 join해 부착. **dev metric엔 이미 `player_code`(본계정 병합)가 있어**(match_participant와 동일 규칙) riot_account 조회 없이 직접 join 가능.
 
 **`pre_match_user_summary` 조립**: `mmr_member_summary`에서 10명 행을 읽어 `{ puuid, positions: [{position, pos_mmr, pos_games, pos_wins}] }` 형태로. 없는 유저/포지션은 보내지 않으면 gmok이 신규(1300)로 간주([03 §5.1](../03_api_contract.md)).
 

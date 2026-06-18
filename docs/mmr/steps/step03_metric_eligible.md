@@ -29,7 +29,7 @@
 | 파일 | 변경 |
 |---|---|
 | `src/services/guildSubscription.service.ts` | 신규 — `isMmrActive` |
-| `src/services/mmrParticipantMetric.service.ts` | 신규 — eligible 판정 + metric 빌드/insert |
+| `src/services/mmrMetric.service.ts` | 신규 — eligible 판정 + metric 빌드/insert |
 | `src/services/mmrMatchQueue.service.ts` | 신규 — `insertInitialStatus` (wait/skip) |
 | `src/facade/replaySave.facade.ts` | 수정 — `saveMatchData` 끝에 MMR hook |
 
@@ -206,7 +206,7 @@ await guildMemberService.insertGuildMember(riotAccounts, savedReplay.guildId, tx
 
 // ── MMR hook ──────────────────────────────
 // 1) metric: 모든 길드 (구독 게이트 밖)
-const metricRows = mmrParticipantMetricService.buildMetricRows({
+const metricRows = mmrMetricService.buildMetricRows({
   rawData,
   matchParticipants: insertedParticipants,
   customMatchId: customMatchData.id,
@@ -216,12 +216,12 @@ const metricRows = mmrParticipantMetricService.buildMetricRows({
   // 동일 시점 업로드는 같은 시각으로 묶이고, worker는 played_date ASC로 처리.
   playedDate: insertedCustomMatch.createDate,
 });
-await mmrParticipantMetricService.insertMetrics(metricRows, tx);
+await mmrMetricService.insertMetrics(metricRows, tx);
 
 // 2) MMR 계산 대상 등록(mmr_match_queue): 구독 active 길드만
 const isMmrActive = await guildSubscriptionService.isMmrActive(savedReplay.guildId, tx);
 if (isMmrActive) {
-  const eligible = mmrParticipantMetricService.isMatchEligibleForMmr(metricRows);
+  const eligible = mmrMetricService.isMatchEligibleForMmr(metricRows);
   await mmrMatchQueueService.insertInitialStatus(
     { customMatchId: customMatchData.id, guildId: savedReplay.guildId, season: savedReplay.season, status: eligible ? 'wait' : 'skip' },
     tx,
