@@ -11,7 +11,7 @@
 | `guild_subscription` | 길드별 MMR 구독 상태 | |
 | `mmr_guild_state` | 길드+시즌별 MMR 계산 진행 상태 | recalc_flag 없음 (RECALC는 (재)구독만) |
 | `mmr_season_baseline` | 시즌별 전체 길드 통합 baseline | `guild_id` 없음 |
-| `mmr_job` | 비동기 작업 큐 | 유지 확정. `INCREMENTAL_BATCH`/`RECALC`/`CLEANUP` (BASELINE은 동기 admin API) |
+| `mmr_job` | 비동기 작업 큐 | 유지 확정. `INCREMENTAL_BATCH`/`RECALC` (BASELINE은 동기 admin API) |
 | `mmr_match_queue` | 경기별 MMR 처리 상태/큐 | `create_date` 기준 1시간 딜레이(config) |
 | `mmr_participant_metric` | 정제 참가자 데이터(통계/상대전적/MMR 공통) | **마이그레이션 007 소유**(상대전적이 먼저 생성). 모든 길드 생성, MMR 계산은 구독 길드만 |
 | `mmr_match_result` | 경기별 MMR 계산 결과 | |
@@ -33,7 +33,7 @@
 | `service_key` | varchar(32) | | 현재 `'MMR'` 고정. 미래 구독 서비스 확장 포인트 |
 | `status` | varchar(16) | | `active` / `cancelled` |
 | `enabled_date` | timestamptz | | **현재(최근) 활성화 시각** (재구독 시 갱신) |
-| `ended_date` | timestamptz | nullable | 최근 해지 시각(이력용). cleanup은 `status='cancelled'` 기준 — 유예 없음 |
+| `ended_date` | timestamptz | nullable | 최근 해지 시각(이력용). 구독 해지 시 soft delete(hard delete 없음) |
 | `create_date` | timestamptz | | **최초 구독 생성 시각** (불변) |
 | `update_date` | timestamptz | | |
 
@@ -94,16 +94,16 @@
 
 ### 2.4 `mmr_job`
 
-비동기 작업 큐. `INCREMENTAL_BATCH` / `RECALC` / `CLEANUP` 작업을 추적한다. (step05에서 **유지 확정**. 동시성 단일화의 핵심 — [01_architecture.md §E](./01_architecture.md))
+비동기 작업 큐. `INCREMENTAL_BATCH` / `RECALC` 작업을 추적한다. (step05에서 **유지 확정**. 동시성 단일화의 핵심 — [01_architecture.md §E](./01_architecture.md))
 
 > **BASELINE은 큐에 넣지 않는다.** 관리자 수동 + <60초라 동기 admin API로 처리 → job_type에서 제외.
 
 | 컬럼 | 타입 | 제약 | 설명 |
 |---|---|---|---|
 | `id` | serial | PK | uuid→serial |
-| `guild_id` | varchar(128) | nullable | INCREMENTAL_BATCH/RECALC 필수, CLEANUP은 null |
+| `guild_id` | varchar(128) | nullable | INCREMENTAL_BATCH/RECALC 모두 guild 단위 |
 | `season` | varchar(32) | nullable | 동상 |
-| `job_type` | varchar(32) | | `INCREMENTAL_BATCH` / `RECALC` / `CLEANUP` |
+| `job_type` | varchar(32) | | `INCREMENTAL_BATCH` / `RECALC` |
 | `status` | varchar(16) | | `wait` / `run` / `done` / `fail` / `cancel` |
 | `attempts` | int | default 0 | 현재 재시도 횟수. 상한은 config `MMR_JOB_MAX_ATTEMPTS`(=3) |
 | `scheduled_date` | timestamptz | | 실행 예약 시각 (재시도·daily cron 예약) |
@@ -410,29 +410,29 @@ CREATE INDEX ON mmr_member_summary (guild_id, season, total_mmr DESC)
 
 ---
 
-## 5. soft delete — 두 가지 트리거
+## 5. soft delete — 영구 보존 (hard delete 없음)
 
-soft delete(`is_deleted`) 후 daily cron `CLEANUP`이 hard delete한다([step12](./steps/step12_crons.md)). 트리거가 둘이고, **유예 정책이 다르다**: 구독 해지는 **유예 없음**(다음 CLEANUP에 정리), 리플 삭제는 **30일 유예**.
+soft delete(`is_deleted=true`)는 **영구 보존**한다 — **CLEANUP(hard delete) 없음**([step12](./steps/step12_crons.md)). 조회는 전부 `is_deleted=false` 필터라 화면엔 안 보이고, 재구독 시 RECALC가 현재 시즌 summary를 덮어쓴다. 트리거는 둘: 구독 해지(길드 단위), 리플 삭제/경기 제외(경기 단위).
 
-### 5.1 구독 해지 시 (길드 단위) — 유예 없음
+> **CLEANUP을 두지 않는 이유**: metric이 전 길드 보존되고 재구독은 RECALC로 현재 시즌을 복원하므로, summary/result/history를 지울 이유가 없다. soft delete row는 조회에서 제외되니 그대로 둬도 무해 → 30일 유예·해지 hard delete·24개월 파티션 DROP을 전부 제거.
+
+### 5.1 구독 해지 시 (길드 단위)
 
 ```
-mmr_member_summary.is_deleted = true (해지 즉시 숨김), 다음 CLEANUP이 hard delete (유예 없음):
-  ✓ mmr_member_summary / mmr_match_result / mmr_history / mmr_match_queue  (그 길드 전체)
-
-hard delete 안 함:
-  ✗ mmr_participant_metric  (모든 길드 보존 — 재구독 RECALC 재활용)
-  ✗ guild_subscription / mmr_season_baseline / mmr_guild_state  (이력·공유 데이터)
+mmr_member_summary.is_deleted = true (리더보드 즉시 숨김). hard delete 없음:
+  · mmr_member_summary   → is_deleted=true (재구독 RECALC가 현재 시즌 덮어씀)
+  · mmr_match_result / mmr_history / mmr_match_queue  → 보존(조회는 summary 게이트로 차단)
+  · mmr_participant_metric  → 보존(모든 길드, 재구독 RECALC 재활용)
 ```
 
-> 유예를 두지 않는 이유: metric이 전 길드 보존되고 재구독은 항상 RECALC로 복원하므로, summary/result/history를 30일 보관해도 재구독 시 어차피 wipe 후 재생성된다 → 보관 이점이 없음.
+> 과거 시즌 summary도 `is_deleted=true`로 숨겨진 채 보존된다(영구유실 아님). 재구독 RECALC는 현재 시즌만 복원하므로 과거 시즌은 숨겨진 상태로 남는다.
 
 ### 5.2 리플 삭제 / 경기 제외 시 (경기 단위) → [step14](./steps/step14_deletion_rollback.md)
 
 ```
-그 경기의 행만 is_deleted = true, 30일 후 hard delete:
-  ✓ mmr_participant_metric / mmr_match_queue / mmr_match_result / mmr_history  (해당 custom_match_id)
+그 경기의 행만 is_deleted = true (영구 보존, hard delete 없음):
+  · mmr_participant_metric / mmr_match_queue / mmr_match_result / mmr_history  (해당 custom_match_id)
   · mmr_member_summary 는 soft delete 아님 → 역산 롤백으로 점수만 되돌림
 ```
 
-> 구독 해지는 metric을 보존하지만, 리플 삭제는 그 경기 metric도 `is_deleted=true`(경기 자체가 사라지므로).
+> 리플 삭제는 그 경기 metric도 `is_deleted=true`(경기 자체가 사라지므로). 조회는 `is_deleted=false` 필터로 제외.

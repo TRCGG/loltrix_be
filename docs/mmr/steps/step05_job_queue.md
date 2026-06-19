@@ -9,9 +9,9 @@
 
 모든 비동기 MMR 작업을 직렬화하는 **단일 큐(`mmr_job`)와 worker 골격**을 만든다. 이게 [01 §2-E](../01_architecture.md)에서 확정한 **동시성 단일화**의 구현체다.
 
-- **job_type 3종**: `INCREMENTAL_BATCH` / `RECALC` / `CLEANUP`. (BASELINE은 큐에 안 넣음 — 동기 admin API, [step11](./step11_admin_api.md))
+- **job_type 2종**: `INCREMENTAL_BATCH` / `RECALC`. (CLEANUP은 soft-delete only 전환으로 제거, BASELINE은 동기 admin API라 큐 제외 — [step11](./step11_admin_api.md))
 - worker는 **골격만** — 픽업·디스패치·성공/실패 처리 루프. 실제 처리 로직(핸들러)은 후속 step이 등록한다.
-- cron/interval **트리거**는 별도 layer: incremental은 [step08](./step08_incremental_worker.md)(30분), cleanup·daily RECALC는 [step12](./step12_crons.md).
+- cron/interval **트리거**는 별도 layer: incremental은 [step08](./step08_incremental_worker.md)(30분), daily 알람·monthly 파티션은 [step12](./step12_crons.md).
 
 ### 산출물
 
@@ -38,7 +38,7 @@ worker.tick()  (트리거: step08 cron 등)
 
 **핵심 두 장치** ([01 §2-E](../01_architecture.md)):
 1. **`FOR UPDATE SKIP LOCKED`** — 여러 picker가 같은 잡을 두고 충돌하지 않음.
-2. **per-guild `NOT EXISTS(run job)`** — 한 길드의 `INCREMENTAL_BATCH`/`RECALC`는 동시에 둘 이상 안 돎(누적 순서 보장). 다른 길드·`CLEANUP`(guild 없음)은 병렬 가능.
+2. **per-guild `NOT EXISTS(run job)`** — 한 길드의 `INCREMENTAL_BATCH`/`RECALC`는 동시에 둘 이상 안 돎(누적 순서 보장). 다른 길드는 병렬 가능.
 
 ---
 
@@ -47,12 +47,12 @@ worker.tick()  (트리거: step08 cron 등)
 ### 3.1 enqueue
 
 ```ts
-export type MmrJobType = 'INCREMENTAL_BATCH' | 'RECALC' | 'CLEANUP';
+export type MmrJobType = 'INCREMENTAL_BATCH' | 'RECALC';   // CLEANUP 제거(soft-delete only)
 export type MmrJobStatus = 'wait' | 'run' | 'done' | 'fail' | 'cancel';
 
 export interface EnqueueJobInput {
   jobType: MmrJobType;
-  guildId?: string | null;   // INCREMENTAL_BATCH/RECALC 필수, CLEANUP은 null
+  guildId?: string | null;   // INCREMENTAL_BATCH/RECALC 모두 guild 단위
   season?: string | null;
   scheduledDate?: Date;      // 기본 now. 재시도 시 재배치 등에 사용
 }
@@ -118,7 +118,9 @@ async markFail(jobId: number, errorMessage: string, tx?: TransactionType): Promi
     .set({
       status: retried ? 'wait' : 'fail',
       errorMessage,
-      finishedDate: retried ? null : new Date(),  // 재시도면 종료시각 비움
+      // 재시도면 종료시각 비우고 다음 tick 이후로 재배치(같은 tick 즉시 재픽업 방지 — 백오프)
+      finishedDate: retried ? null : new Date(),
+      scheduledDate: retried ? sql`NOW() + (${MMR_WORKER_INTERVAL_MIN} || ' minutes')::interval` : undefined,
       updateDate: new Date(),
     })
     .where(eq(mmrJob.id, jobId)).returning();
@@ -127,6 +129,7 @@ async markFail(jobId: number, errorMessage: string, tx?: TransactionType): Promi
 ```
 
 > `attempts`는 픽업 때 이미 증가. 3번째 픽업(`attempts=3`)에서 실패하면 `3 < 3` 거짓 → `fail`. 결과적으로 **총 3회 시도**.
+> **백오프**: 재시도(`wait` 환원) 시 `scheduled_date`를 worker 간격(`MMR_WORKER_INTERVAL_MIN`)만큼 미뤄 **같은 tick 내 즉시 재픽업을 막는다**. gmok 다운 시 3회가 한 tick에 순식간 소진되는 것을 방지(다음 tick에 재시도).
 
 ### 3.4 운영자용 (step11에서 노출)
 
@@ -192,7 +195,6 @@ export const mmrWorker = new MmrWorker();
 |---|---|---|
 | `INCREMENTAL_BATCH` | step08 | step08 cron(30분)이 wait+1h 경기 있는 길드별로 enqueue |
 | `RECALC` | step08(=incremental 반복) / step09 | (재)구독 시에만(step07). 삭제는 역산 롤백(step14) |
-| `CLEANUP` | step12 | daily cron(step12) |
 
 > **RECALC 멱등 재시작**([01 §3.3](../01_architecture.md)): RECALC 핸들러는 재시도 시 summary 초기화부터 전량 재실행하도록 step08/09에서 구현. 큐는 단지 "다시 wait→run"만 한다.
 
@@ -203,7 +205,7 @@ export const mmrWorker = new MmrWorker();
 | 항목 | 내용 |
 |---|---|
 | mmr_job 유지 | 확정. 동시성·재시도·관측을 한 곳에 모음 |
-| job_type | `INCREMENTAL_BATCH`/`RECALC`/`CLEANUP` 3종. BASELINE 제외(동기 admin API) |
+| job_type | `INCREMENTAL_BATCH`/`RECALC` 2종. CLEANUP 제거(soft-delete only), BASELINE 제외(동기 admin API) |
 | `max_attempts` | **컬럼 아님 → config `MMR_JOB_MAX_ATTEMPTS`(=3)**. `attempts`만 컬럼 |
 | `calculation_id`/`payload` 없음 | mmr_job에 두지 않음(컬럼 검토 제거). 경기별 calc_id는 result/queue가 가짐 |
 | 핸들러 실행 위치 | 픽업 TX **밖**. gmok HTTP 동안 DB 락·커넥션 점유 회피 |
@@ -229,5 +231,5 @@ export const mmrWorker = new MmrWorker();
 ## 7. 의존성 / 다음 step
 
 - **선행**: [step02](./step02_schema.md)(mmr_job 타입)
-- **후행**: [step08](./step08_incremental_worker.md)(INCREMENTAL_BATCH 핸들러 + 30분 cron) · [step09](./step09_result_save.md)(핸들러 내 결과 저장) · [step11](./step11_admin_api.md)(cancel/retry/list 노출) · [step12](./step12_crons.md)(CLEANUP·daily RECALC enqueue)
+- **후행**: [step08](./step08_incremental_worker.md)(INCREMENTAL_BATCH 핸들러 + 30분 cron) · [step09](./step09_result_save.md)(핸들러 내 결과 저장) · [step11](./step11_admin_api.md)(cancel/retry/list 노출) · [step12](./step12_crons.md)(파티션·알람)
 </content>

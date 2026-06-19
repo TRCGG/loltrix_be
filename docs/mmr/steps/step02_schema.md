@@ -7,7 +7,7 @@
 
 ## 1. 목적 / 범위
 
-[step01](./step01_migration.md)의 9테이블 DDL을 **Drizzle ORM 정의로 1:1 매핑**한다. 타입 추론(`$inferSelect`/`$inferInsert`)으로 서비스 계층이 타입 안전하게 쓰도록 한다.
+[step01](./step01_migration.md)의 MMR 전용 8테이블 DDL을 **Drizzle ORM 정의로 1:1 매핑**한다. 타입 추론(`$inferSelect`/`$inferInsert`)으로 서비스 계층이 타입 안전하게 쓰도록 한다.
 
 - DDL이 SoT다. 이 step은 그 DDL과 **정확히 일치**하는 Drizzle 정의를 만든다.
 - 마이그레이션 실행(테이블 생성)은 step01의 raw SQL이 담당한다. Drizzle은 **쿼리·타입용 매핑**만 한다(`drizzle-kit push`로 테이블을 만들지 않는다 — 파티션·partial index를 raw SQL로 관리하기 때문).
@@ -16,7 +16,7 @@
 
 | 파일 | 내용 |
 |---|---|
-| `src/database/schema.ts` | 아래 §3의 9개 `pgTable` 정의 + 타입 export 추가 (기존 파일에 append) |
+| `src/database/schema.ts` | 아래 §3의 8개 `pgTable` 정의 (metric은 dev 재사용) + 타입 export 추가 (기존 파일에 append) |
 
 ---
 
@@ -122,7 +122,7 @@ export const mmrJob = pgTable(
     id: serial('id').primaryKey(),
     guildId: varchar('guild_id', { length: 128 }),
     season: varchar('season', { length: 32 }),
-    jobType: varchar('job_type', { length: 32 }).notNull(),       // INCREMENTAL_BATCH / RECALC / CLEANUP
+    jobType: varchar('job_type', { length: 32 }).notNull(),       // INCREMENTAL_BATCH / RECALC
     status: varchar('status', { length: 16 }).notNull(),          // wait / run / done / fail / cancel
     attempts: integer('attempts').notNull().default(0),
     scheduledDate: timestamp('scheduled_date', { withTimezone: true }).notNull().defaultNow(),

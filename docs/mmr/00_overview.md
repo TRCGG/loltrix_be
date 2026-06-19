@@ -81,7 +81,7 @@
 
 > **삭제 가능 기간**: 업로드 후 **2주 이내**만 삭제 가능(config `REPLAY_DELETE_WINDOW_DAYS`=14, system_config로 조정). 2주 지난 경기는 삭제 불가 → 역산 롤백의 누적 오차가 작게 묶인다.
 
-리플 삭제는 **soft delete**다 — 경기·MMR 데이터를 `is_deleted=true`로 표시(복구 없음, 30일 후 cleanup이 hard delete).
+리플 삭제는 **soft delete**다 — 경기·MMR 데이터를 `is_deleted=true`로 표시(복구 없음, hard delete 없이 영구 보존. 조회는 `is_deleted=false`로 제외).
 
 | 삭제 대상 | 처리 |
 |---|---|
@@ -109,9 +109,9 @@
 ### 3.5 구독을 해지하면
 
 ```
-구독 해지 → summary is_deleted=true로 리더보드 즉시 숨김 (유예 없음)
-  ├─ 재구독 → 전체 RECALC(다음 오전 10시 예약)로 metric에서 재구축 → 복원
-  └─ 다음 CLEANUP → MMR 데이터 hard delete (metric은 전 길드 보존)
+구독 해지 → summary is_deleted=true로 리더보드 즉시 숨김
+  └─ 재구독 → 현재 시즌 RECALC(다음 오전 10시 예약)로 summary 덮어씀 → 복원
+     (hard delete 없음 — soft delete 영구 보존. 과거 시즌은 숨겨진 채 남음)
 ```
 
 통계 데이터(`match_participant`)는 영향받지 않는다. 무료 통계는 계속 보인다.
@@ -275,9 +275,9 @@
 | 시즌 중 baseline 변경 | 과거 계산 MMR 유지, 자동 RECALC 안 함. 신규 경기만 새 baseline | 과거 결과 안정성 우선 |
 | RECALC 트리거 | **구독·재구독 시에만** | 삭제는 롤백, baseline 변경은 과거 유지 → 무거운 RECALC 최소화 |
 | 판수 부족 유저 | `total_games < N`이면 배치 중(`is_placed=false`)·리더보드 분리 | 1~2판 유저가 1300으로 상위 노출되는 왜곡 방지 |
-| 재구독 | 유예 없음 — 재구독 시 metric에서 전체 RECALC로 복원 | metric이 전 길드 보존되어 언제든 재구축 가능. 유예 보관은 이점 없음 |
+| 재구독 | 재구독 시 현재 시즌 RECALC로 summary 복원(과거 시즌은 숨겨진 채 유지) | metric이 전 길드 보존되어 언제든 재구축 가능 |
 | 데이터 부족 | `INSUFFICIENT_DATA` 명시 에러 | "조용히 0점" 같은 모호한 상태 방지 |
-| mmr_history 파티션 | 처음부터 monthly range partition, 2년 보존 후 정리 | 시계열이라 1~2년 안에 폭증 예상. 나중에 쪼개기 어려움 |
+| mmr_history 파티션 | 처음부터 monthly range partition. **DROP 없이 무기한 보존**(soft-delete only) | 시계열이라 폭증 예상이나 회수 정책 없음. 나중에 쪼개기 어려워 처음부터 파티션 |
 
 ---
 
@@ -305,7 +305,7 @@
 | [03_api_contract.md](./03_api_contract.md) | 백엔드 ↔ MMR 서비스 통신 계약, payload 명세, 에러 코드 |
 | [steps/step01_migration.md](./steps/step01_migration.md) | DB 마이그레이션 구현 스펙 |
 | [steps/step02_schema.md](./steps/step02_schema.md) | Drizzle ORM 스키마 구현 스펙 |
-| [steps/step03_metric_eligible.md](./steps/step03_metric_eligible.md) | mmr_participant_metric 정제 + is_mmr_eligible |
+| [steps/step03_metric_eligible.md](./steps/step03_metric_eligible.md) | MMR 계산 대상 등록(mmr_match_queue) — metric/eligible은 dev 재사용 |
 | [steps/step04_baseline.md](./steps/step04_baseline.md) | mmr_season_baseline 저장·조회·active 전환 |
 | [steps/step05_job_queue.md](./steps/step05_job_queue.md) | mmr_job 큐 + worker 골격 |
 | [steps/step06_mmr_client.md](./steps/step06_mmr_client.md) | gmok_mmr 클라이언트 (fetch) |
@@ -314,6 +314,6 @@
 | [steps/step09_result_save.md](./steps/step09_result_save.md) | 결과 저장 (멱등 upsert + 트랜잭션) |
 | [steps/step10_query_api.md](./steps/step10_query_api.md) | 조회 API (available/status/data) |
 | [steps/step11_admin_api.md](./steps/step11_admin_api.md) | 운영자 API (baseline·경기 제외·job) |
-| [steps/step12_crons.md](./steps/step12_crons.md) | daily cron (cleanup) + monthly partition cron |
+| [steps/step12_crons.md](./steps/step12_crons.md) | daily 적체 알람 + monthly partition cron (CLEANUP 없음) |
 | [steps/step13_integration_test.md](./steps/step13_integration_test.md) | 통합 테스트 (contract fixture) |
 | [steps/step14_deletion_rollback.md](./steps/step14_deletion_rollback.md) | 리플 삭제 MMR 역산 롤백 (2주 제한·soft delete) |

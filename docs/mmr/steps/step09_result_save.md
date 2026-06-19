@@ -110,6 +110,8 @@ async save(res: MatchCalcResponse): Promise<void> {
 ### `buildSummaryRow` — updated_user_summary → 평면 컬럼
 응답의 `positions: [{position, pos_mmr, pos_games, pos_wins}]`를 `top_*`/`jug_*`/`mid_*`/`adc_*`/`sup_*` 15컬럼으로 펼친다. 응답에 없는 포지션은 기본(`1300/0/0`) — gmok이 절댓값 전체를 주므로 없는 포지션은 미플레이로 간주. `total_mmr/total_games/total_wins`는 응답값, `is_deleted=false`.
 
+> **분모 0 가드**: `total_mmr` 가중평균 시 `Σ(pos_games)=0`(미플레이 유저)이면 0으로 나누지 말고 초기값(1300). gmok 응답의 `total_mmr`을 그대로 쓰는 정상 경로에선 무관하나, 역산([step14](./step14_deletion_rollback.md))과 동일 가드를 둔다.
+
 ---
 
 ## 4. 주의점

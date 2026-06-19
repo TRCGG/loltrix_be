@@ -53,7 +53,7 @@ every 30min (MMR_WORKER_INTERVAL_MIN):
 ```ts
 mmrWorker.registerHandler('INCREMENTAL_BATCH', (job) => mmrIncremental.runIncrementalBatch(job.guildId!, job.season!));
 mmrWorker.registerHandler('RECALC',            (job) => mmrIncremental.runRecalc(job.guildId!, job.season!));
-// CLEANUP 핸들러는 step12
+// CLEANUP 없음 (soft-delete only — step12는 알람·파티션만)
 ```
 
 ### 4.1 `runIncrementalBatch(guildId, season)`
@@ -84,7 +84,7 @@ baseline = getActiveBaseline(season); if (!baseline) return   // baseline 생길
 ```
 
 > **RECALC는 예약 실행**: 구독/재구독 시 `scheduled_date=다음 오전 10시 KST`로 enqueue됨([step07](./step07_subscription.md)). worker `pickNextJob`이 `scheduled_date <= NOW()`라 10시 후 tick에 픽업한다. 1년치면 20분+(경기 순서 의존 → 병렬 불가)라 한산한 창에 몰기 위함.
-> **metric backfill 없음**: metric은 **업로드 시 모든 길드에 적재**(step03)되므로 RECALC가 raw 재파싱할 필요가 없다. 기존 경기는 일회성 backfill SQL로 이미 채워진 상태 전제([step03 §7](./step03_metric_eligible.md)).
+> **metric backfill 없음**: metric은 **업로드 시 모든 길드에 적재**(step03)되므로 RECALC가 raw 재파싱할 필요가 없다. 기존 경기는 일회성 backfill SQL로 이미 채워진 상태 전제([step03](./step03_metric_eligible.md)).
 > **멱등**([기획 §6.3](../00_overview.md)): RECALC 재시도 시 **항상 Step 1(초기화)부터 전량 재실행**. 중간부터 안 이어간다.
 
 ---
@@ -176,6 +176,6 @@ async processMatch(customMatchId, guildId, season, baseline) {
 
 ## 9. 의존성 / 다음 step
 
-- **선행**: [step04](./step04_baseline.md)(getActiveBaseline) · [step05](./step05_job_queue.md)(worker/enqueue) · [step06](./step06_mmr_client.md)(calculateMatch) · [step03](./step03_metric_eligible.md)(buildMetricRows 재사용)
-- **후행**: [step09](./step09_result_save.md)(`mmrResultSave.save` — 단일 TX 멱등 저장) · [step12](./step12_crons.md)(daily RECALC enqueue·CLEANUP, 같은 스케줄러)
+- **선행**: [step04](./step04_baseline.md)(getActiveBaseline) · [step05](./step05_job_queue.md)(worker/enqueue) · [step06](./step06_mmr_client.md)(calculateMatch) · [step03](./step03_metric_eligible.md)(metric 테이블 재사용)
+- **후행**: [step09](./step09_result_save.md)(`mmrResultSave.save` — 단일 TX 멱등 저장) · [step12](./step12_crons.md)(daily 알람·monthly 파티션, 같은 스케줄러)
 </content>

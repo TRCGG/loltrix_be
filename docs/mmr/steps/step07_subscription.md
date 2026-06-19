@@ -61,7 +61,7 @@ subscribe(guildId)   ── 단일 TX ──
 
 worker가 RECALC를 픽업: summary 초기화(전원 1300, **is_deleted=false**) → eligible 경기 played_date ASC 전량 incremental 반복 → `mmr_guild_state=ready` ([01 §3.3](../01_architecture.md), 핸들러는 step08). metric은 전 길드 적재라 raw 재파싱 backfill 불필요.
 
-> 해지 때 정리된(soft-deleted 후 hard delete된) 데이터를 RECALC가 metric에서 summary/result/history로 **재구축**하므로 **별도 복구 단계가 없다.** 해지 후 경과 기간과 무관하게 동일.
+> 해지 때 숨겨진(soft delete된) 데이터 위에 RECALC가 summary를 새로 덮어쓰므로(현재 시즌) **별도 복구 단계가 없다.** 해지 후 경과 기간과 무관하게 동일. (과거 시즌 summary는 숨겨진 채 남음 — RECALC는 현재 시즌만.)
 
 ---
 
@@ -74,7 +74,7 @@ cancel(guildId)   ── 단일 TX ──
   → 응답
 ```
 
-- 해지 즉시 summary `is_deleted=true`로 **리더보드 숨김**. 데이터 hard delete는 **다음 daily CLEANUP**([step12](./step12_crons.md))이 **유예 없이**(`status='cancelled'` 기준) 수행. metric은 보존(재구독 RECALC 복원).
+- 해지 즉시 summary `is_deleted=true`로 **리더보드 숨김**. **hard delete 없음** — soft delete 영구 보존([step12](./step12_crons.md)). metric도 보존(재구독 RECALC가 현재 시즌 복원).
 - 해지 후 업로드: facade hook이 `isMmrActive=false`라 metric·queue 미생성([step03](./step03_metric_eligible.md)) → 자연히 MMR 누적 멈춤.
 - `mmr_match_queue`의 잔여 `wait`/run 잡 처리: 해지 시 해당 길드 wait 경기를 `skip`으로 정리할지(권장) — §5 참조.
 
@@ -137,9 +137,9 @@ async get(guildId, season, tx?) { /* 단건 (조회 게이트·worker용) */ }
 | 권한 | **게이트 없음** (role 미들웨어 미적용). `guildId`는 body로 받아 디코딩 불필요 |
 | 멱등 | 이미 active인 길드 재-subscribe: no-op 또는 RECALC 재enqueue(중복 방지 — 같은 길드 wait/run RECALC 있으면 skip) |
 | 응답 즉시성 | enqueue까지만. 계산은 worker. 응답은 `wait_init`/`ready` 상태 반환 |
-| soft delete 범위 | 해지 시 `mmr_member_summary`(그 길드 전 시즌) `is_deleted=true`. `mmr_match_result`/`mmr_history`는 그대로(=cleanup 때 hard delete, step12) |
+| soft delete 범위 | 해지 시 `mmr_member_summary`(그 길드 전 시즌) `is_deleted=true`. `mmr_match_result`/`mmr_history`도 보존(hard delete 없음). 과거 시즌은 숨겨진 채 영구 보존 |
 | 트랜잭션 | subscribe/cancel 각각 단일 TX. enqueue도 같은 TX |
-| 비범위 | RECALC 핸들러 로직=step08, baseline=step04/11, cleanup=step12 |
+| 비범위 | RECALC 핸들러 로직=step08, baseline=step04/11, 파티션·알람=step12 |
 
 ---
 
@@ -157,5 +157,5 @@ async get(guildId, season, tx?) { /* 단건 (조회 게이트·worker용) */ }
 ## 9. 의존성 / 다음 step
 
 - **선행**: [step03](./step03_metric_eligible.md)(`isMmrActive`·metric) · [step05](./step05_job_queue.md)(enqueue·`hasPendingRecalc`) · `systemConfigService`(`LOL_SEASON`) · 미들웨어(`validateRequest`)
-- **후행**: [step08](./step08_incremental_worker.md)(RECALC·backfill 핸들러) · [step12](./step12_crons.md)(cleanup)
+- **후행**: [step08](./step08_incremental_worker.md)(RECALC 핸들러) · [step12](./step12_crons.md)(파티션·알람)
 </content>

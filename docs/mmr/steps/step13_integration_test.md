@@ -94,9 +94,10 @@ MMR 파이프라인을 **gmok_mmr를 모킹**해 통합 검증하고, 양 레포
 [T12] RECALC 멱등 재시작
   → 일부 처리 후 재실행 시 summary 초기화부터 전량, 결과 동일 수렴
 
-[T13] CLEANUP
-  → (A) 해지 길드(유예 없음): summary/result/history/queue 삭제, metric 보존
-  → (B) 삭제 경기(is_deleted=true) 30일 경과분: metric/queue/result/history 삭제
+[T13] soft delete 보존 (hard delete 없음)
+  → (A) 해지 길드: summary `is_deleted=true`로 숨김, result/history/metric 모두 보존. 조회 API에서 제외 확인
+  → (B) 재구독: RECALC가 현재 시즌 summary를 덮어써 복원, 과거 시즌은 숨겨진 채 유지
+  → (C) 삭제 경기(is_deleted=true): 역산 롤백으로 summary 차감, result/history는 보존(조회 제외)
 ```
 
 ---
@@ -107,7 +108,7 @@ MMR 파이프라인을 **gmok_mmr를 모킹**해 통합 검증하고, 양 레포
 |---|---|
 | gmok 모킹 | `jest.mock('mmrClient')` 또는 fetch 인터셉트 → fixture 반환 |
 | DB | 테스트 DB(로컬/CI) + **테스트별 트랜잭션 롤백** 또는 truncate. 기존 `src/test` 패턴 따름 |
-| 시간 | `played_date`·`create_date`·딜레이(60분)·grace(30일)는 시간 의존 → fake timer 또는 `create_date` 주입으로 경계 테스트 |
+| 시간 | `played_date`·`create_date`·처리 딜레이(60분)는 시간 의존 → fake timer 또는 `create_date` 주입으로 경계 테스트 |
 | nanoid | calculation_id는 매번 달라짐 → 단언은 형식(`/^MMR-\d{8}-/`)·존재로 |
 | 멱등 | 같은 fixture 2회 저장 후 row count 단언 |
 

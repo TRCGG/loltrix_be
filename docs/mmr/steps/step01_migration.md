@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS guild_subscription (
   service_key   VARCHAR(32)  NOT NULL,              -- 현재 'MMR' 고정 (확장 포인트)
   status        VARCHAR(16)  NOT NULL,              -- active / cancelled
   enabled_date  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),-- 현재(최근) 활성화 시각
-  ended_date    TIMESTAMPTZ,                        -- 최근 해지 시각 (이력용; cleanup은 status='cancelled' 기준, 유예 없음)
+  ended_date    TIMESTAMPTZ,                        -- 최근 해지 시각 (이력용; 구독 해지 시 soft delete (hard delete 없음))
   create_date   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),-- 최초 구독 생성 시각 (불변)
   update_date   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_guild_subscription_guild_service UNIQUE (guild_id, service_key)
@@ -106,9 +106,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_mmr_season_baseline_active_per_season
 ```sql
 CREATE TABLE IF NOT EXISTS mmr_job (
   id                SERIAL PRIMARY KEY,
-  guild_id          VARCHAR(128),                    -- INCREMENTAL_BATCH/RECALC 시 필수, CLEANUP은 null
+  guild_id          VARCHAR(128),                    -- INCREMENTAL_BATCH/RECALC 모두 guild 단위
   season            VARCHAR(32),
-  job_type          VARCHAR(32) NOT NULL,            -- INCREMENTAL_BATCH / RECALC / CLEANUP
+  job_type          VARCHAR(32) NOT NULL,            -- INCREMENTAL_BATCH / RECALC
   status            VARCHAR(16) NOT NULL,            -- wait / run / done / fail / cancel
   attempts          INTEGER     NOT NULL DEFAULT 0,  -- 상한은 config MMR_JOB_MAX_ATTEMPTS(=3)
   scheduled_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -125,7 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_mmr_job_guild_type_status
   ON mmr_job (guild_id, job_type, status);
 ```
 
-> `job_type`은 `INCREMENTAL_BATCH`/`RECALC`/`CLEANUP` 3종(step05 동시성 결정 — incremental도 큐로 직렬화). **BASELINE은 동기 admin API라 큐 제외.** enum은 DB 강제 안 하고 step05·코드에서 관리.
+> `job_type`은 `INCREMENTAL_BATCH`/`RECALC` 2종(step05 동시성 결정 — incremental도 큐로 직렬화). **BASELINE은 동기 admin API라 큐 제외.** enum은 DB 강제 안 하고 step05·코드에서 관리.
 
 ### 3.5 mmr_match_queue
 
@@ -235,7 +235,7 @@ CREATE TABLE IF NOT EXISTS mmr_member_summary (
   mid_mmr  INTEGER NOT NULL, mid_games INTEGER NOT NULL DEFAULT 0, mid_wins INTEGER NOT NULL DEFAULT 0,
   adc_mmr  INTEGER NOT NULL, adc_games INTEGER NOT NULL DEFAULT 0, adc_wins INTEGER NOT NULL DEFAULT 0,
   sup_mmr  INTEGER NOT NULL, sup_games INTEGER NOT NULL DEFAULT 0, sup_wins INTEGER NOT NULL DEFAULT 0,
-  is_deleted        BOOLEAN      NOT NULL DEFAULT FALSE,   -- 구독 해지 시 리더보드 숨김 (cleanup은 status='cancelled' 기준, 유예 없음)
+  is_deleted        BOOLEAN      NOT NULL DEFAULT FALSE,   -- 구독 해지 시 리더보드 숨김 (구독 해지 시 soft delete (hard delete 없음))
   update_date       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   PRIMARY KEY (guild_id, season, puuid)
 );
