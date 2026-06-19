@@ -162,7 +162,7 @@ GROUP BY guild_id
 
 정제된 참가자 데이터(통계/MMR 공통 입력). **모든 길드 경기에 생성**한다 — 단, MMR 계산(`mmr_match_queue`·worker)은 **구독 길드만** 대상.
 - 신규 업로드 시: 업로드 handler에서 즉시 생성 (구독 여부 무관)
-- 기존 경기: 일회성 **backfill SQL**([backfill_match_participant_metric.sql](backfill_match_participant_metric.sql))로 `replay.raw_data`에서 적재
+- 기존 경기: 일회성 **backfill SQL**([scripts/backfill_mmr_participant_metric.sql](../../scripts/backfill_mmr_participant_metric.sql))로 `replay.raw_data`에서 적재
 
 > 구조는 MMR 팀 [정의서](match_participant_metric_table_spec.md)(**raw 49 + 파생 14**) 기반. 단 categoricals는 **변환값**으로 저장(`game_team=blue/red`, `position=TOP/JUG/…`, `game_result=1/0`)해 전송 시 리네임만 남긴다([03 §3](03_api_contract.md)).
 > 모든 길드에 metric을 미리 쌓아두므로, 구독/재구독 RECALC 시 raw_data 재파싱 backfill이 불필요하다(이미 적재됨).
@@ -183,7 +183,7 @@ GROUP BY guild_id
 | `game_result` | smallint | NOT NULL | 변환값 `1`(승)/`0`(패) (WIN='Win'→1) |
 | `played_date` | timestamptz | NOT NULL | 경기 플레이 시각. raw에 없어 업로드 시각 fallback. incremental 순서(ASC) 기준 |
 
-**raw 49 / 파생 14** (정의서 §2.2·§2.3): `kills`·`deaths`·`assists`·`gold_earned`·`cc_time`·`game_duration`·`damage_to_champions`·`damage_taken`·`wards_placed`… (raw, nullable INTEGER) + `gold_per_min`·`dpm`·`cs_per_min`·`kda`·`lane_gold_diff`… (파생, nullable NUMERIC, 소수 2자리). 전체 목록·JSON 키·산식은 [정의서](match_participant_metric_table_spec.md)와 [backfill SQL](backfill_match_participant_metric.sql)이 canonical.
+**raw 49 / 파생 14** (정의서 §2.2·§2.3): `kills`·`deaths`·`assists`·`gold_earned`·`cc_time`·`game_duration`·`damage_to_champions`·`damage_taken`·`wards_placed`… (raw, nullable INTEGER) + `gold_per_min`·`dpm`·`cs_per_min`·`kda`·`lane_gold_diff`… (파생, nullable NUMERIC, 소수 2자리). 전체 목록·JSON 키·산식은 [정의서](match_participant_metric_table_spec.md)와 [backfill SQL](../../scripts/backfill_mmr_participant_metric.sql)이 canonical.
 
 **파이프라인** (정의서엔 없음, 우리 운영용)
 
