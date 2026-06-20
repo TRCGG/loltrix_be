@@ -29,7 +29,8 @@ export const login = async (req: Request, res: Response<void>, next: NextFunctio
     const authorizeUrl = await discordAuthService.getDiscordAuthorizeUrl();
     res.redirect(authorizeUrl);
   } catch (error) {
-    next();
+    console.error('login error', error);
+    next(error);
   }
 };
 
@@ -152,7 +153,7 @@ export const getSelfProfile = async (req: AuthRequest, res: Response) => {
     }
 
     if (!req.discordMemberId) {
-      res.status(500).json({
+      return res.status(500).json({
         status: 'error',
         message: 'User ID not found after auth middleware',
         data: null,
