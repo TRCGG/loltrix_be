@@ -38,6 +38,35 @@
 
 ---
 
+---
+
+## 3. Guilds
+
+### #7 POST /api/guilds — 🟡 중복 guildId 처리
+- [guild.controller.ts:15-41](../../src/controllers/guild.controller.ts#L15-L41) · [guild.service.ts:15-18](../../src/services/guild.service.ts#L15-L18)
+- `insertGuild`는 평범한 insert. 이미 존재하는 guildId(또는 soft-delete된 동일 id)면 PK 충돌 → catch에서 일괄 500. **409 Conflict로 구분**하는 게 적절. 권한·검증·정상 흐름은 양호.
+
+### #8 GET /api/guilds — 🟡 X-Total-Pages "NaN" (재발 패턴)
+- [guild.controller.ts:94](../../src/controllers/guild.controller.ts#L94)
+- `Math.ceil(totalCount / (Number(limit) ?? 10))` — `limit` 미입력 시 `Number(undefined)=NaN`이고 `NaN ?? 10`은 NaN(`??`는 nullish만 처리, NaN은 통과 못 함) → 헤더값 `"NaN"`.
+- 바로 위 `X-Limit`은 `(limit ?? 10)`으로 올바르게 처리 → 두 줄이 불일치.
+- **✅ 수정함**: `Number(limit) || 10`로 변경.
+- ⚠️ **동일 패턴이 #23 most-picks([matchParticipant.controller.ts:226](../../src/controllers/matchParticipant.controller.ts#L226)) 등 다른 페이지네이션 응답에도 존재** → 해당 엔드포인트 점검 시 같이 수정.
+
+### #9 GET /api/guilds/:id — ✅ 이상 없음
+- isDeleted=false 필터, 404 분기 정상.
+
+### #10 PUT /api/guilds/:id — 🔵 참고
+- [guild.service.ts:88-95](../../src/services/guild.service.ts#L88-L95)
+- where가 `isDeleted=false`라 **삭제된 길드는 복구(un-delete) 불가**(404). body로 `isDeleted:true`는 가능 → PUT으로도 소프트삭제 됨(의도 확인 필요). `updateDate` 미갱신.
+
+### #11 DELETE /api/guilds/:id — 🟡 "이미 삭제됨" 분기 도달 불가
+- [guild.service.ts:100-107](../../src/services/guild.service.ts#L100-L107)
+- `softDeleteGuild` where가 `eq(guild.id, id)`뿐 — **isDeleted 필터 없음**. 이미 삭제된 길드도 update가 매칭돼 행 반환 → 컨트롤러의 404 "already deleted" 분기([guild.controller.ts:160](../../src/controllers/guild.controller.ts#L160))는 **영원히 도달 불가**(죽은 코드). `updateDate`도 미갱신.
+- **✅ 수정함**: where에 `eq(guild.isDeleted, false)` 추가 + `updateDate` 갱신. 이제 이미 삭제된 길드는 404 반환.
+
+---
+
 ## 진행 현황
-- 점검 완료: #1 ~ #6
-- 다음: #7 Guilds
+- 점검 완료: #1 ~ #11
+- 다음: #12 Replays

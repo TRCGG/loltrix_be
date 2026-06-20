@@ -36,11 +36,11 @@
 
 | # | Method | Path | 설명 | 인증 | 점검 |
 |---|---|---|---|---|---|
-| 7 | POST | `/api/guilds` | 새 길드 생성 | 인증 | ⬜ |
-| 8 | GET | `/api/guilds` | 길드 목록 조회 | 인증 | ⬜ |
-| 9 | GET | `/api/guilds/:id` | 길드 상세 조회 | 인증 | ⬜ |
-| 10 | PUT | `/api/guilds/:id` | 길드 정보 수정 | 인증 | ⬜ |
-| 11 | DELETE | `/api/guilds/:id` | 길드 삭제 | 인증 | ⬜ |
+| 7 | POST | `/api/guilds` | 새 길드 생성 | adminNormal | 🟡 |
+| 8 | GET | `/api/guilds` | 길드 목록 조회 | 인증 | ✅fix |
+| 9 | GET | `/api/guilds/:id` | 길드 상세 조회 | 인증 | ✅ |
+| 10 | PUT | `/api/guilds/:id` | 길드 정보 수정 | adminNormal | 🔵 |
+| 11 | DELETE | `/api/guilds/:id` | 길드 삭제 | adminNormal | ✅fix |
 
 ## 4. Replays — `replay.routes.ts`
 
