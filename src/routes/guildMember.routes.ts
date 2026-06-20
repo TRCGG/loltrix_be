@@ -117,7 +117,9 @@ router.post(
         mainRiotTag: 'KR1'
       }
     }
+    #swagger.security = [{ "session": [] }]
   */
+  requireGuildRole('guildManager', { from: 'body', key: 'guildId' }),
   validateRequest(linkSubAccountSchema),
   linkSubAccount,
 );

@@ -90,7 +90,39 @@
 
 ---
 
+---
+
+## 5. Guild Member
+
+### #15 POST /api/guildMember/sub-account — 🟡 권한 검증 누락 (수정함)
+- [guildMember.routes.ts:103-125](../../src/routes/guildMember.routes.ts#L103-L125)
+- 형제 쓰기 라우트(PUT `/status`, DELETE `/sub-account`)는 `requireGuildRole('guildManager')`를 거는데 부계정 **연결**(POST)만 누락 → 일반 유저도 임의 계정 연결 가능했음.
+- **✅ 수정함**: `requireGuildRole('guildManager', { from: 'body', key: 'guildId' })` 추가. 봇 요청은 `req.isBot` bypass로 그대로 통과([requireRole.ts:62](../../src/middlewares/requireRole.ts#L62))하므로 디스코드 봇 호출엔 영향 없고, 사람(웹) 호출만 guildManager 요구.
+- 🔵 (기존 추적) 연결 시 player_code UPDATE가 guildId 미스코프 → 다중 길드 참여 계정의 타 길드 전적까지 병합. 부캐-본캐 연결이 "길드별"인지 "전역"인지 결정 후 별도 수정 예정.
+
+### #16 GET /api/guildMember/:guildId/members — ✅ 이상 없음
+- [guildMember.controller.ts:65-106](../../src/controllers/guildMember.controller.ts#L65-L106)
+- `Number(limit) || 50` + `limitNum`으로 X-Total-Pages 계산 → NaN 위험 없음(#8과 달리 올바른 패턴). 양호.
+
+### #17 GET /api/guildMember/:guildId/sub-accounts — ✅ 이상 없음
+- 부계정 없을 때 200 + 빈 배열. 정상.
+
+### #18 GET /api/guildMember/:guildId/:riotName — 🔵 참고
+- [guildMember.controller.ts:18-58](../../src/controllers/guildMember.controller.ts#L18-L58)
+- 동작 정상. 라우트 순서상 `/:guildId/members`·`/:guildId/sub-accounts`가 먼저 선언돼, riotName이 우연히 `members`/`sub-accounts`인 멤버는 검색 불가(엣지). catch 일괄 500.
+
+### #19 PUT /api/guildMember/status — ✅ 동작 정상 / 🔵
+- guildManager 권한 정상. Zod enum으로 이미 검증된 status를 컨트롤러에서 한 번 더 체크(중복, 무해). `BusinessError` status 분기 처리 양호.
+
+### #20 DELETE /api/guildMember/sub-account — 🔵 에러 처리 불일치
+- [guildMember.controller.ts:240-278](../../src/controllers/guildMember.controller.ts#L240-L278)
+- guildManager 권한 정상. not-found는 service가 null 반환 → 404 정상. 다만 catch가 일괄 500이라 `BusinessError`(상태코드)가 #19와 달리 뭉개짐 — 패턴 통일 권장. 연결 해제 시 player_code 미원복은 **의도된 동작**으로 확인됨.
+
+---
+
 ## 진행 현황
-- 점검 완료: #1 ~ #14
-- 다음: #15 Guild Member
-- ⚠️ 별도 추적: 메모리의 웹 업로드 위반/강등 기능이 코드에 없음 → 정정/구현 여부 결정 필요
+- 점검 완료: #1 ~ #20
+- 다음: #21 Matches
+- ⚠️ 별도 추적:
+  - 메모리의 웹 업로드 위반/강등 기능이 코드에 없음 → 메모리 정정 완료, 구현 여부는 미정
+  - #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책(길드별/전역) 결정 후 수정

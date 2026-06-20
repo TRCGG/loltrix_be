@@ -54,12 +54,12 @@
 
 | # | Method | Path | 설명 | 인증 | 점검 |
 |---|---|---|---|---|---|
-| 15 | POST | `/api/guildMember/sub-account` | 부계정 연결 | 인증 | ⬜ |
-| 16 | GET | `/api/guildMember/:guildId/members` | 멤버 목록 조회 | 인증 | ⬜ |
-| 17 | GET | `/api/guildMember/:guildId/sub-accounts` | 부계정 목록 조회 | 인증 | ⬜ |
-| 18 | GET | `/api/guildMember/:guildId/:riotName` | 길드 멤버 검색 | 인증 | ⬜ |
-| 19 | PUT | `/api/guildMember/status` | 멤버 상태 변경 (탈퇴/복귀) | 인증 | ⬜ |
-| 20 | DELETE | `/api/guildMember/sub-account` | 부계정 연결 해제 | 인증 | ⬜ |
+| 15 | POST | `/api/guildMember/sub-account` | 부계정 연결 | guildManager | 🟡fix |
+| 16 | GET | `/api/guildMember/:guildId/members` | 멤버 목록 조회 | 인증 | ✅ |
+| 17 | GET | `/api/guildMember/:guildId/sub-accounts` | 부계정 목록 조회 | 인증 | ✅ |
+| 18 | GET | `/api/guildMember/:guildId/:riotName` | 길드 멤버 검색 | 인증 | 🔵 |
+| 19 | PUT | `/api/guildMember/status` | 멤버 상태 변경 (탈퇴/복귀) | guildManager | ✅ |
+| 20 | DELETE | `/api/guildMember/sub-account` | 부계정 연결 해제 | guildManager | 🔵 |
 
 ## 6. Matches — `matchParticipant.routes.ts`
 
