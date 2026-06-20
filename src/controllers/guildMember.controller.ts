@@ -8,7 +8,6 @@ import {
   MemberListAPIResponse,
 } from '../types/guildMember.js';
 import { guildMemberService } from '../services/guildMember.service.js';
-import { BusinessError } from '../types/error.js';
 
 /**
  * @desc 길드 멤버 및 라이엇 계정 정보 통합 검색
@@ -23,6 +22,7 @@ export const searchGuildMembers = async (
     { riotNameTag?: string; limit?: number }
   >,
   res: Response<GuildMemberAccountResponse>,
+  next: NextFunction,
 ) => {
   try {
     const { guildId, riotName } = req.params;
@@ -49,11 +49,7 @@ export const searchGuildMembers = async (
     });
   } catch (error) {
     console.error('Error searching guild members:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Internal server error while searching guild members',
-      data: null,
-    });
+    return next(error);
   }
 };
 
@@ -70,6 +66,7 @@ export const getMembers = async (
     { status?: string; page?: string; limit?: string }
   >,
   res: Response<MemberListAPIResponse>,
+  next: NextFunction,
 ) => {
   try {
     const { guildId } = req.params;
@@ -97,11 +94,7 @@ export const getMembers = async (
     });
   } catch (error) {
     console.error('Error retrieving members:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Internal server error while retrieving members',
-      data: null,
-    });
+    return next(error);
   }
 };
 
@@ -149,6 +142,7 @@ export const linkSubAccount = async (
 export const getSubAccounts = async (
   req: Request<{ guildId: string }>,
   res: Response<SubAccountsAPIResponse>,
+  next: NextFunction,
 ) => {
   try {
     const { guildId } = req.params;
@@ -170,11 +164,7 @@ export const getSubAccounts = async (
     });
   } catch (error) {
     console.error('Error retrieving sub-accounts:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Internal server error while retrieving sub-accounts',
-      data: null,
-    });
+    return next(error);
   }
 };
 
@@ -186,6 +176,7 @@ export const getSubAccounts = async (
 export const updateMemberStatus = async (
   req: Request<Record<string, never>, GuildMemberResponse, UpdateGuildMemberStatusRequest>,
   res: Response<GuildMemberResponse>,
+  next: NextFunction,
 ) => {
   try {
     const { guildId, riotName, riotNameTag, status } = req.body;
@@ -215,20 +206,8 @@ export const updateMemberStatus = async (
     });
   } catch (error) {
     console.error('Error updating member status:', error);
-
-    if (error instanceof BusinessError) {
-      return res.status(error.status).json({
-        status: 'error',
-        message: error.message,
-        data: null,
-      });
-    }
-
-    return res.status(500).json({
-      status: 'error',
-      message: 'Internal server error while updating member status',
-      data: null,
-    });
+    // BusinessError도 errorHandler가 status·message 그대로 처리 + error_log 기록
+    return next(error);
   }
 };
 
@@ -244,6 +223,7 @@ export const removeSubAccount = async (
     { guildId: string; riotName: string; riotNameTag: string }
   >,
   res: Response<GuildMemberResponse>,
+  next: NextFunction,
 ) => {
   try {
     const { guildId, riotName, riotNameTag } = req.body;
@@ -269,10 +249,6 @@ export const removeSubAccount = async (
     });
   } catch (error) {
     console.error('Error removing sub-account link:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Internal server error while removing sub-account',
-      data: null,
-    });
+    return next(error);
   }
 };

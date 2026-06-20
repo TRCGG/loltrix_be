@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { h2hService } from '../services/h2h.service.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
@@ -55,6 +55,7 @@ async function resolveSeasonValue(season?: string): Promise<string | null> {
 export const getFrequentOpponents = async (
   req: Request<{ guildId: string }>,
   res: Response<H2hResponse<FrequentH2hItem[]>>,
+  next: NextFunction,
 ) => {
   try {
     const { guildId } = req.params;
@@ -97,7 +98,7 @@ export const getFrequentOpponents = async (
     });
   } catch (error) {
     console.error('Error retrieving frequent opponents (h2h):', error);
-    return res.status(500).json({ status: 'error', message: 'Internal server error', data: null });
+    return next(error);
   }
 };
 
@@ -108,6 +109,7 @@ export const getFrequentOpponents = async (
 export const getH2hDetail = async (
   req: Request<{ guildId: string }>,
   res: Response<H2hResponse<H2hDetail>>,
+  next: NextFunction,
 ) => {
   try {
     const { guildId } = req.params;
@@ -172,6 +174,6 @@ export const getH2hDetail = async (
     });
   } catch (error) {
     console.error('Error retrieving h2h detail:', error);
-    return res.status(500).json({ status: 'error', message: 'Internal server error', data: null });
+    return next(error);
   }
 };

@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { statisticsService } from '../services/statistics.service.js';
 import {
   StatisticsResponse,
@@ -19,6 +19,7 @@ export const getUserGameStats = async (
     StatisticsRequestQuery
   >,
   res: Response<StatisticsResponse<UserGameStatistic>>,
+  next: NextFunction,
 ) => {
   try {
     const { guildId } = req.params;
@@ -49,11 +50,7 @@ export const getUserGameStats = async (
     });
   } catch (error) {
     console.error('Error retrieving user game stats:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Internal server error while retrieving user game stats',
-      data: null,
-    });
+    return next(error);
   }
 };
 
@@ -69,6 +66,7 @@ export const getChampionStats = async (
     StatisticsRequestQuery
   >,
   res: Response<StatisticsResponse<ChampionStatistic>>,
+  next: NextFunction,
 ) => {
   try {
     const { guildId } = req.params;
@@ -97,10 +95,6 @@ export const getChampionStats = async (
     });
   } catch (error) {
     console.error('Error retrieving champion stats:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Internal server error while retrieving champion stats',
-      data: null,
-    });
+    return next(error);
   }
 };
