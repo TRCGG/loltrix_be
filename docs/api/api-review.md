@@ -171,12 +171,60 @@
 
 ---
 
-## 진행 현황
-- 점검 완료: #1 ~ #27
-- 다음: #28 H2H
-- ⚠️ 별도 추적:
-  - 메모리의 웹 업로드 위반/강등 기능 미구현 (메모리 정정 완료)
-  - #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책 결정 후 수정
+---
+
+## 8. H2H (상대전적)
+
+### #28 GET /api/h2h/:guildId/frequent — ✅ 이상 없음
+- [h2h.controller.ts:55-102](../../src/controllers/h2h.controller.ts#L55-L102)
+- 404/동명이인 후보/단일 분기 완비. 동명이인은 HTTP 200 + `status:'error'` + `data:candidates[]`(스펙 §3.1 의도된 규격). 서비스는 본계정 병합 player_code 집계(세션 초반 점검 완료).
+
+### #29 GET /api/h2h/:guildId — ✅ 이상 없음
+- [h2h.controller.ts:108-177](../../src/controllers/h2h.controller.ts#L108-L177)
+- 두 유저 병렬 resolve, 404/후보/동일플레이어(400) 처리 완비. `Number(recentLimit) || 6`/`|| 0`으로 NaN 없음. 인사이트(A1~A5) 조건은 스펙 일치 확인 완료(세션 초반).
+- 🔵 (참고) 후보 응답이 200+`status:'error'` — 프론트가 status로 분기하는 의도된 규격.
+
+---
+
+## 9. Examples (스캐폴딩)
+
+### #30~32 POST/GET /api/examples — 🔵 데모 스캐폴딩
+- [example.routes.ts](../../src/routes/example.routes.ts)
+- 모두 `#swagger.ignore = true`인 샘플 라우트(템플릿 잔재). 인증 뒤에 마운트돼 보안 위험은 낮으나 **운영 코드에서 제거 검토 권장**.
+
+---
+
+## 10. Test (개발 전용)
+
+### #33~35 GET /api/test/error/* — ✅ 의도된 개발 도구
+- [test.routes.ts](../../src/routes/test.routes.ts)
+- `NODE_ENV=development`에서만 등록(index.ts). 에러 로깅 검증용. 운영 미노출. 정상.
+
+---
+
+## 점검 총괄 (#1 ~ #35 완료)
+
+### 수정 완료 (커밋됨)
+| # | 내용 | 심각도 |
+|---|---|---|
+| #2 | auth/login `next()` → `next(error)` | 🔴 |
+| #5 | auth/me `return` 누락(이중 응답) | 🔴 |
+| #8 | guilds X-Total-Pages NaN | 🟡 |
+| #11 | guilds softDelete isDeleted 필터 누락 | 🟡 |
+| #15 | guildMember 부계정 연결 권한 누락 | 🟡 |
+| #21,#23 | matches X-Total-Pages NaN | 🟡 |
+| #25 | matches 게임 삭제 권한 누락 | 🟡 |
+| #26,#27 | statistics X-Total-Pages NaN + 기본 limit 불일치 | 🟡 |
+
+### 미해결/추적 항목
+- **#7** guilds 중복 guildId → 500(409 권장)
+- **#10** guilds 삭제된 길드 복구 불가 / updateDate 미갱신
+- **#14** web upload reason 문자열 통일 / verifyAuth 중복 / **위반·강등 기능 미구현**(메모리 정정 완료)
+- **#15/#20** 부계정 연결 player_code UPDATE **guildId 미스코프** → 정책(길드별/전역) 결정 후 수정
+- **#18** 라우트 섀도잉(riotName="members" 등)
+- **#20** 에러 처리 패턴 불일치(BusinessError 미보존)
+- **#27** statistics service range 월 추출 연도 무시(설계 의존)
+- **#30~32** Examples 스캐폴딩 제거 검토
 - ⚠️ 별도 추적:
   - 메모리의 웹 업로드 위반/강등 기능 미구현 (메모리 정정 완료)
   - #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책 결정 후 수정

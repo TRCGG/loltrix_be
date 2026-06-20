@@ -82,24 +82,24 @@
 
 | # | Method | Path | 설명 | 인증 | 점검 |
 |---|---|---|---|---|---|
-| 28 | GET | `/api/h2h/:guildId/frequent` | 자주 만난 상대 목록 | 인증 | ⬜ |
-| 29 | GET | `/api/h2h/:guildId` | 상대전적 상세 (맞붙은 + 함께한) | 인증 | ⬜ |
+| 28 | GET | `/api/h2h/:guildId/frequent` | 자주 만난 상대 목록 | 인증 | ✅ |
+| 29 | GET | `/api/h2h/:guildId` | 상대전적 상세 (맞붙은 + 함께한) | 인증 | ✅ |
 
 ## 9. Examples (샘플/참고) — `example.routes.ts`
 
 | # | Method | Path | 설명 | 인증 | 점검 |
 |---|---|---|---|---|---|
-| 30 | POST | `/api/examples` | 예제 생성 | 인증 | ⬜ |
-| 31 | GET | `/api/examples` | 예제 목록 | 인증 | ⬜ |
-| 32 | GET | `/api/examples/:id` | 예제 상세 | 인증 | ⬜ |
+| 30 | POST | `/api/examples` | 예제 생성 | 인증 | 🔵 |
+| 31 | GET | `/api/examples` | 예제 목록 | 인증 | 🔵 |
+| 32 | GET | `/api/examples/:id` | 예제 상세 | 인증 | 🔵 |
 
 ## 10. Test (개발 전용) — `test.routes.ts`  *(NODE_ENV=development 에서만 등록)*
 
 | # | Method | Path | 설명 | 인증 | 점검 |
 |---|---|---|---|---|---|
-| 33 | GET | `/api/test/error/generic` | 일반 에러 로깅 테스트 | 인증/dev | ⬜ |
-| 34 | GET | `/api/test/error/validation` | 검증 에러 테스트 | 인증/dev | ⬜ |
-| 35 | GET | `/api/test/error/database` | DB 에러 테스트 | 인증/dev | ⬜ |
+| 33 | GET | `/api/test/error/generic` | 일반 에러 로깅 테스트 | 인증/dev | ✅ |
+| 34 | GET | `/api/test/error/validation` | 검증 에러 테스트 | 인증/dev | ✅ |
+| 35 | GET | `/api/test/error/database` | DB 에러 테스트 | 인증/dev | ✅ |
 
 ---
 
