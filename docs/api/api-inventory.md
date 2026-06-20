@@ -46,9 +46,9 @@
 
 | # | Method | Path | 설명 | 인증 | 점검 |
 |---|---|---|---|---|---|
-| 12 | GET | `/api/replays/:guildId` | 리플레이 목록 조회 | 인증 | ⬜ |
-| 13 | POST | `/api/replays` | 리플레이 생성 (디스코드 봇, JSON) | 인증/봇 | ⬜ |
-| 14 | POST | `/api/replays/web` | 웹 리플레이 업로드 (multipart) | 인증+업로드권한 | ⬜ |
+| 12 | GET | `/api/replays/:guildId` | 리플레이 목록 조회 | 인증 | ✅ |
+| 13 | POST | `/api/replays` | 리플레이 생성 (디스코드 봇, JSON) | 인증/봇 | ✅ |
+| 14 | POST | `/api/replays/web` | 웹 리플레이 업로드 (multipart) | 인증+업로드권한 | 🔵 |
 
 ## 5. Guild Member — `guildMember.routes.ts`
 

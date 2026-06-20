@@ -67,6 +67,30 @@
 
 ---
 
+---
+
+## 4. Replays
+
+### #12 GET /api/replays/:guildId — ✅ 이상 없음
+- [replay.controller.ts:35-59](../../src/controllers/replay.controller.ts#L35-L59)
+- 구조분해 기본값 `{ page=1, limit=10 }`으로 받아 `X-Total-Pages`에 NaN 위험 없음(#8과 달리 안전). 에러는 `next(error)` 위임. 양호.
+
+### #13 POST /api/replays — ✅ 이상 없음
+- [replay.controller.ts:12-29](../../src/controllers/replay.controller.ts#L12-L29)
+- 디스코드 봇 JSON 업로드. `facade.allSave` + `next(error)`. 권한은 부모 `restrictBotToLocalhost`+`verifyAuth`에 위임. 깔끔.
+
+### #14 POST /api/replays/web — 🔵 점검 사항 다수 (코드 버그는 아님)
+- [replay.controller.ts:65-136](../../src/controllers/replay.controller.ts#L65-L136) · [requireRole.ts:103-146](../../src/middlewares/requireRole.ts#L103-L146)
+- 파일별 try/catch 부분성공 응답 설계 양호. 검증 순서(확장자→magic bytes→파싱→중복해시→저장) 정상. `requireUploadPermission`(allowAllUploads/ userUploader 분기, admin bypass) 정상.
+- 🔵 **`verifyAuth` 중복**: 라우트에서 인라인 `verifyAuth`([replay.routes.ts:181](../../src/routes/replay.routes.ts#L181)) — 부모 라우터(index.ts:23)에서 이미 적용됨. 중복 호출(세션 재검증 1회 추가). 제거 가능하나 무해.
+- 🔵 **failed.reason 문자열 불일치**: `invalid_extension`/`invalid_format`/`parse_failed`/`save_failed`는 snake_case인데 `'duplicated replay data'`만 공백 포함. 프론트 분기/i18n 위해 키 통일 권장(예: `duplicated`).
+- 🔴→🔵 **(중요) 메모리-코드 불일치**: 프로젝트 메모리에는 "웹 업로드 실패 시 `upload_violation` 기록 + 하루 10건 초과 시 userNormal 강등 + 응답 `demoted` 필드"가 **구현 완료**로 적혀 있으나, **코드 전체에 `uploadViolation`/`violation`/`demote` 참조가 0건**. 응답도 `{ succeeded, failed }`만 반환(`demoted` 없음). `uploadViolation.service.ts` 파일도 없음.
+  - → 해당 기능은 현재 브랜치(dev 계열)에 **미존재**. 별도 미머지 브랜치(TRC-171)에 있거나 보류된 것으로 추정. **메모리가 stale** → 사용자 확인 후 메모리 정정 필요.
+- 🔵 **파일 크기 한도**: multer `fileSize: 50MB`([replay.routes.ts:15](../../src/routes/replay.routes.ts#L15)) = swagger 표기 일치. (메모리의 "25MB/개"는 stale)
+
+---
+
 ## 진행 현황
-- 점검 완료: #1 ~ #11
-- 다음: #12 Replays
+- 점검 완료: #1 ~ #14
+- 다음: #15 Guild Member
+- ⚠️ 별도 추적: 메모리의 웹 업로드 위반/강등 기능이 코드에 없음 → 정정/구현 여부 결정 필요
