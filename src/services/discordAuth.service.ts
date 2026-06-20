@@ -190,6 +190,10 @@ export class DiscordAuthService {
         },
       });
 
+      if (!userResult.ok) {
+        throw new SystemError('Failed to fetch discord user', 500);
+      }
+
       const userData = await userResult.json();
 
       return {

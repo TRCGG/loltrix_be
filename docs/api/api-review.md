@@ -202,6 +202,37 @@
 
 ---
 
+---
+
+## 부록 A. 에러 로그 씹힘 점검 (Discord OAuth2 경로)
+
+배경: 에러가 `error_log` DB에 남는 건 `errorHandler`를 거칠 때뿐(`logErrorFromRequest`). 컨트롤러 catch가 `res.status(500)` 직접 응답으로 끝나면 errorHandler를 우회해 console.error만 남고 DB 미기록.
+
+전수 집계: 컨트롤러 `res.status(500)` 직접 응답 **22곳** vs `next(error)` 8곳. 봇 실제 호출 경로(POST `/api/replays` → createReplay)는 `next(error)`라 안전.
+
+### Discord OAuth2 경로 수정 (적용함)
+- **getGmokGuilds / getSelfProfile** [discordAuth.controller.ts](../../src/controllers/discordAuth.controller.ts): catch가 `res.status(500)` 직접 응답 → **✅ `next(error)` 위임**으로 변경(errorHandler가 DB 로깅 + 추적코드). `getSelfProfile`의 `!discordMemberId` 분기도 `throw SystemError`로 통일.
+- **fetchUser** [discordAuth.service.ts:185-210](../../src/services/discordAuth.service.ts#L185-L210): `userResult.ok` 검사 없이 `.json()` 호출 → 토큰 만료 시 `{id:undefined}` 쓰레기값 반환하던 문제. **✅ `.ok` 검사 추가**(handleDiscordCallback과 동일 패턴).
+
+### 미적용 (추적) — 컨트롤러 직접-500 (errorHandler 우회)
+OAuth2 3곳 수정 후 **남은 19곳**(guild×5, guildMember×5, matches×5, h2h×2, statistics×2). 예기치 못한 500이 `error_log` DB에 안 남음. 일괄 `next(error)` 전환은 별도 검토.
+
+---
+
+## 부록 B. 외부 API(Discord) 호출 에러 씹힘 점검
+
+모든 외부 호출은 `fetchWithTimeout` 경유(타임아웃 → SystemError 504). 호출 10곳 중 **에러가 씹히던 곳**:
+
+| 위치 | 호출 | 상태 |
+|---|---|---|
+| `enrichWithNick` [discordMemberGuild.service.ts:57-72](../../src/services/discordMemberGuild.service.ts#L57-L72) | `/users/@me/guilds/{id}/member` | 🔴→✅ **빈 `catch {}`(완전 무로깅)** → `console.warn` 추가(`.ok` 아님 + 네트워크 에러 양쪽). nick은 부가정보라 throw는 안 함. |
+| `fetchUser` [discordAuth.service.ts:185-210](../../src/services/discordAuth.service.ts#L185-L210) | `/users/@me` | 🔴→✅ `.ok` 미검사로 토큰 만료 시 `{id:undefined}` 반환하던 것 → `.ok` 검사 추가 |
+| `revokeDiscordToken` [discordAuth.service.ts:297-315](../../src/services/discordAuth.service.ts#L297-L315) | `/oauth2/token/revoke` | 🔵 유지 — 로그아웃 best-effort, 이미 console.warn/error 있음(DB 미기록은 의도) |
+
+정상 전파(씹힘 아님): `/oauth2/token`(인가코드/refresh), `/users/@me`(콜백), `/users/@me/guilds` 모두 `.ok` 검사 후 throw.
+
+---
+
 ## 점검 총괄 (#1 ~ #35 완료)
 
 ### 수정 완료 (커밋됨)
@@ -225,9 +256,6 @@
 - **#20** 에러 처리 패턴 불일치(BusinessError 미보존)
 - **#27** statistics service range 월 추출 연도 무시(설계 의존)
 - **#30~32** Examples 스캐폴딩 제거 검토
-- ⚠️ 별도 추적:
-  - 메모리의 웹 업로드 위반/강등 기능 미구현 (메모리 정정 완료)
-  - #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책 결정 후 수정
-- ⚠️ 별도 추적:
-  - 메모리의 웹 업로드 위반/강등 기능이 코드에 없음 → 메모리 정정 완료, 구현 여부는 미정
-  - #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책(길드별/전역) 결정 후 수정
+- **에러 로깅**: 컨트롤러 직접-500 19곳(부록 A), 외부 API 씹힘은 부록 B 참조
+- 메모리의 웹 업로드 위반/강등 기능 미구현 (메모리 정정 완료, 구현 여부 미정)
+- #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책(길드별/전역) 결정 후 수정

@@ -99,7 +99,11 @@ export const logout = async (req: Request, res: Response<void>) => {
  * @desc (Protected) 현재 인증된 유저의 gmok이 있는 길드 목록 가져오기
  * @access Private (auth.middleware를 통과해야 함)
  */
-export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuildAPIResponse>) => {
+export const getGmokGuilds = async (
+  req: AuthRequest,
+  res: Response<DiscordGuildAPIResponse>,
+  next: NextFunction,
+) => {
   try {
     // 1. 유저 요청 처리
     const { accessToken, discordMemberId } = req;
@@ -131,11 +135,7 @@ export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuild
     });
   } catch (error) {
     console.error('getSelfGuilds error', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error discordAuth getGmokGuilds',
-      data: null,
-    });
+    next(error);
   }
 };
 
@@ -144,7 +144,7 @@ export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuild
  * @desc [(Protected) 현재 세션의 유저 ID 조회 (세션 체크용)
  * @access Private
  */
-export const getSelfProfile = async (req: AuthRequest, res: Response) => {
+export const getSelfProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { accessToken } = req;
 
@@ -153,11 +153,7 @@ export const getSelfProfile = async (req: AuthRequest, res: Response) => {
     }
 
     if (!req.discordMemberId) {
-      return res.status(500).json({
-        status: 'error',
-        message: 'User ID not found after auth middleware',
-        data: null,
-      });
+      throw new SystemError('User ID not found after auth middleware');
     }
 
     const result = await discordAuthService.fetchUser(accessToken);
@@ -170,11 +166,7 @@ export const getSelfProfile = async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('getSelfProfile error');
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error while discordAuth getSelfProfile',
-      data: null,
-    });
+    console.error('getSelfProfile error', error);
+    next(error);
   }
 };
