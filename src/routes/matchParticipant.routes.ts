@@ -9,6 +9,7 @@ import {
   deleteMatch,
 } from '../controllers/matchParticipant.controller.js';
 import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
+import { requireGuildRole } from '../middlewares/requireRole.js';
 
 const router: Router = Router();
 
@@ -230,8 +231,10 @@ router.delete(
       required: true,
       type: 'string'
     }
+    #swagger.security = [{ "session": [] }]
   */
   decodeGuildIdMiddleware,
+  requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
   validateRequest(gameDetailSchema),
   deleteMatch,
 );

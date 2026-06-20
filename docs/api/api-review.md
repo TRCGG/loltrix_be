@@ -120,9 +120,40 @@
 
 ---
 
+---
+
+## 6. Matches
+
+### #21 GET /api/matches/:guildId/:riotName/games — 🟡 X-Total-Pages NaN (수정함)
+- [matchParticipant.controller.ts:80](../../src/controllers/matchParticipant.controller.ts#L80)
+- #8과 동일 패턴: `Number(limit) ?? 20`이 limit 미입력 시 NaN. **✅ 수정함**: `Number(limit) || 20`.
+- 동명이인은 200 + 후보목록 반환 처리 양호.
+
+### #22 GET /api/matches/:guildId/:riotName/dashboard — ✅ 이상 없음
+- [matchParticipant.controller.ts:102-167](../../src/controllers/matchParticipant.controller.ts#L102-L167)
+- 4개 쿼리 Promise.all 병렬. 페이지네이션 없음. 양호.
+
+### #23 GET /api/matches/:guildId/:riotName/most-picks — 🟡 X-Total-Pages NaN (수정함)
+- [matchParticipant.controller.ts:226](../../src/controllers/matchParticipant.controller.ts#L226)
+- 동일 패턴. **✅ 수정함**: `Number(limit) || 10`.
+- 🔵 (참고) 월별 필터 미지원 — season/position만. 기능 추가는 별건.
+
+### #24 GET /api/matches/:guildId/games/:gameId — ✅ 이상 없음
+- [matchParticipant.controller.ts:247-282](../../src/controllers/matchParticipant.controller.ts#L247-L282)
+- 404 처리 정상.
+
+### #25 DELETE /api/matches/:guildId/games/:gameId — 🟡 권한 검증 누락 (수정함)
+- [matchParticipant.routes.ts:214-237](../../src/routes/matchParticipant.routes.ts#L214-L237)
+- 파괴적 작업인데 권한 미들웨어 없이 인증만으로 호출 가능했음. **✅ 수정함**: `requireGuildRole('guildManager', { from: 'params', key: 'guildId' })` 추가(봇은 isBot bypass로 통과). `deleteMatch` 서비스는 custom_match·match_participant·mmr_participant_metric·replay 일괄 soft delete로 정합성 양호.
+
+---
+
 ## 진행 현황
-- 점검 완료: #1 ~ #20
-- 다음: #21 Matches
+- 점검 완료: #1 ~ #25
+- 다음: #26 Statistics
+- ⚠️ 별도 추적:
+  - 메모리의 웹 업로드 위반/강등 기능 미구현 (메모리 정정 완료)
+  - #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책 결정 후 수정
 - ⚠️ 별도 추적:
   - 메모리의 웹 업로드 위반/강등 기능이 코드에 없음 → 메모리 정정 완료, 구현 여부는 미정
   - #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책(길드별/전역) 결정 후 수정

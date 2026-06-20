@@ -77,7 +77,7 @@ export const getRecentGames = async (
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
     res.setHeader('X-Limit', (limit ?? 20).toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 20)).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) || 20)).toString());
 
     return res.status(200).json({
       status: 'success',
@@ -223,7 +223,7 @@ export const getMostPicks = async (
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
     res.setHeader('X-Limit', (limit ?? 10).toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 10)).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) || 10)).toString());
 
     return res.status(200).json({
       status: 'success',

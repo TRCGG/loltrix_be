@@ -65,11 +65,11 @@
 
 | # | Method | Path | 설명 | 인증 | 점검 |
 |---|---|---|---|---|---|
-| 21 | GET | `/api/matches/:guildId/:riotName/games` | 최근 게임 목록 조회 | 인증 | ⬜ |
-| 22 | GET | `/api/matches/:guildId/:riotName/dashboard` | 전적 대시보드 조회 | 인증 | ⬜ |
-| 23 | GET | `/api/matches/:guildId/:riotName/most-picks` | 모스트 픽 상세 조회 | 인증 | ⬜ |
-| 24 | GET | `/api/matches/:guildId/games/:gameId` | 게임 상세 조회 | 인증 | ⬜ |
-| 25 | DELETE | `/api/matches/:guildId/games/:gameId` | 게임 기록 삭제 | 인증 | ⬜ |
+| 21 | GET | `/api/matches/:guildId/:riotName/games` | 최근 게임 목록 조회 | 인증 | 🟡fix |
+| 22 | GET | `/api/matches/:guildId/:riotName/dashboard` | 전적 대시보드 조회 | 인증 | ✅ |
+| 23 | GET | `/api/matches/:guildId/:riotName/most-picks` | 모스트 픽 상세 조회 | 인증 | 🟡fix |
+| 24 | GET | `/api/matches/:guildId/games/:gameId` | 게임 상세 조회 | 인증 | ✅ |
+| 25 | DELETE | `/api/matches/:guildId/games/:gameId` | 게임 기록 삭제 | guildManager | 🟡fix |
 
 ## 7. Statistics — `statistics.route.ts`
 
