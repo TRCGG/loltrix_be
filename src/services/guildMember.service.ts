@@ -6,6 +6,7 @@ import {
   InsertGuildMember,
   matchParticipant,
   mmrParticipantMetric,
+  customMatch,
   riotAccount,
   RiotAccount,
 } from '../database/schema.js';
@@ -276,22 +277,41 @@ export class GuildMemberService {
         .returning();
 
       // 4. MatchParticipant 테이블 업데이트 (playerCode 변경)
+      //    match_participant엔 guildId 컬럼이 없어 custom_match 서브쿼리로 해당 길드 경기만 병합
+      //    (다른 길드에서 연결 안 된 부캐 전적이 본캐로 섞이는 것 방지)
       await tx
         .update(matchParticipant)
         .set({
           playerCode: priRiot.playerCode,
           updateDate: new Date(),
         })
-        .where(eq(matchParticipant.playerCode, secRiot.playerCode));
+        .where(
+          and(
+            eq(matchParticipant.playerCode, secRiot.playerCode),
+            inArray(
+              matchParticipant.customMatchId,
+              tx
+                .select({ id: customMatch.id })
+                .from(customMatch)
+                .where(eq(customMatch.guildId, guildId)),
+            ),
+          ),
+        );
 
       // 5. mmr_participant_metric도 동일하게 병합 (match_participant와 상태 일치 유지)
+      //    이쪽은 guildId 컬럼이 있어 직접 조건으로 해당 길드만 병합
       await tx
         .update(mmrParticipantMetric)
         .set({
           playerCode: priRiot.playerCode,
           updateDate: new Date(),
         })
-        .where(eq(mmrParticipantMetric.playerCode, secRiot.playerCode));
+        .where(
+          and(
+            eq(mmrParticipantMetric.playerCode, secRiot.playerCode),
+            eq(mmrParticipantMetric.guildId, guildId),
+          ),
+        );
 
       return result[0];
     });

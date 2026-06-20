@@ -98,7 +98,7 @@
 - [guildMember.routes.ts:103-125](../../src/routes/guildMember.routes.ts#L103-L125)
 - 형제 쓰기 라우트(PUT `/status`, DELETE `/sub-account`)는 `requireGuildRole('guildManager')`를 거는데 부계정 **연결**(POST)만 누락 → 일반 유저도 임의 계정 연결 가능했음.
 - **✅ 수정함**: `requireGuildRole('guildManager', { from: 'body', key: 'guildId' })` 추가. 봇 요청은 `req.isBot` bypass로 그대로 통과([requireRole.ts:62](../../src/middlewares/requireRole.ts#L62))하므로 디스코드 봇 호출엔 영향 없고, 사람(웹) 호출만 guildManager 요구.
-- 🔵 (기존 추적) 연결 시 player_code UPDATE가 guildId 미스코프 → 다중 길드 참여 계정의 타 길드 전적까지 병합. 부캐-본캐 연결이 "길드별"인지 "전역"인지 결정 후 별도 수정 예정.
+- **✅ 수정함 (길드별 스코프)**: 연결 시 player_code UPDATE가 guildId 미스코프라 다중 길드 참여 계정의 타 길드 전적까지 병합되던 문제. `match_participant`는 custom_match 서브쿼리(`customMatchId IN (SELECT id FROM custom_match WHERE guild_id=:guildId)`), `mmr_participant_metric`은 `guildId` 직접 조건으로 **해당 길드 경기만** 병합하도록 수정. [guildMember.service.ts:278-310](../../src/services/guildMember.service.ts#L278-L310)
 
 ### #16 GET /api/guildMember/:guildId/members — ✅ 이상 없음
 - [guildMember.controller.ts:65-106](../../src/controllers/guildMember.controller.ts#L65-L106)
@@ -258,4 +258,4 @@ OAuth2 3곳 수정 후 **남은 19곳**(guild×5, guildMember×5, matches×5, h2
 - **#30~32** Examples 스캐폴딩 제거 검토
 - **에러 로깅**: 컨트롤러 직접-500 19곳(부록 A), 외부 API 씹힘은 부록 B 참조
 - 메모리의 웹 업로드 위반/강등 기능 미구현 (메모리 정정 완료, 구현 여부 미정)
-- #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책(길드별/전역) 결정 후 수정
+- ~~#15 부계정 연결 player_code UPDATE guildId 스코프~~ → ✅ 길드별 스코프로 수정 완료
