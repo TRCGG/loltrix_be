@@ -117,7 +117,8 @@ export const logErrorFromRequest = async (
     request: requestData,
     userAgent: req.get('user-agent'),
     ipAddress,
-    userId: (req as any).user?.id, // 사용자 인증 정보가 있다면
+    // authHandler가 req.discordMemberId에 주입(봇이면 isBot). req.user는 미사용이라 fallback만 유지.
+    userId: (req as any).discordMemberId ?? ((req as any).isBot ? 'bot' : (req as any).user?.id),
     severity: status && status < 500 ? 'warning' : 'error',
     status: status || 500,
   };

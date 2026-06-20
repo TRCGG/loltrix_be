@@ -233,6 +233,9 @@ OAuth2 3곳 + **나머지 19곳**(guild×5, guildMember×5, matches×5, h2h×2, 
 
 정상 전파(씹힘 아님): `/oauth2/token`(인가코드/refresh), `/users/@me`(콜백), `/users/@me/guilds` 모두 `.ok` 검사 후 throw.
 
+### ✅ error_log userId 식별 복구
+[errorLog.service.ts:120](../../src/services/errorLog.service.ts#L120)가 `req.user?.id`(미사용)를 읽어 **모든 에러 로그 userId가 null**이던 문제 → authHandler가 주입하는 `req.discordMemberId`(봇이면 `'bot'`)를 우선 사용하도록 수정. 이제 어떤 유저/봇 요청에서 난 에러인지 DB에서 식별 가능. (`user_id` 컬럼 varchar(255) nullable)
+
 ---
 
 ## 점검 총괄 (#1 ~ #35 완료)
