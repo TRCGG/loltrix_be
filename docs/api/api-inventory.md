@@ -75,8 +75,8 @@
 
 | # | Method | Path | 설명 | 인증 | 점검 |
 |---|---|---|---|---|---|
-| 26 | GET | `/api/statistics/:guildId/users` | 유저별 게임 통계 | 인증 | ⬜ |
-| 27 | GET | `/api/statistics/:guildId/champions` | 챔피언별 통계 | 인증 | ⬜ |
+| 26 | GET | `/api/statistics/:guildId/users` | 유저별 게임 통계 | 인증 | 🟡fix |
+| 27 | GET | `/api/statistics/:guildId/champions` | 챔피언별 통계 | 인증 | 🟡fix |
 
 ## 8. H2H (상대전적) — `h2h.routes.ts`
 

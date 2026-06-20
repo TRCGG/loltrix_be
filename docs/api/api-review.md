@@ -148,9 +148,35 @@
 
 ---
 
+---
+
+## 7. Statistics
+
+### #26 GET /api/statistics/:guildId/users — 🟡 X-Total-Pages NaN (수정함)
+- [statistics.controller.ts:43](../../src/controllers/statistics.controller.ts#L43)
+- 동일 NaN 패턴. **✅ 수정함**: `Number(limit) || 50`. 서비스 기본값(50)과 헤더 일치하므로 그 외 정상.
+
+### #27 GET /api/statistics/:guildId/champions — 🟡 NaN + 기본 limit 불일치 (수정함)
+- [statistics.controller.ts:90-91](../../src/controllers/statistics.controller.ts#L90-L91)
+- NaN 패턴 + **서비스 실제 기본 limit=20인데 헤더(X-Limit·X-Total-Pages)는 50으로 계산** → limit 미입력 시 데이터는 20개인데 헤더가 50이라 거짓 보고.
+- **✅ 수정함**: `(limit ?? 20)` + `Number(limit) || 20`으로 서비스 기본값에 맞춤.
+- 🔵 (참고) 서비스 구조분해 기본 limit=50([statistics.service.ts:189](../../src/services/statistics.service.ts#L189))은 컨트롤러가 항상 값을 넘겨 미사용(데드). 20으로 통일하면 더 명확.
+
+### Statistics 서비스 공통 — ✅ 로직 견고 / 🔵 설계 참고
+- [statistics.service.ts](../../src/services/statistics.service.ts)
+- SQL 전부 drizzle 파라미터 바인딩(인젝션 안전), 본계정 병합 조인(isMain·status·isDeleted 필터) 정합, count 서브쿼리 정상. winRate 정렬 시 `STATS_MIN_GAME_COUNT` having 적용 합리적.
+- 🔵 `datePreset='range'`는 `EXTRACT(MONTH FROM create_date)`만 사용 — **연도 무시**, season 조건과 결합해 "시즌 내 월 범위"로 동작. 시즌이 같은 월을 두 번 포함하면 구분 불가(설계 의존).
+- 🔵 `buildSeasonCondition`이 항상 적용 → `datePreset='recent'`도 기본 시즌으로 제한됨(최근 1개월 ∩ 현재 시즌). 의도면 OK.
+- 🔵 `gameResult` 비교가 한글 `'승'/'패'` 문자열 — match_participant 테이블 실제 저장값 기준(mmr 테이블의 정수 1/0과 다름). 데이터 정합 전제.
+
+---
+
 ## 진행 현황
-- 점검 완료: #1 ~ #25
-- 다음: #26 Statistics
+- 점검 완료: #1 ~ #27
+- 다음: #28 H2H
+- ⚠️ 별도 추적:
+  - 메모리의 웹 업로드 위반/강등 기능 미구현 (메모리 정정 완료)
+  - #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책 결정 후 수정
 - ⚠️ 별도 추적:
   - 메모리의 웹 업로드 위반/강등 기능 미구현 (메모리 정정 완료)
   - #15 부계정 연결 player_code UPDATE guildId 스코프 → 정책 결정 후 수정
