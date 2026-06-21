@@ -36,6 +36,11 @@
 - [discordAuth.controller.ts:101-139](../../src/controllers/discordAuth.controller.ts#L101-L139)
 - admin/일반 분기, 기본 권한 보장 로직 정상. catch가 항상 500으로 뭉뚱그려 내려 BusinessError 구분이 안 됨(전역 errorHandler에 위임하면 상태코드 세분화 가능) — 다른 컨트롤러와 패턴 일관성 점검 대상.
 
+### #5/#6 에러 응답 본문 형식 — 프론트 약속 형식 유지 + 로깅 병행 (최종)
+- 점검 중 `/me`·`/gmokGuilds`의 catch를 `next(error)`로 위임했으나, errorHandler 경유 시 응답 본문이 **ProblemDetails(`{type,title,status,detail}`)로 바뀌어 프론트 약속 형식(`{status,message,data}`)을 깨는 회귀** 발생(운영 main은 `{status,message,data}`였음).
+- **결정**: 두 엔드포인트의 catch에서 `logErrorFromRequest(error, req, 500)`로 `error_log` DB 기록은 유지하되, 응답 본문은 **기존 `{ status:'error', message, data:null }` 형식으로 복원**. (메시지는 점검 전 원문 유지)
+- replay 3곳(`createReplay`/`getReplayList`/`webCreateReplay`)의 에러 응답도 ProblemDetails지만, **최초 도입 때부터 그래왔고 운영 main도 동일**(최근 회귀 아님) → 이번엔 **보류**. 프론트 실제 처리 방식 확인 후 통일 여부 별도 결정.
+
 ---
 
 ---
@@ -249,16 +254,18 @@ OAuth2 3곳 수정 후 **남은 19곳**(guild×5, guildMember×5, matches×5, h2
 | #21,#23 | matches X-Total-Pages NaN | 🟡 |
 | #25 | matches 게임 삭제 권한 누락 | 🟡 |
 | #26,#27 | statistics X-Total-Pages NaN + 기본 limit 불일치 | 🟡 |
+| #15/#20 | 부계정 연결 player_code UPDATE guildId 미스코프 → 길드별 스코프로 제한 | 🟡 |
+| 부록 B | Discord 외부 API 에러 씹힘 보강(`.ok` 검사 등) | 🔴 |
+| 부록 B | error_log userId 항상 null → `req.discordMemberId` 우선 사용 | 🟡 |
+| #5/#6 | auth `/me`·`/gmokGuilds` 에러 응답 본문 `{status,message,data}` 형식 유지 + error_log 기록 병행 | 🔴 |
 
 ### 미해결/추적 항목
 - **#7** guilds 중복 guildId → 500(409 권장)
 - **#10** guilds 삭제된 길드 복구 불가 / updateDate 미갱신
 - **#14** web upload reason 문자열 통일 / verifyAuth 중복 / **위반·강등 기능 미구현**(메모리 정정 완료)
-- **#15/#20** 부계정 연결 player_code UPDATE **guildId 미스코프** → 정책(길드별/전역) 결정 후 수정
 - **#18** 라우트 섀도잉(riotName="members" 등)
 - **#20** 에러 처리 패턴 불일치(BusinessError 미보존)
 - **#27** statistics service range 월 추출 연도 무시(설계 의존)
 - **#30~32** Examples 스캐폴딩 제거 검토
-- **에러 로깅**: 컨트롤러 직접-500 19곳(부록 A), 외부 API 씹힘은 부록 B 참조
+- **에러 로깅**: 컨트롤러 직접-500 19곳 미적용(부록 A) — `error_log` DB 미기록 현행 유지
 - 메모리의 웹 업로드 위반/강등 기능 미구현 (메모리 정정 완료, 구현 여부 미정)
-- ~~#15 부계정 연결 player_code UPDATE guildId 스코프~~ → ✅ 길드별 스코프로 수정 완료

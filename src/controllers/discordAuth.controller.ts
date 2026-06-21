@@ -9,6 +9,7 @@ import { DiscordGuildAPI, DiscordGuildAPIResponse } from '../types/discordAuth.j
 import { systemConfigService } from '../services/systemConfig.service.js';
 import { getCookieOptions } from '../utils/cookieOptions.js';
 import { ADMIN_ROLES, Role } from '../types/role.js';
+import { logErrorFromRequest } from '../services/errorLog.service.js';
 
 const discordAuthService = new DiscordAuthService();
 const discordMemberGuildService = new DiscordMemberGuildService();
@@ -102,7 +103,6 @@ export const logout = async (req: Request, res: Response<void>) => {
 export const getGmokGuilds = async (
   req: AuthRequest,
   res: Response<DiscordGuildAPIResponse>,
-  next: NextFunction,
 ) => {
   try {
     // 1. 유저 요청 처리
@@ -135,7 +135,16 @@ export const getGmokGuilds = async (
     });
   } catch (error) {
     console.error('getSelfGuilds error', error);
-    next(error);
+    await logErrorFromRequest(
+      error instanceof Error ? error : new Error('Unknown error'),
+      req,
+      500,
+    );
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error discordAuth getGmokGuilds',
+      data: null,
+    });
   }
 };
 
@@ -144,7 +153,7 @@ export const getGmokGuilds = async (
  * @desc [(Protected) 현재 세션의 유저 ID 조회 (세션 체크용)
  * @access Private
  */
-export const getSelfProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const getSelfProfile = async (req: AuthRequest, res: Response) => {
   try {
     const { accessToken } = req;
 
@@ -167,6 +176,15 @@ export const getSelfProfile = async (req: AuthRequest, res: Response, next: Next
     });
   } catch (error) {
     console.error('getSelfProfile error', error);
-    next(error);
+    await logErrorFromRequest(
+      error instanceof Error ? error : new Error('Unknown error'),
+      req,
+      500,
+    );
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while discordAuth getSelfProfile',
+      data: null,
+    });
   }
 };
