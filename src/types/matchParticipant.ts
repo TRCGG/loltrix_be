@@ -116,6 +116,7 @@ export interface DashboardData {
 export interface MatchQuery {
   riotNameTag?: string;
   season?: string;
+  position?: string;
   page?: string;
   limit?: string;
 }

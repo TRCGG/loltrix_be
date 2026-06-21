@@ -9,6 +9,7 @@ import {
   deleteMatch,
 } from '../controllers/matchParticipant.controller.js';
 import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
+import { requireGuildRole } from '../middlewares/requireRole.js';
 
 const router: Router = Router();
 
@@ -29,12 +30,23 @@ const matchListSchema = z.object({
   query: z.object({
     riotNameTag: z.string().max(128, 'riotNameTag must be less than 128 characters').optional(),
     season: z.string().max(32, 'season must be less than 32 characters').optional(),
-    page: z.string().regex(/^\d+$/, 'Page must be a positive number').transform(Number).optional(),
+    page: z
+      .string()
+      .regex(/^\d+$/, 'Page must be a positive number')
+      .refine((val) => Number(val) >= 1, { message: 'Page must be 1 or greater' })
+      .transform(Number)
+      .optional(),
     limit: z
       .string()
       .regex(/^\d+$/, 'Limit must be a positive number')
       .transform(Number)
       .optional(),
+  }),
+});
+
+const mostPickSchema = matchListSchema.extend({
+  query: matchListSchema.shape.query.extend({
+    position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
   }),
 });
 
@@ -153,11 +165,17 @@ router.get(
       type: 'string'
     }
     #swagger.parameters['season'] = { in: 'query', description: '시즌 필터', type: 'string' }
+    #swagger.parameters['position'] = {
+      in: 'query',
+      description: '라인 필터',
+      type: 'string',
+      enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']
+    }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
   */
   decodeGuildIdMiddleware,
-  validateRequest(matchListSchema),
+  validateRequest(mostPickSchema),
   getMostPicks,
 );
 
@@ -213,8 +231,10 @@ router.delete(
       required: true,
       type: 'string'
     }
+    #swagger.security = [{ "session": [] }]
   */
   decodeGuildIdMiddleware,
+  requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
   validateRequest(gameDetailSchema),
   deleteMatch,
 );

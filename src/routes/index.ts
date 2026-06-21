@@ -9,6 +9,7 @@ import authRouter from './discordAuth.routes.js';
 import guildMemberRoutes from './guildMember.routes.js';
 import matchParticipantRoutes from './matchParticipant.routes.js';
 import statisticsRoutes from './statistics.route.js';
+import h2hRoutes from './h2h.routes.js';
 
 const router: Router = Router();
 
@@ -37,6 +38,8 @@ router.use('/guildMember', guildMemberRoutes);
 router.use('/matches', matchParticipantRoutes);
 
 router.use('/statistics', statisticsRoutes);
+
+router.use('/h2h', h2hRoutes);
 
 // Test routes for error logging (개발 환경에서만)
 if (process.env.NODE_ENV === 'development') {

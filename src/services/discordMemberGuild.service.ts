@@ -63,9 +63,15 @@ export class DiscordMemberGuildService {
             const member = await memberResult.json();
             const fallbackName = member.user?.username?.replace(/\s/g, '');
             nick = member.nick?.replace(/\s/g, '') ?? fallbackName;
+          } else {
+            // nick은 부가 정보라 실패해도 진행하되, rate-limit(429) 등 추적을 위해 로깅
+            console.warn(
+              `enrichWithNick: member fetch failed (guild ${guild.id}, status ${memberResult.status})`,
+            );
           }
-        } catch {
-          // nick은 부가 정보이므로 조회 실패 시 undefined로 둠
+        } catch (error) {
+          // nick은 부가 정보이므로 조회 실패(네트워크/타임아웃) 시 undefined로 두되 로깅은 남김
+          console.warn(`enrichWithNick: member fetch error (guild ${guild.id})`, error);
         }
 
         return { ...guild, nick };

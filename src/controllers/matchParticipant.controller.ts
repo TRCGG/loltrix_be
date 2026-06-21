@@ -77,7 +77,7 @@ export const getRecentGames = async (
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
     res.setHeader('X-Limit', (limit ?? 20).toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 20)).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) || 20)).toString());
 
     return res.status(200).json({
       status: 'success',
@@ -182,7 +182,7 @@ export const getMostPicks = async (
 ) => {
   try {
     const { guildId, riotName } = req.params;
-    const { riotNameTag, season, page, limit } = req.query;
+    const { riotNameTag, season, page, limit, position } = req.query;
 
     const defaultSeason = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
     const lolSeason = season || defaultSeason;
@@ -217,12 +217,13 @@ export const getMostPicks = async (
       guildId,
       Number(page) || 1,
       Number(limit) || 10,
+      position,
     );
 
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
     res.setHeader('X-Limit', (limit ?? 10).toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) ?? 10)).toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) || 10)).toString());
 
     return res.status(200).json({
       status: 'success',

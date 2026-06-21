@@ -31,8 +31,11 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          zip -r dist.zip dist
-          cp src/swagger-output.json ./swagger-output.json
+          cp package.json dist/
+          cp pnpm-lock.yaml dist/
+          cp src/swagger-output.json dist/swagger-output.json
+          pnpm install --prod --frozen-lockfile --ignore-scripts --config.node-linker=hoisted --dir dist
+          zip -qr dist.zip dist
 
       - name: Upload to prod server
         uses: appleboy/scp-action@v0.1.7
@@ -41,7 +44,7 @@ jobs:
           username: ${{ secrets.PROD_SSH_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           port: ${{ secrets.PROD_SSH_PORT || 22 }}
-          source: "dist.zip,package.json,swagger-output.json,deploy.sh"
+          source: "dist.zip,deploy.sh"
           target: "/home/gtrix/gtrix/gmok"
 
       - name: Run deploy script on prod server

@@ -100,8 +100,8 @@ export class GuildService {
   public async softDeleteGuild(id: string) {
     const result = await db
       .update(guild)
-      .set({ isDeleted: true })
-      .where(eq(guild.id, id))
+      .set({ isDeleted: true, updateDate: new Date() })
+      .where(and(eq(guild.id, id), eq(guild.isDeleted, false)))
       .returning();
     return result[0];
   }

@@ -9,6 +9,7 @@ import { DiscordGuildAPI, DiscordGuildAPIResponse } from '../types/discordAuth.j
 import { systemConfigService } from '../services/systemConfig.service.js';
 import { getCookieOptions } from '../utils/cookieOptions.js';
 import { ADMIN_ROLES, Role } from '../types/role.js';
+import { logErrorFromRequest } from '../services/errorLog.service.js';
 
 const discordAuthService = new DiscordAuthService();
 const discordMemberGuildService = new DiscordMemberGuildService();
@@ -29,7 +30,8 @@ export const login = async (req: Request, res: Response<void>, next: NextFunctio
     const authorizeUrl = await discordAuthService.getDiscordAuthorizeUrl();
     res.redirect(authorizeUrl);
   } catch (error) {
-    next();
+    console.error('login error', error);
+    next(error);
   }
 };
 
@@ -98,7 +100,10 @@ export const logout = async (req: Request, res: Response<void>) => {
  * @desc (Protected) 현재 인증된 유저의 gmok이 있는 길드 목록 가져오기
  * @access Private (auth.middleware를 통과해야 함)
  */
-export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuildAPIResponse>) => {
+export const getGmokGuilds = async (
+  req: AuthRequest,
+  res: Response<DiscordGuildAPIResponse>,
+) => {
   try {
     // 1. 유저 요청 처리
     const { accessToken, discordMemberId } = req;
@@ -130,6 +135,11 @@ export const getGmokGuilds = async (req: AuthRequest, res: Response<DiscordGuild
     });
   } catch (error) {
     console.error('getSelfGuilds error', error);
+    await logErrorFromRequest(
+      error instanceof Error ? error : new Error('Unknown error'),
+      req,
+      500,
+    );
     res.status(500).json({
       status: 'error',
       message: 'Internal server error discordAuth getGmokGuilds',
@@ -152,11 +162,7 @@ export const getSelfProfile = async (req: AuthRequest, res: Response) => {
     }
 
     if (!req.discordMemberId) {
-      res.status(500).json({
-        status: 'error',
-        message: 'User ID not found after auth middleware',
-        data: null,
-      });
+      throw new SystemError('User ID not found after auth middleware');
     }
 
     const result = await discordAuthService.fetchUser(accessToken);
@@ -169,7 +175,12 @@ export const getSelfProfile = async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('getSelfProfile error');
+    console.error('getSelfProfile error', error);
+    await logErrorFromRequest(
+      error instanceof Error ? error : new Error('Unknown error'),
+      req,
+      500,
+    );
     res.status(500).json({
       status: 'error',
       message: 'Internal server error while discordAuth getSelfProfile',

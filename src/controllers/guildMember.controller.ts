@@ -5,6 +5,7 @@ import {
   LinkSubAccountRequest,
   SubAccountsAPIResponse,
   UpdateGuildMemberStatusRequest,
+  MemberListAPIResponse,
 } from '../types/guildMember.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { BusinessError } from '../types/error.js';
@@ -51,6 +52,54 @@ export const searchGuildMembers = async (
     return res.status(500).json({
       status: 'error',
       message: 'Internal server error while searching guild members',
+      data: null,
+    });
+  }
+};
+
+/**
+ * @desc 길드 멤버 목록 조회 (활성/탈퇴/전체)
+ * @route GET /api/guildMember/:guildId/members
+ * @access Public
+ */
+export const getMembers = async (
+  req: Request<
+    { guildId: string },
+    MemberListAPIResponse,
+    never,
+    { status?: string; page?: string; limit?: string }
+  >,
+  res: Response<MemberListAPIResponse>,
+) => {
+  try {
+    const { guildId } = req.params;
+    const { status = '1', page, limit } = req.query;
+
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 50;
+
+    const { result, totalCount } = await guildMemberService.findMembersByGuildId(
+      guildId,
+      status as '1' | '2' | 'all',
+      pageNum,
+      limitNum,
+    );
+
+    res.setHeader('X-Total-Count', totalCount.toString());
+    res.setHeader('X-Page', pageNum.toString());
+    res.setHeader('X-Limit', limitNum.toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / limitNum).toString());
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Members retrieved successfully',
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error retrieving members:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving members',
       data: null,
     });
   }

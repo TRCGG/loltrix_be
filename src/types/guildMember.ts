@@ -73,3 +73,18 @@ export interface SubAccountsAPIResponse {
   message: string;
   data?: SubAccountSummary[] | null;
 }
+
+export interface MemberListItem {
+  playerCode: string;
+  riotName: string;
+  riotNameTag: string;
+  status: string;
+  createDate: Date;
+  updateDate: Date;
+}
+
+export interface MemberListAPIResponse {
+  status: 'success' | 'error';
+  message: string;
+  data?: MemberListItem[] | null;
+}
