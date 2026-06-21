@@ -38,7 +38,8 @@ WITH base AS (
     CASE p->>'TEAM' WHEN '100' THEN 'blue' WHEN '200' THEN 'red' END  AS game_team,
     CASE p->>'TEAM_POSITION'
       WHEN 'TOP' THEN 'TOP' WHEN 'JUNGLE' THEN 'JUG' WHEN 'MIDDLE' THEN 'MID'
-      WHEN 'BOTTOM' THEN 'ADC' WHEN 'UTILITY' THEN 'SUP' END          AS position,
+      WHEN 'BOTTOM' THEN 'ADC' WHEN 'UTILITY' THEN 'SUP'
+      ELSE COALESCE(p->>'TEAM_POSITION', '') END                      AS position,  -- 매핑 안 되면 raw 그대로(빈값 포함). match_participant·mmrMetric.service와 동일 처리
     CASE WHEN p->>'WIN' = 'Win' THEN 1 ELSE 0 END                     AS game_result,
     (p->>'GAME_ENDED_IN_SURRENDER' = '1')                            AS ended_in_surrender,
     NULLIF(p->>'CHAMPIONS_KILLED','')::int                AS kills,
