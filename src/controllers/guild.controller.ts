@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import {
   CreateGuildRequest,
   UpdateGuildRequest,
@@ -15,7 +15,6 @@ import { guildService } from '../services/guild.service.js';
 export const createGuild = async (
   req: Request<Record<string, never>, GuildResponse, CreateGuildRequest>,
   res: Response<GuildResponse>,
-  next: NextFunction,
 ) => {
   try {
     const { guildId, guildName, languageCode } = req.body;
@@ -33,7 +32,11 @@ export const createGuild = async (
     });
   } catch (error) {
     console.error('Error creating guild:', error);
-    next(error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while creating guild',
+      data: null,
+    });
   }
 };
 
@@ -42,11 +45,7 @@ export const createGuild = async (
  * @route GET /api/guilds/:id
  * @access Public
  */
-export const getGuildById = async (
-  req: Request<{ id: string }>,
-  res: Response<GuildResponse>,
-  next: NextFunction,
-) => {
+export const getGuildById = async (req: Request<{ id: string }>, res: Response<GuildResponse>) => {
   try {
     const { id } = req.params;
 
@@ -67,7 +66,11 @@ export const getGuildById = async (
     });
   } catch (error) {
     console.error('Error retrieving guild:', error);
-    return next(error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving guild',
+      data: null,
+    });
   }
 };
 
@@ -79,7 +82,6 @@ export const getGuildById = async (
 export const getAllGuilds = async (
   req: Request<Record<string, never>, GuildResponse, Record<string, never>, GetGuildsQuery>,
   res: Response<GuildResponse>,
-  next: NextFunction,
 ) => {
   try {
     const { page, limit, search } = req.query;
@@ -98,7 +100,11 @@ export const getAllGuilds = async (
     });
   } catch (error) {
     console.error('Error retrieving guilds:', error);
-    next(error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving guilds',
+      data: null,
+    });
   }
 };
 
@@ -110,7 +116,6 @@ export const getAllGuilds = async (
 export const updateGuild = async (
   req: Request<{ id: string }, GuildResponse, UpdateGuildRequest>,
   res: Response<GuildResponse>,
-  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
@@ -133,7 +138,11 @@ export const updateGuild = async (
     });
   } catch (error) {
     console.error('Error updating guild:', error);
-    return next(error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while updating guild',
+      data: null,
+    });
   }
 };
 
@@ -142,11 +151,7 @@ export const updateGuild = async (
  * @route DELETE /api/guilds/:id
  * @access Public
  */
-export const deleteGuild = async (
-  req: Request<{ id: string }>,
-  res: Response<GuildResponse>,
-  next: NextFunction,
-) => {
+export const deleteGuild = async (req: Request<{ id: string }>, res: Response<GuildResponse>) => {
   try {
     const { id } = req.params;
 
@@ -167,6 +172,10 @@ export const deleteGuild = async (
     });
   } catch (error) {
     console.error('Error deleting guild:', error);
-    return next(error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while deleting guild',
+      data: null,
+    });
   }
 };

@@ -214,10 +214,8 @@
 - **getGmokGuilds / getSelfProfile** [discordAuth.controller.ts](../../src/controllers/discordAuth.controller.ts): catch가 `res.status(500)` 직접 응답 → **✅ `next(error)` 위임**으로 변경(errorHandler가 DB 로깅 + 추적코드). `getSelfProfile`의 `!discordMemberId` 분기도 `throw SystemError`로 통일.
 - **fetchUser** [discordAuth.service.ts:185-210](../../src/services/discordAuth.service.ts#L185-L210): `userResult.ok` 검사 없이 `.json()` 호출 → 토큰 만료 시 `{id:undefined}` 쓰레기값 반환하던 문제. **✅ `.ok` 검사 추가**(handleDiscordCallback과 동일 패턴).
 
-### ✅ 컨트롤러 직접-500 일괄 전환 완료
-OAuth2 3곳 + **나머지 19곳**(guild×5, guildMember×5, matches×5, h2h×2, statistics×2) 모두 `catch → next(error)`로 전환. 이제 모든 컨트롤러의 예기치 못한 500이 errorHandler를 거쳐 `error_log` DB에 기록됨(추적코드 포함). 컨트롤러 내 `res.status(500)` 직접 응답 **0건**.
-- guildMember `updateMemberStatus`의 BusinessError 분기도 errorHandler로 위임(동일 동작 + DB 로깅) → 미사용 `BusinessError` import 제거.
-- ⚠️ 500 응답 본문이 `{status,message,data}` → `ProblemDetails`로 변경됨(프론트가 500 본문 파싱 시 확인 필요).
+### 미적용 (추적) — 컨트롤러 직접-500 (errorHandler 우회)
+OAuth2 3곳 수정 후 **남은 19곳**(guild×5, guildMember×5, matches×5, h2h×2, statistics×2). 예기치 못한 500이 `error_log` DB에 안 남음. 일괄 `next(error)` 전환은 별도 검토.
 
 ---
 

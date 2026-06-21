@@ -1,5 +1,5 @@
 // controllers/matchParticipant.controller.ts
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import {
   CustomMatch,
   MatchResponse,
@@ -34,7 +34,6 @@ export const getRecentGames = async (
     MatchQuery
   >,
   res: Response<MatchResponse<RecentGame[]>>,
-  next: NextFunction,
 ) => {
   try {
     const { guildId, riotName } = req.params;
@@ -87,7 +86,11 @@ export const getRecentGames = async (
     });
   } catch (error) {
     console.error('Error retrieving recent games:', error);
-    return next(error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving recent games',
+      data: null,
+    });
   }
 };
 
@@ -104,7 +107,6 @@ export const getMatchDashboard = async (
     MatchQuery
   >,
   res: Response<MatchResponse<DashboardData>>,
-  next: NextFunction,
 ) => {
   try {
     const { guildId, riotName } = req.params;
@@ -156,7 +158,11 @@ export const getMatchDashboard = async (
     });
   } catch (error) {
     console.error('Error retrieving match dashboard:', error);
-    return next(error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving match dashboard',
+      data: null,
+    });
   }
 };
 
@@ -173,7 +179,6 @@ export const getMostPicks = async (
     MatchQuery
   >,
   res: Response<MatchResponse<MostPick[]>>,
-  next: NextFunction,
 ) => {
   try {
     const { guildId, riotName } = req.params;
@@ -227,7 +232,11 @@ export const getMostPicks = async (
     });
   } catch (error) {
     console.error('Error retrieving most picks:', error);
-    return next(error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving most picks',
+      data: null,
+    });
   }
 };
 
@@ -243,7 +252,6 @@ export const getGameDetail = async (
     Record<string, never>
   >,
   res: Response<MatchResponse<GameDetail[]>>,
-  next: NextFunction,
 ) => {
   try {
     const { guildId, gameId } = req.params;
@@ -265,7 +273,11 @@ export const getGameDetail = async (
     });
   } catch (error) {
     console.error('Error retrieving game detail', error);
-    return next(error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving game detail',
+      data: null,
+    });
   }
 };
 
@@ -276,7 +288,6 @@ export const getGameDetail = async (
 export const deleteMatch = async (
   req: Request<{ guildId: string; gameId: string }>,
   res: Response<MatchResponse<CustomMatch>>,
-  next: NextFunction,
 ) => {
   try {
     const { guildId, gameId } = req.params;
@@ -298,6 +309,10 @@ export const deleteMatch = async (
     });
   } catch (error) {
     console.error('Error deleting match:', error);
-    return next(error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while deleting match',
+      data: null,
+    });
   }
 };
