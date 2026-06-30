@@ -632,8 +632,10 @@ export class H2hService {
       oppoLane: string;
       count: number;
       wins: number;
-      ka: number; // 두 사람 K+A 합
-      d: number; // 두 사람 D 합
+      myKa: number; // 내 K+A 합
+      myD: number; // 내 D 합
+      mateKa: number; // 팀원(oppo) K+A 합
+      mateD: number; // 팀원(oppo) D 합
     }
     const duoMap = new Map<string, DuoAcc>();
     for (const r of rows) {
@@ -646,13 +648,17 @@ export class H2hService {
         oppoLane: r.opPosition,
         count: 0,
         wins: 0,
-        ka: 0,
-        d: 0,
+        myKa: 0,
+        myD: 0,
+        mateKa: 0,
+        mateD: 0,
       };
       acc.count += 1;
       if (r.meResult === 1) acc.wins += 1;
-      acc.ka += (r.meKills ?? 0) + (r.meAssists ?? 0) + (r.opKills ?? 0) + (r.opAssists ?? 0);
-      acc.d += (r.meDeaths ?? 0) + (r.opDeaths ?? 0);
+      acc.myKa += (r.meKills ?? 0) + (r.meAssists ?? 0);
+      acc.myD += r.meDeaths ?? 0;
+      acc.mateKa += (r.opKills ?? 0) + (r.opAssists ?? 0);
+      acc.mateD += r.opDeaths ?? 0;
       duoMap.set(key, acc);
     }
     const duoChamps: H2hDuoChamp[] = Array.from(duoMap.values())
@@ -664,7 +670,8 @@ export class H2hService {
         oppoLane: a.oppoLane,
         count: a.count,
         wins: a.wins,
-        comboKda: String(Math.round((a.ka / (a.d === 0 ? 1 : a.d)) * 100) / 100),
+        myKda: String(Math.round((a.myKa / (a.myD === 0 ? 1 : a.myD)) * 100) / 100),
+        mateKda: String(Math.round((a.mateKa / (a.mateD === 0 ? 1 : a.mateD)) * 100) / 100),
       }));
 
     // 최근 함께한 8건 (detail 없음)
