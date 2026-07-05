@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { requireAdmin } from '../middlewares/requireRole.js';
+import { requireAdmin, requireGuildRole } from '../middlewares/requireRole.js';
+import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 import {
   createGuild,
   getGuildById,
   getAllGuilds,
   updateGuild,
   deleteGuild,
+  updateAllowAllUploads,
 } from '../controllers/guild.controller.js';
 
 const router: Router = Router();
@@ -78,6 +80,18 @@ const deleteGuildSchema = z.object({
       .string()
       .min(1, 'Guild ID is required')
       .max(128, 'Guild ID must be less than 128 characters'),
+  }),
+});
+
+const allowAllUploadsSchema = z.object({
+  params: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128),
+  }),
+  body: z.object({
+    allowAllUploads: z.boolean({
+      required_error: 'allowAllUploads is required',
+      invalid_type_error: 'allowAllUploads must be a boolean',
+    }),
   }),
 });
 
@@ -185,6 +199,33 @@ router.delete(
   requireAdmin('adminNormal'),
   validateRequest(deleteGuildSchema),
   deleteGuild,
+);
+
+/**
+ * @route PATCH /api/guilds/:guildId/allow-all-uploads
+ * @desc allowAllUploads(전체 업로드 허용) 플래그만 토글
+ * @access guildManager 이상 (admin bypass)
+ * @note 기존 PUT /api/guilds/:id(adminNormal)를 넓히지 않고 이 플래그 전용으로 신설
+ */
+router.patch(
+  '/:guildId/allow-all-uploads',
+  /* #swagger.auto = false
+    #swagger.tags = ['Guild']
+    #swagger.summary = 'allowAllUploads 토글'
+    #swagger.description = '길드의 전체 업로드 허용 여부를 변경합니다. (guildManager 이상 권한 필요)'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: '전체 업로드 허용 여부',
+      required: true,
+      schema: { allowAllUploads: true }
+    }
+  */
+  decodeGuildIdMiddleware,
+  requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
+  validateRequest(allowAllUploadsSchema),
+  updateAllowAllUploads,
 );
 
 export default router;

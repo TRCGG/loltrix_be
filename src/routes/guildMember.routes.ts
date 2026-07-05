@@ -9,6 +9,8 @@ import {
   removeSubAccount,
   updateMemberStatus,
   getMembers,
+  getGuildDiscordMembers,
+  updateGuildMemberRole,
 } from '../controllers/guildMember.controller.js';
 import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 
@@ -72,6 +74,39 @@ const getMembersSchema = z.object({
       .regex(/^\d+$/, 'Limit must be a positive number')
       .transform(Number)
       .optional(),
+  }),
+});
+
+const getDiscordMembersSchema = z.object({
+  params: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128),
+  }),
+  query: z.object({
+    search: z.string().max(128, 'Search term must be less than 128 characters').optional(),
+    // validateRequest는 transform 결과를 컨트롤러로 전달하지 않으므로(원본 req 유지),
+    // 상한 검증을 여기서 걸고 컨트롤러에서도 클램프한다. 무제한 값은 bigint 파싱 500/테이블 덤프 유발.
+    page: z
+      .string()
+      .regex(/^\d+$/, 'Page must be a positive number')
+      .refine((v) => Number(v) >= 1 && Number(v) <= 100000, 'Page must be between 1 and 100000')
+      .optional(),
+    limit: z
+      .string()
+      .regex(/^\d+$/, 'Limit must be a positive number')
+      .refine((v) => Number(v) >= 1 && Number(v) <= 100, 'Limit must be between 1 and 100')
+      .optional(),
+  }),
+});
+
+const updateMemberRoleSchema = z.object({
+  params: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128),
+    memberId: z.string().min(1, 'Member ID is required').max(64),
+  }),
+  body: z.object({
+    role: z.enum(['userNormal', 'userUploader'], {
+      errorMap: () => ({ message: "Role must be 'userNormal' or 'userUploader'" }),
+    }),
   }),
 });
 
@@ -165,6 +200,56 @@ router.get(
   decodeGuildIdMiddleware,
   validateRequest(getSubAccountsSchema),
   getSubAccounts,
+);
+
+/**
+ * @route GET /api/guildMember/:guildId/discord-members
+ * @desc 멤버 관리 화면용 Discord 멤버 목록/검색 (길드 스코프 역할 포함)
+ * @access guildManager 이상 (admin bypass)
+ * @note /:guildId/:riotName 보다 먼저 등록해야 riotName으로 잡히지 않음
+ */
+router.get(
+  '/:guildId/discord-members',
+  /* #swagger.auto = false
+    #swagger.tags = ['GuildMember']
+    #swagger.summary = 'Discord 멤버 목록/검색 (권한 관리)'
+    #swagger.description = 'guildManager가 관리할 Discord 멤버 목록을 조회합니다. 웹 로그인 이력이 있는 멤버만 표시. (guildManager 이상 권한 필요)'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['search'] = { in: 'query', description: '표시명 부분 검색', type: 'string' }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (기본값: 50)', type: 'integer' }
+  */
+  decodeGuildIdMiddleware,
+  requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
+  validateRequest(getDiscordMembersSchema),
+  getGuildDiscordMembers,
+);
+
+/**
+ * @route PATCH /api/guildMember/:guildId/discord-members/:memberId/role
+ * @desc 멤버 역할 부여/회수 (userNormal <-> userUploader)
+ * @access guildManager 이상 (admin bypass)
+ */
+router.patch(
+  '/:guildId/discord-members/:memberId/role',
+  /* #swagger.tags = ['GuildMember']
+    #swagger.summary = '멤버 역할 부여/회수'
+    #swagger.description = 'guildManager가 대상 멤버의 역할을 userNormal <-> userUploader로 변경합니다. guildManager 이상 대상은 변경 불가. (guildManager 이상 권한 필요)'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['memberId'] = { in: 'path', description: '대상 Discord 멤버 ID', required: true, type: 'string' }
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: '변경할 역할',
+      required: true,
+      schema: { role: 'userUploader' }
+    }
+  */
+  decodeGuildIdMiddleware,
+  requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
+  validateRequest(updateMemberRoleSchema),
+  updateGuildMemberRole,
 );
 
 /**

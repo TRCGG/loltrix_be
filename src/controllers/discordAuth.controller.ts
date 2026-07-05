@@ -5,6 +5,7 @@ import { BusinessError, SystemError } from '../types/error.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
 import { DiscordMemberGuildService } from '../services/discordMemberGuild.service.js';
 import { discordMemberRoleService } from '../services/discordMemberRole.service.js';
+import { discordGuildMemberService } from '../services/discordGuildMember.service.js';
 import { DiscordGuildAPI, DiscordGuildAPIResponse } from '../types/discordAuth.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
 import { getCookieOptions } from '../utils/cookieOptions.js';
@@ -126,6 +127,14 @@ export const getGmokGuilds = async (
         joinedGmokGuilds.map((g) => g.id),
         activeRoles,
       );
+      // 멤버 관리 화면 식별용 길드 별명 저장 (best-effort, enrichWithNick으로 받은 nick).
+      // 응답이 이 결과를 쓰지 않고 서비스가 에러를 내부에서 처리하므로 응답을 막지 않도록 fire-and-forget.
+      discordGuildMemberService
+        .upsertGuildNicknames(
+          discordMemberId,
+          joinedGmokGuilds.map((g) => ({ guildId: g.id, nickname: g.nick })),
+        )
+        .catch(() => {}); // 서비스 내부에서 이미 로깅 — 여기선 unhandled rejection만 방지
       guildsData = discordMemberGuildService.applyRolesToGuilds(joinedGmokGuilds, ensuredRoles);
     }
     res.status(200).json({
