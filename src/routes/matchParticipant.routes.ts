@@ -211,30 +211,33 @@ router.get(
 /**
  * @route DELETE /api/matches/:guildId/games/:gameId
  * @desc 게임 기록 삭제 (소프트 삭제)
+ * @access userUploader 이상 (admin bypass)
+ * @note TRC-220: 웹 리플 삭제를 업로더에게 허용하기 위해 guildManager → userUploader로 하향
+ *       (가드 도입은 a394266 — 무보호 파괴적 작업 보호 목적이었고, 검증 자체는 유지)
  */
 router.delete(
   '/:guildId/games/:gameId',
   /* #swagger.auto = false
     #swagger.tags = ['Matches']
     #swagger.summary = '게임 기록 삭제'
-    #swagger.description = '특정 게임 기록을 삭제(숨김) 처리합니다.'
-    
-    #swagger.parameters['guildId'] = { 
-      in: 'path', 
-      description: '길드 ID', 
+    #swagger.description = '특정 게임 기록을 삭제(숨김) 처리합니다. (userUploader 이상 권한 필요)'
+
+    #swagger.parameters['guildId'] = {
+      in: 'path',
+      description: '길드 ID',
       required: true,
       type: 'string'
     }
-    #swagger.parameters['gameId'] = { 
-      in: 'path', 
-      description: 'Game ID', 
+    #swagger.parameters['gameId'] = {
+      in: 'path',
+      description: 'Game ID',
       required: true,
       type: 'string'
     }
     #swagger.security = [{ "session": [] }]
   */
   decodeGuildIdMiddleware,
-  requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
+  requireGuildRole('userUploader', { from: 'params', key: 'guildId' }),
   validateRequest(gameDetailSchema),
   deleteMatch,
 );
