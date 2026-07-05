@@ -80,5 +80,8 @@
 
 ## 후속작업 (별도 티켓)
 
-- 웹 리플 파일 삭제(userUploader 이상) — 현재 삭제 API는 guildManager 이상 요구, 권한 하향 결정 선행 필요.
+- 웹 리플 파일 삭제(userUploader 이상) — **권한 하향 결정 완료(2026-07-05, TRC-220)**:
+  `DELETE /api/matches/{guildId}/games/{gameId}`를 guildManager → userUploader로 하향
+  (브랜치 `TRC-220-Back-웹-리플삭제-권한-하향`). 봇 `!drop`은 별도 체계(Discord 서버 역할)로 유지.
+  남은 것은 프론트 삭제 UI.
 - 클랜원 복귀/탈퇴 웹 화면 — 기존 `PUT /api/guildMember/status` 활용.
