@@ -47,7 +47,7 @@ out_of_scope:
   - 봇 측 권한 부여 기능 변경
   # 아래는 후속작업(별도 티켓) — 이번엔 안 함
   - (후속1) 클랜원 복귀/탈퇴 웹 화면 (현재 Discord 명령어로만, guildManager 이상) — 기존 PUT /api/guildMember/status 활용
-  - (후속2) 웹 리플 파일 삭제 (userUploader 이상) — 주의: 현재 삭제 API/봇은 guildManager 이상 요구 → 권한 하향 결정 필요(intent-guard)
+  - (후속2) 웹 리플 파일 삭제 (userUploader 이상) — 권한 하향 결정 완료(2026-07-05, TRC-220): API는 userUploader로 하향, 봇 !drop은 그대로
 
 ontology:
   - "멤버 표시명": 그 길드에서 지정한 Discord guild 별명. 없으면 global 별명, 그것도 없으면 Discord id
@@ -82,7 +82,10 @@ repos_touched:
 
 1. **클랜원 복귀/탈퇴 웹 화면** — 현재 Discord 명령어로만(guildManager 이상). 기존 `PUT /api/guildMember/status`(본계정 변경 시 부계정 동반 처리 로직 있음) 활용.
 2. **웹 리플 파일 삭제 (A)** — 대상 권한 = userUploader 이상.
-   - 인텐트 주의: 현재 `DELETE /api/matches/{guildId}/games/{gameId}`는 guildManager 이상, 봇 `!drop`도 관리자급. userUploader로 낮추려면 해당 코드 git 이력 확인 후 결정.
+   - ~~인텐트 주의: userUploader로 낮추려면 해당 코드 git 이력 확인 후 결정.~~
+   - **결정 완료(2026-07-05, TRC-220)**: git 이력 확인(가드 도입 = TRC-217 a394266, 무보호 파괴적 작업 보호 목적) 후
+     `DELETE /api/matches/{guildId}/games/{gameId}`를 userUploader로 하향(f37b125). 봇 `!drop`은 별도 체계라 관리자급 유지.
+     남은 것은 프론트 삭제 UI.
 
 ## 참조 (조사로 확인된 코드 위치)
 
