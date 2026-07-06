@@ -211,7 +211,8 @@ export interface H2hDuoChamp {
   oppoLane: string;
   count: number;
   wins: number;
-  comboKda: string; // (두 사람 K+A 합) / (D 합, 0이면 1)
+  myKda: string; // 내 (K+A 합) / (내 D 합, 0이면 1) — 그 듀오 게임들 합산
+  mateKda: string; // 함께한 팀원(oppo) (K+A 합) / (팀원 D 합, 0이면 1)
 }
 
 /** 함께한(together) 블록 — 지표·매트릭스·인사이트·우위그래프 없음 (§3.10) */
