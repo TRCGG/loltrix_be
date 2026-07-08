@@ -9,6 +9,7 @@ import {
   champion,
   riotAccount,
   customMatch,
+  guildMember,
   summonerSpell,
   perks,
 } from '../database/schema.js'; // 스키마 import 추가
@@ -614,6 +615,8 @@ export class MatchParticipantService {
       )
       .innerJoin(riotAccount, eq(mpTeammate.playerCode, riotAccount.playerCode))
       .innerJoin(customMatch, eq(mpTeammate.customMatchId, customMatch.id))
+      // Join 2: 팀원의 길드 멤버십 (탈퇴/부계정 제외용)
+      .innerJoin(guildMember, eq(riotAccount.playerCode, guildMember.account))
       .where(
         and(
           // 조건 1: 나는 '나'여야 함
@@ -627,6 +630,11 @@ export class MatchParticipantService {
           eq(mpTeammate.isDeleted, false),
           eq(customMatch.guildId, guildId),
           eq(customMatch.isDeleted, false),
+          // 조건 5: 팀원은 현재 길드에 가입(status '1') 상태인 본계정만 (탈퇴·부계정 제외)
+          eq(guildMember.guildId, guildId),
+          eq(guildMember.status, '1'),
+          eq(guildMember.isMain, true),
+          eq(guildMember.isDeleted, false),
         ),
       )
       .groupBy(riotAccount.riotName, riotAccount.riotNameTag)
