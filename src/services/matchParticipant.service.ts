@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { eq, ne, and, desc, sql, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { db, TransactionType } from '../database/connectionPool.js';
+import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import {
   InsertMatchParticipant,
   matchParticipant,
@@ -119,6 +119,7 @@ export class MatchParticipantService {
         rawData,
         customMatchId,
         puuidToPlayerCodeMap,
+        tx,
       );
 
       // 2. 변환된 데이터를 삽입
@@ -140,6 +141,7 @@ export class MatchParticipantService {
     rawData: any,
     customMatchId: string,
     puuidToPlayerCodeMap: Map<string, string>,
+    executor: DbOrTx = db,
   ): Promise<InsertMatchParticipant[]> {
     // Zod를 사용하여 원본 데이터 검증
     const validatedData = MatchparticipantArraySchema.parse(rawData);
@@ -148,7 +150,7 @@ export class MatchParticipantService {
     const championEngNames = [...new Set(validatedData.map((d) => d.SKIN).filter(Boolean))];
 
     // 2. 챔피언 영문, ID DB조회
-    const championRecords = await db
+    const championRecords = await executor
       .select({ id: champion.id, nameEng: champion.champNameEng })
       .from(champion)
       .where(inArray(champion.champNameEng, championEngNames));

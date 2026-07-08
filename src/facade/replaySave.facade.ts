@@ -17,9 +17,11 @@ export class ReplaySaveFacade {
    * (파일 다운로드 + 길드 upsert + 저장)
    */
   public async allSave(fileData: ReplayFileRequest): Promise<ReplaySaveResult> {
-    return db.transaction(async (tx: TransactionType) => {
-      const { rawData, patchVersion } = await replayService.getRawData(fileData);
+    // 파일 다운로드+파싱은 트랜잭션 밖에서 수행한다.
+    // (네트워크 I/O 동안 DB 커넥션을 idle-in-transaction 으로 붙잡지 않도록)
+    const { rawData, patchVersion } = await replayService.getRawData(fileData);
 
+    return db.transaction(async (tx: TransactionType) => {
       // 1. 길드 저장
       await guildService.upsertGuild(fileData.guild, tx);
 
@@ -119,14 +121,17 @@ export class ReplaySaveFacade {
 
     // mmr_participant_metric 적재 — 모든 길드 (구독 여부 무관).
     // raw에 게임시각이 없어 played_date는 업로드 시각(custom_match.create_date) 사용.
-    const metricRows = await mmrMetricService.buildMetricRows({
-      rawData,
-      customMatchId: customMatchData.id,
-      guildId: savedReplay.guildId,
-      season: savedReplay.season,
-      playedDate: savedCustomMatch.createDate,
-      puuidToPlayerCodeMap,
-    });
+    const metricRows = await mmrMetricService.buildMetricRows(
+      {
+        rawData,
+        customMatchId: customMatchData.id,
+        guildId: savedReplay.guildId,
+        season: savedReplay.season,
+        playedDate: savedCustomMatch.createDate,
+        puuidToPlayerCodeMap,
+      },
+      tx,
+    );
     await mmrMetricService.insertMetrics(metricRows, tx);
   }
 }

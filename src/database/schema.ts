@@ -59,7 +59,10 @@ export const replay = pgTable('replay', {
   createDate: timestamp('create_date').notNull().defaultNow(),
   updateDate: timestamp('update_date').notNull().defaultNow(),
   isDeleted: boolean('is_deleted').notNull().default(false),
-});
+}, (t) => [
+  // 중복검사(checkDuplicateByHash: hash_data = ? AND guild_id = ?) 풀스캔 방지
+  index('idx_replay_hash_guild').on(t.hashData, t.guildId),
+]);
 
 export type Guild = typeof guild.$inferSelect;
 export type InsertGuild = typeof guild.$inferInsert;
