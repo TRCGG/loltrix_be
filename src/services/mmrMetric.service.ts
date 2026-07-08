@@ -6,7 +6,8 @@ import { SystemError } from '../types/error.js';
 /**
  * @desc mmr_participant_metric 적재 서비스
  * 한 row = 한 경기의 한 참가자. 원천 = replay.raw_data 배열.
- * 변환·파생 산식은 backfill SQL(docs/mmr/metric_implementation_guide.md §6)과 수치가 정확히 일치해야 한다.
+ * 변환·파생 산식은 backfill SQL과 수치가 정확히 일치해야 한다.
+ * 구현 가이드(스키마·적재·파생·backfill): Confluence [개발팀] > [Back] > "mmr_participant_metric 스키마·적재 구현 가이드".
  */
 
 const MIN_TIME_PLAYED_SECONDS = 300; // 5분 미만 제외
