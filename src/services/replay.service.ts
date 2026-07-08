@@ -1,7 +1,7 @@
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { get } from 'https';
 import { createHash } from 'crypto';
-import { db, TransactionType } from '../database/connectionPool.js';
+import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import { replay } from '../database/schema.js';
 import { ReplayFileRequest } from '../types/replay.js';
 import { BusinessError, SystemError } from '../types/error.js';
@@ -22,8 +22,12 @@ export class ReplayService {
    * @desc 파일의 해시값과 길드 ID가 일치하는 중복 레코드의 존재 여부를 확인
    * @returns 중복된 레코드가 존재하면 true, 존재하지 않으면 false
    */
-  public async checkDuplicateByHash(hashData: string, guildId: string): Promise<boolean> {
-    const result = await db
+  public async checkDuplicateByHash(
+    hashData: string,
+    guildId: string,
+    executor: DbOrTx = db,
+  ): Promise<boolean> {
+    const result = await executor
       .select({ id: replay.id })
       .from(replay)
       .where(
@@ -98,7 +102,7 @@ export class ReplayService {
   /**
    * @desc replay_code 생성 (RPY-YYMMDD-filename-id) 형식
    */
-  private async generateReplayCode(fileName: string): Promise<string> {
+  private async generateReplayCode(fileName: string, executor: DbOrTx = db): Promise<string> {
     const seoulDateStr = new Date().toLocaleString('sv-SE', {
       timeZone: 'Asia/Seoul',
     });
@@ -108,7 +112,7 @@ export class ReplayService {
 
     const prefix = `RPY-${YYMMDD}-${fileName}-`;
 
-    const lastReplay = await db
+    const lastReplay = await executor
       .select({ id: replay.id })
       .from(replay)
       .orderBy(desc(replay.id))
@@ -211,12 +215,12 @@ export class ReplayService {
     const hashData = this.generateHash(rawDataString);
 
     // 1. 중복된 데이터 확인
-    if (await this.checkDuplicateByHash(hashData, guildId)) {
+    if (await this.checkDuplicateByHash(hashData, guildId, tx)) {
       throw new BusinessError('duplicated replay data', 400, { isLoggable: false });
     }
 
-    const replayCode = await this.generateReplayCode(fileName);
-    const season = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
+    const replayCode = await this.generateReplayCode(fileName, tx);
+    const season = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season', tx);
 
     const newReplay = await tx
       .insert(replay)
