@@ -213,12 +213,25 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['GuildMember']
     #swagger.summary = 'Discord 멤버 목록/검색 (권한 관리)'
-    #swagger.description = 'guildManager가 관리할 Discord 멤버 목록을 조회합니다. 웹 로그인 이력이 있는 멤버만 표시. (guildManager 이상 권한 필요)'
+    #swagger.description = '[멤버 권한 관리 화면] 목록/검색용. 웹에 로그인한 적 있는 Discord 멤버만 반환합니다. 각 항목의 role로 현재 권한을 표시하세요. ▶ guildId는 Base64 인코딩해 path에 넣습니다. ▶ 페이지네이션(총 개수/현재 페이지/전체 페이지)은 응답 body가 아니라 응답 헤더 X-Total-Count / X-Page / X-Limit / X-Total-Pages 로 옵니다. ▶ search는 표시명 부분검색(선택). ▶ 세션 로그인(guildManager 이상) 필요.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['search'] = { in: 'query', description: '표시명 부분 검색', type: 'string' }
-    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
-    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (기본값: 50)', type: 'integer' }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (1~100000, 기본값 1)', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (1~100, 기본값 50)', type: 'integer' }
+    #swagger.responses[200] = {
+      description: '조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다. displayName = 길드 별명 ?? 전역 별명 ?? discord_id',
+      schema: {
+        status: 'success',
+        message: 'Discord members retrieved successfully',
+        data: [
+          { memberId: '123456789012345678', displayName: '홍길동', role: 'userUploader' },
+          { memberId: '234567890123456789', displayName: '김철수', role: 'userNormal' }
+        ]
+      }
+    }
+    #swagger.responses[401] = { description: '미인증 (세션 없음)', schema: { status: 'error', message: 'Unauthorized', data: null } }
+    #swagger.responses[403] = { description: 'guildManager 미만 권한', schema: { status: 'error', message: 'Forbidden: insufficient guild role', data: null } }
   */
   decodeGuildIdMiddleware,
   requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
@@ -235,16 +248,29 @@ router.patch(
   '/:guildId/discord-members/:memberId/role',
   /* #swagger.tags = ['GuildMember']
     #swagger.summary = '멤버 역할 부여/회수'
-    #swagger.description = 'guildManager가 대상 멤버의 역할을 userNormal <-> userUploader로 변경합니다. guildManager 이상 대상은 변경 불가. (guildManager 이상 권한 필요)'
+    #swagger.description = '[업로더 권한 부여/회수 버튼]에 연결. ▶ body.role에 원하는 최종 상태를 그대로 보냅니다 — userUploader=권한 부여, userNormal=권한 회수 (토글이 아니라 원하는 값 지정). ▶ 이미 그 역할이면 에러가 아니라 200 + data.changed=false 로 응답하니 UI에서 그대로 반영하면 됩니다. ▶ 대상이 guildManager 이상이면 403, 웹 로그인 이력 없는 멤버면 404. ▶ guildId는 Base64. ▶ 세션 로그인(guildManager 이상) 필요.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['memberId'] = { in: 'path', description: '대상 Discord 멤버 ID', required: true, type: 'string' }
     #swagger.parameters['body'] = {
       in: 'body',
-      description: '변경할 역할',
+      description: "변경할 역할 (userNormal: 회수 / userUploader: 부여)",
       required: true,
       schema: { role: 'userUploader' }
     }
+    #swagger.responses[200] = {
+      description: '변경 성공. 이미 같은 역할이면 변경 없이 changed:false로 응답합니다(idempotent).',
+      schema: {
+        status: 'success',
+        message: 'Role updated to userUploader',
+        data: { memberId: '234567890123456789', guildId: '987654321098765432', role: 'userUploader', changed: true }
+      }
+    }
+    #swagger.responses[400] = { description: 'role 값이 userNormal/userUploader가 아님', schema: { status: 'error', message: "Role must be 'userNormal' or 'userUploader'", data: null } }
+    #swagger.responses[401] = { description: '미인증 (세션 없음)', schema: { status: 'error', message: 'Unauthorized', data: null } }
+    #swagger.responses[403] = { description: 'guildManager 미만 권한이거나, 대상이 guildManager 이상이라 변경 불가', schema: { status: 'error', message: 'Cannot modify guildManager or higher role', data: null } }
+    #swagger.responses[404] = { description: '대상 멤버가 이 길드에 없음 (웹 로그인 이력 필요)', schema: { status: 'error', message: 'Target member not found in this guild (web login history required)', data: null } }
+    #swagger.responses[409] = { description: '대상의 현재 역할이 관리 불가한 미지의 값', schema: { status: 'error', message: 'Cannot modify unknown role: someRole', data: null } }
   */
   decodeGuildIdMiddleware,
   requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
