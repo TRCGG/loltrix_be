@@ -106,3 +106,7 @@ export const closeDB = () => dbConnectionPool.close();
 export const isDBReady = () => dbConnectionPool.isReady();
 
 export type TransactionType = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// db(풀) 또는 tx(트랜잭션) 어느 쪽으로도 실행 가능한 executor 타입.
+// 트랜잭션 안에서 별도 풀 커넥션을 잡지 않도록 tx를 넘길 때 사용한다.
+export type DbOrTx = NodePgDatabase<typeof schema> | TransactionType;

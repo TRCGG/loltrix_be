@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { eq, ne, and, desc, sql, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { db, TransactionType } from '../database/connectionPool.js';
+import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import {
   InsertMatchParticipant,
   matchParticipant,
@@ -9,6 +9,7 @@ import {
   champion,
   riotAccount,
   customMatch,
+  guildMember,
   summonerSpell,
   perks,
 } from '../database/schema.js'; // 스키마 import 추가
@@ -118,6 +119,7 @@ export class MatchParticipantService {
         rawData,
         customMatchId,
         puuidToPlayerCodeMap,
+        tx,
       );
 
       // 2. 변환된 데이터를 삽입
@@ -139,6 +141,7 @@ export class MatchParticipantService {
     rawData: any,
     customMatchId: string,
     puuidToPlayerCodeMap: Map<string, string>,
+    executor: DbOrTx = db,
   ): Promise<InsertMatchParticipant[]> {
     // Zod를 사용하여 원본 데이터 검증
     const validatedData = MatchparticipantArraySchema.parse(rawData);
@@ -147,7 +150,7 @@ export class MatchParticipantService {
     const championEngNames = [...new Set(validatedData.map((d) => d.SKIN).filter(Boolean))];
 
     // 2. 챔피언 영문, ID DB조회
-    const championRecords = await db
+    const championRecords = await executor
       .select({ id: champion.id, nameEng: champion.champNameEng })
       .from(champion)
       .where(inArray(champion.champNameEng, championEngNames));
@@ -614,6 +617,8 @@ export class MatchParticipantService {
       )
       .innerJoin(riotAccount, eq(mpTeammate.playerCode, riotAccount.playerCode))
       .innerJoin(customMatch, eq(mpTeammate.customMatchId, customMatch.id))
+      // Join 2: 팀원의 길드 멤버십 (탈퇴/부계정 제외용)
+      .innerJoin(guildMember, eq(riotAccount.playerCode, guildMember.account))
       .where(
         and(
           // 조건 1: 나는 '나'여야 함
@@ -627,6 +632,11 @@ export class MatchParticipantService {
           eq(mpTeammate.isDeleted, false),
           eq(customMatch.guildId, guildId),
           eq(customMatch.isDeleted, false),
+          // 조건 5: 팀원은 현재 길드에 가입(status '1') 상태인 본계정만 (탈퇴·부계정 제외)
+          eq(guildMember.guildId, guildId),
+          eq(guildMember.status, '1'),
+          eq(guildMember.isMain, true),
+          eq(guildMember.isDeleted, false),
         ),
       )
       .groupBy(riotAccount.riotName, riotAccount.riotNameTag)

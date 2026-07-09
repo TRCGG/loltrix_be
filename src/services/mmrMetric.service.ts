@@ -1,5 +1,5 @@
 import { inArray } from 'drizzle-orm';
-import { db, TransactionType } from '../database/connectionPool.js';
+import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import { champion, mmrParticipantMetric, InsertMmrParticipantMetric } from '../database/schema.js';
 import { SystemError } from '../types/error.js';
 
@@ -114,11 +114,14 @@ export class MmrMetricService {
    * @desc rawData 배열 → mmr_participant_metric insert 행 배열
    * categoricals·championId·파생 모두 rawData 기준으로 backfill SQL과 동일하게 변환한다.
    */
-  public async buildMetricRows(input: BuildMetricRowsInput): Promise<InsertMmrParticipantMetric[]> {
+  public async buildMetricRows(
+    input: BuildMetricRowsInput,
+    executor: DbOrTx = db,
+  ): Promise<InsertMmrParticipantMetric[]> {
     const { rawData, customMatchId, guildId, season, playedDate, puuidToPlayerCodeMap } = input;
 
     // championId: SKIN(영문 챔프명) → champion.id, 실패 시 NULL (backfill LEFT JOIN과 동일)
-    const championMap = await this.buildChampionMap(rawData);
+    const championMap = await this.buildChampionMap(rawData, executor);
 
     const rows: InsertMmrParticipantMetric[] = rawData.map((p) => {
       if (!p.PUUID) throw new SystemError('metric build mismatch: PUUID missing', 500);
@@ -200,11 +203,12 @@ export class MmrMetricService {
   /** SKIN(champ_name_eng) → champion.id Map. 매핑 실패 챔프는 Map에 없음 → 호출부에서 null */
   private async buildChampionMap(
     rawData: Array<Record<string, string | undefined>>,
+    executor: DbOrTx = db,
   ): Promise<Map<string, string>> {
     const skins = [...new Set(rawData.map((p) => p.SKIN).filter((s): s is string => !!s))];
     if (skins.length === 0) return new Map();
 
-    const records = await db
+    const records = await executor
       .select({ id: champion.id, nameEng: champion.champNameEng })
       .from(champion)
       .where(inArray(champion.champNameEng, skins));
