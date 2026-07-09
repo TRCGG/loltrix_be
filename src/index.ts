@@ -67,7 +67,7 @@ app.use(
   cors({
     origin: ['https://gmok.kr', 'https://dev.gmok.kr'],
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: [
       'Content-Type',
       'Authorization',
@@ -76,6 +76,8 @@ app.use(
       'Accept',
       'x-discord-bot',
     ],
+    // 페이지네이션 헤더를 프론트 JS가 읽을 수 있도록 노출 (목록 API 공통)
+    exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Limit', 'X-Total-Pages'],
   }),
 );
 

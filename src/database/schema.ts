@@ -334,11 +334,66 @@ export const discordMemberRole = pgTable(
       .$onUpdate(() => new Date()),
     isDeleted: boolean('is_deleted').notNull().default(false),
   },
-  (table) => [unique('uq_member_guild').on(table.memberId, table.guildId)],
+  (table) => [
+    unique('uq_member_guild').on(table.memberId, table.guildId),
+    // 멤버 관리 목록 API: WHERE guild_id + ORDER BY update_date (uq_member_guild는 member_id 선행이라 못 씀)
+    index('idx_dmr_guild_updated').on(table.guildId, table.updateDate),
+  ],
 );
 
 export type DiscordMemberRole = typeof discordMemberRole.$inferSelect;
 export type InsertDiscordMemberRole = typeof discordMemberRole.$inferInsert;
+
+/**
+ * 길드별 Discord 별명 테이블
+ * - Discord↔Riot 매핑이 없어 웹 멤버 관리 화면에서 멤버를 guild 별명으로 식별하기 위한 저장소.
+ * - (member, guild) 당 1행. 로그인/길드 조회 시점에 enrichWithNick으로 받은 nick을 upsert.
+ * - 표시명 = nickname ?? discord_member.display_name ?? member_id.
+ */
+export const discordGuildMember = pgTable(
+  'discord_guild_member',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => discordMember.id),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    nickname: text('nickname'),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (table) => [unique('uq_discord_guild_member').on(table.memberId, table.guildId)],
+);
+
+export type DiscordGuildMember = typeof discordGuildMember.$inferSelect;
+export type InsertDiscordGuildMember = typeof discordGuildMember.$inferInsert;
+
+/**
+ * 역할 부여/회수 감사 로그 (append-only)
+ * - "누가 누구에게 언제 부여/회수했는지" = 이벤트 이력. discord_member_role에 grantedBy 컬럼을 두면
+ *   마지막 값만 남아 이력이 유실되므로 별도 로그 테이블로 분리.
+ * - INSERT 전용. update/soft-delete 없음.
+ */
+export const discordMemberRoleLog = pgTable(
+  'discord_member_role_log',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: text('member_id').notNull(),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    actorMemberId: text('actor_member_id').notNull(),
+    fromRole: varchar('from_role', { length: 32 }).notNull(),
+    toRole: varchar('to_role', { length: 32 }).notNull(),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('idx_dmrl_member_guild_created').on(table.memberId, table.guildId, table.createDate)],
+);
+
+export type DiscordMemberRoleLog = typeof discordMemberRoleLog.$inferSelect;
+export type InsertDiscordMemberRoleLog = typeof discordMemberRoleLog.$inferInsert;
 
 export const systemConfig = pgTable('system_config', {
   key: varchar('key', { length: 128 }).primaryKey(),

@@ -147,6 +147,44 @@ export const updateGuild = async (
 };
 
 /**
+ * @desc allowAllUploads 플래그만 토글 (guildManager 스코프)
+ * @route PATCH /api/guilds/:guildId/allow-all-uploads
+ * @access guildManager 이상 (admin bypass)
+ */
+export const updateAllowAllUploads = async (
+  req: Request<{ guildId: string }, GuildResponse, { allowAllUploads: boolean }>,
+  res: Response<GuildResponse>,
+) => {
+  try {
+    const { guildId } = req.params;
+    const { allowAllUploads } = req.body;
+
+    const updatedGuild = await guildService.updateAllowAllUploads(guildId, allowAllUploads);
+
+    if (!updatedGuild) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Guild not found or already deleted',
+        data: null,
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'allowAllUploads updated successfully',
+      data: updatedGuild,
+    });
+  } catch (error) {
+    console.error('Error updating allowAllUploads:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while updating allowAllUploads',
+      data: null,
+    });
+  }
+};
+
+/**
  * @desc ID로 길드 삭제 (소프트 삭제)
  * @route DELETE /api/guilds/:id
  * @access Public

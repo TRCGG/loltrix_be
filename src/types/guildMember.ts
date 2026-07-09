@@ -88,3 +88,32 @@ export interface MemberListAPIResponse {
   message: string;
   data?: MemberListItem[] | null;
 }
+
+// --- guildManager 웹 권한 관리 (Discord 멤버 기준) ---
+
+/**
+ * @desc 멤버 관리 화면 단일 항목 (Discord 멤버 + 길드 스코프 역할)
+ * - displayName = guild 별명 ?? global 별명 ?? discord_id
+ */
+export interface DiscordMemberRoleItem {
+  memberId: string;
+  displayName: string;
+  role: string;
+}
+
+export interface DiscordMemberRoleListAPIResponse {
+  status: 'success' | 'error';
+  message: string;
+  data?: DiscordMemberRoleItem[] | null;
+}
+
+/** 역할 부여/회수 요청 body (상한: userUploader) */
+export interface UpdateMemberRoleRequest {
+  role: 'userNormal' | 'userUploader';
+}
+
+export interface UpdateMemberRoleAPIResponse {
+  status: 'success' | 'error';
+  message: string;
+  data?: { memberId: string; guildId: string; role: string; changed: boolean } | null;
+}
