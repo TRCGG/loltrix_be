@@ -71,11 +71,18 @@ router.get(
     #swagger.description = '현재 로그인된 세션 정보를 바탕으로 유저 정보를 조회합니다. (쿠키 또는 봇 헤더 필요)'
     // security 설정 생략 -> 전역 설정(cookieAuth OR botAuth) 자동 적용됨
     #swagger.responses[200] = {
-      description: '성공',
+      description: '성공. avatar는 완성된 이미지 URL(없으면 null)이라 프론트에서 그대로 img src로 사용 가능.',
       schema: {
-        userId: 'string',
-        username: 'string',
-        avatar: 'string'
+        status: 'success',
+        message: 'session OK',
+        data: {
+          user: {
+            id: '123456789012345678',
+            username: 'gildong',
+            global_name: '홍길동',
+            avatar: 'https://cdn.discordapp.com/avatars/123456789012345678/abc123.png'
+          }
+        }
       }
     }
   */
