@@ -3,10 +3,10 @@ import { db } from '../database/connectionPool.js';
 import { discordGuildMember } from '../database/schema.js';
 
 /**
- * @desc discord_guild_member(길드별 Discord 별명) 조작 서비스
+ * @desc 길드별 Discord 별명 저장 서비스 (테이블: discord_guild_member)
  * - 멤버 관리 화면에서 멤버를 식별할 표시명(별명) 저장소.
  */
-export class DiscordGuildMemberService {
+export class DiscordGuildNicknameService {
   /**
    * @desc 로그인/길드 조회 시점에 받은 길드별 nick을 upsert (member, guild 당 1행)
    * - nick이 실제로 바뀐 경우에만 UPDATE (불필요한 write 방지).
@@ -49,4 +49,4 @@ export class DiscordGuildMemberService {
   }
 }
 
-export const discordGuildMemberService = new DiscordGuildMemberService();
+export const discordGuildNicknameService = new DiscordGuildNicknameService();
