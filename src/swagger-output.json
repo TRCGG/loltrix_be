@@ -1208,7 +1208,7 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "페이지당 개수 (1~100, 기본값 50)",
+            "description": "페이지당 개수 (1~1000, 기본값 50)",
             "schema": {
               "type": "integer"
             }

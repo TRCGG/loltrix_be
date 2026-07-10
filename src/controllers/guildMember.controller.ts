@@ -133,7 +133,7 @@ export const getGuildDiscordMembers = async (
 
     // zod 상한 검증과 별개로 방어적 클램프 (validateRequest는 transform 값을 전달하지 않음)
     const pageNum = Math.min(Number(page) || 1, 100000);
-    const limitNum = Math.min(Number(limit) || 50, 100);
+    const limitNum = Math.min(Number(limit) || 50, 1000);
 
     const { result, totalCount } = await discordMemberRoleService.getGuildMembersWithRoles(guildId, {
       search,

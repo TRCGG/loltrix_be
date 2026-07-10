@@ -94,7 +94,7 @@ const getDiscordMembersSchema = z.object({
     limit: z
       .string()
       .regex(/^\d+$/, 'Limit must be a positive number')
-      .refine((v) => Number(v) >= 1 && Number(v) <= 100, 'Limit must be between 1 and 100')
+      .refine((v) => Number(v) >= 1 && Number(v) <= 1000, 'Limit must be between 1 and 1000')
       .optional(),
   }),
 });
@@ -238,7 +238,7 @@ router.get(
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['search'] = { in: 'query', description: '표시명 부분 검색', type: 'string' }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (1~100000, 기본값 1)', type: 'integer' }
-    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (1~100, 기본값 50)', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (1~1000, 기본값 50)', type: 'integer' }
     #swagger.responses[200] = {
       description: '조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다. displayName = 길드 별명 ?? 전역 별명 ?? discord_id',
       schema: {
