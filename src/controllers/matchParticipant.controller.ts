@@ -12,6 +12,7 @@ import {
 import { matchParticipantService } from '../services/matchParticipant.service.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
+import { AuthRequest } from '../middlewares/authHandler.js';
 
 const formatMember = (members: any[]) => {
   return members.map((member) => ({
@@ -285,14 +286,21 @@ export const getGameDetail = async (
  * @desc 게임 기록 삭제 (소프트 삭제)
  * @route DELETE /api/matches/:guildId/games/:gameId
  */
-export const deleteMatch = async (
-  req: Request<{ guildId: string; gameId: string }>,
-  res: Response<MatchResponse<CustomMatch>>,
-) => {
+export const deleteMatch = async (req: AuthRequest, res: Response<MatchResponse<CustomMatch>>) => {
   try {
-    const { guildId, gameId } = req.params;
+    const { guildId, gameId } = req.params as { guildId: string; gameId: string };
 
-    const deletedMatch = await matchParticipantService.deleteMatch(gameId, guildId);
+    // 삭제 주체(actor): 웹은 세션 memberId(requireGuildRole이 존재 보장), 봇(!drop)은
+    // body.actorMemberId로 명령 사용자를 전달받음 — 미전달(구버전 봇)이면 'bot'으로 기록.
+    const bodyActor = (req.body as { actorMemberId?: unknown } | undefined)?.actorMemberId;
+    const actor = req.isBot
+      ? {
+          memberId: typeof bodyActor === 'string' && bodyActor ? bodyActor : 'bot',
+          source: 'bot' as const,
+        }
+      : { memberId: req.discordMemberId ?? 'unknown', source: 'web' as const };
+
+    const deletedMatch = await matchParticipantService.deleteMatch(gameId, guildId, actor);
 
     if (!deletedMatch) {
       return res.status(404).json({

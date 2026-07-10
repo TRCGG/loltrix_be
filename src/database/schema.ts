@@ -372,28 +372,38 @@ export const discordGuildMember = pgTable(
 export type DiscordGuildMember = typeof discordGuildMember.$inferSelect;
 export type InsertDiscordGuildMember = typeof discordGuildMember.$inferInsert;
 
+/** guild_audit_log 타입별 페이로드 (event_type에 따라 하나가 들어감) */
+export type GuildAuditLogDetail =
+  | { fromRole: string; toRole: string } // eventType 'roleChange'
+  | { gameId: string; source: 'web' | 'bot' }; // eventType 'replayDelete'
+
 /**
- * 역할 부여/회수 감사 로그 (append-only)
- * - "누가 누구에게 언제 부여/회수했는지" = 이벤트 이력. discord_member_role에 grantedBy 컬럼을 두면
- *   마지막 값만 남아 이력이 유실되므로 별도 로그 테이블로 분리.
+ * 길드 관리 행위 통합 감사 로그 (append-only)
+ * - "누가 무엇을 언제 했는지" = 이벤트 이력. 상태 테이블(discord_member_role, custom_match 등)은
+ *   마지막 값만 남아 행위자·이력이 유실되므로 별도 로그 테이블로 분리 (TRC-221 결정 #2).
+ * - 로그 종류마다 테이블을 늘리지 않고 통합: 공통 컬럼 + 타입별 페이로드는 detail(jsonb).
+ *   (기존 discord_member_role_log는 마이그레이션 010에서 이 테이블로 흡수됨)
  * - INSERT 전용. update/soft-delete 없음.
  */
-export const discordMemberRoleLog = pgTable(
-  'discord_member_role_log',
+export const guildAuditLog = pgTable(
+  'guild_audit_log',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    memberId: text('member_id').notNull(),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
-    actorMemberId: text('actor_member_id').notNull(),
-    fromRole: varchar('from_role', { length: 32 }).notNull(),
-    toRole: varchar('to_role', { length: 32 }).notNull(),
+    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete'
+    actorMemberId: text('actor_member_id').notNull(), // 행위자 Discord id (미상이면 'bot')
+    targetMemberId: text('target_member_id'), // 대상 멤버 (roleChange), 없으면 NULL
+    detail: jsonb('detail').$type<GuildAuditLogDetail>().notNull(),
     createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('idx_dmrl_member_guild_created').on(table.memberId, table.guildId, table.createDate)],
+  (table) => [
+    index('idx_gal_guild_created').on(table.guildId, table.createDate),
+    index('idx_gal_guild_target_created').on(table.guildId, table.targetMemberId, table.createDate),
+  ],
 );
 
-export type DiscordMemberRoleLog = typeof discordMemberRoleLog.$inferSelect;
-export type InsertDiscordMemberRoleLog = typeof discordMemberRoleLog.$inferInsert;
+export type GuildAuditLog = typeof guildAuditLog.$inferSelect;
+export type InsertGuildAuditLog = typeof guildAuditLog.$inferInsert;
 
 export const systemConfig = pgTable('system_config', {
   key: varchar('key', { length: 128 }).primaryKey(),

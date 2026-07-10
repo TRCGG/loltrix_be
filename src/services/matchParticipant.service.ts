@@ -12,6 +12,7 @@ import {
   guildMember,
   summonerSpell,
   perks,
+  guildAuditLog,
 } from '../database/schema.js'; // 스키마 import 추가
 import { SystemError } from '../types/error.js';
 import { replayService } from './replay.service.js';
@@ -649,8 +650,13 @@ export class MatchParticipantService {
   /**
    * @desc 게임 기록 소프트 삭제
    * customMatch와 연관된 matchParticipant를 모두 isDeleted = true 처리
+   * @param actor 삭제 수행자 — guild_audit_log에 감사 기록 (웹 세션 memberId 또는 봇 !drop 사용자)
    */
-  public async deleteMatch(gameId: string, guildId: string) {
+  public async deleteMatch(
+    gameId: string,
+    guildId: string,
+    actor: { memberId: string; source: 'web' | 'bot' },
+  ) {
     return db.transaction(async (tx) => {
       // 1. CustomMatch 삭제
       const [deletedMatch] = await tx
@@ -700,6 +706,14 @@ export class MatchParticipantService {
 
       // 3. 연관된 replays 삭제
       await replayService.softDeleteReplayByCode(gameId, tx);
+
+      // 4. 삭제 감사 로그 (append-only) — 누가 어느 게임을 지웠는지
+      await tx.insert(guildAuditLog).values({
+        guildId,
+        eventType: 'replayDelete',
+        actorMemberId: actor.memberId,
+        detail: { gameId, source: actor.source },
+      });
 
       return deletedMatch;
     });

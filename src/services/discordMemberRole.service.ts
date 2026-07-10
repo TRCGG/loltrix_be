@@ -5,7 +5,7 @@ import {
   discordMemberRole,
   discordMember,
   discordGuildMember,
-  discordMemberRoleLog,
+  guildAuditLog,
 } from '../database/schema.js';
 import { ADMIN_ROLES, ROLES, Role, hasMinRole } from '../types/role.js';
 import { BusinessError } from '../types/error.js';
@@ -139,7 +139,7 @@ export class DiscordMemberRoleService {
    * - 권한 상승 차단: 대상이 guildManager 이상이면 거부. toRole은 타입/검증으로 userUploader 상한.
    * - 길드 스코프: 대상의 (member, guildId) 역할 행이 없으면 404 (타 길드/웹 로그인 이력 없음).
    * - idempotent: 이미 같은 역할이면 변경/로그 없이 changed:false 반환.
-   * - 감사: 실제 변경 시 discord_member_role_log에 이벤트 기록 (actor 포함).
+   * - 감사: 실제 변경 시 guild_audit_log에 roleChange 이벤트 기록 (actor 포함).
    */
   public async grantOrRevokeRole(
     actorMemberId: string,
@@ -198,12 +198,12 @@ export class DiscordMemberRoleService {
         .set({ role: toRole, updateDate: new Date() })
         .where(eq(discordMemberRole.id, current.id));
 
-      await tx.insert(discordMemberRoleLog).values({
-        memberId: targetMemberId,
+      await tx.insert(guildAuditLog).values({
         guildId,
+        eventType: 'roleChange',
         actorMemberId,
-        fromRole: currentRole,
-        toRole,
+        targetMemberId,
+        detail: { fromRole: currentRole, toRole },
       });
 
       return { memberId: targetMemberId, guildId, role: toRole, changed: true };

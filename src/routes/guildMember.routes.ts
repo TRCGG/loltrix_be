@@ -11,6 +11,7 @@ import {
   getMembers,
   getGuildDiscordMembers,
   updateGuildMemberRole,
+  getGuildAuditLogs,
 } from '../controllers/guildMember.controller.js';
 import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 
@@ -107,6 +108,25 @@ const updateMemberRoleSchema = z.object({
     role: z.enum(['userNormal', 'userUploader'], {
       errorMap: () => ({ message: "Role must be 'userNormal' or 'userUploader'" }),
     }),
+  }),
+});
+
+const getAuditLogsSchema = z.object({
+  params: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128),
+  }),
+  query: z.object({
+    type: z.enum(['all', 'roleChange', 'replayDelete']).optional(),
+    page: z
+      .string()
+      .regex(/^\d+$/, 'Page must be a positive number')
+      .refine((v) => Number(v) >= 1 && Number(v) <= 100000, 'Page must be between 1 and 100000')
+      .optional(),
+    limit: z
+      .string()
+      .regex(/^\d+$/, 'Limit must be a positive number')
+      .refine((v) => Number(v) >= 1 && Number(v) <= 100, 'Limit must be between 1 and 100')
+      .optional(),
   }),
 });
 
@@ -237,6 +257,43 @@ router.get(
   requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
   validateRequest(getDiscordMembersSchema),
   getGuildDiscordMembers,
+);
+
+/**
+ * @route GET /api/guildMember/:guildId/audit-logs
+ * @desc 클랜관리 관리 로그 조회 (역할 부여/회수 + 리플 삭제 통합, 최신순)
+ * @access guildManager 이상 (admin bypass)
+ * @note /:guildId/:riotName 보다 먼저 등록해야 riotName으로 잡히지 않음
+ */
+router.get(
+  '/:guildId/audit-logs',
+  /* #swagger.auto = false
+    #swagger.tags = ['GuildMember']
+    #swagger.summary = '관리 로그 조회 (역할 변경 + 리플 삭제)'
+    #swagger.description = '[클랜관리 화면] 관리 로그 목록용. 역할 부여/회수 이력과 리플(게임 기록) 삭제 이력을 하나의 시간순(최신순) 피드로 반환합니다. ▶ 항목의 type으로 구분: roleChange(역할 변경 — targetMemberId/fromRole/toRole 사용), replayDelete(리플 삭제 — gameId/source 사용, 나머지는 null). ▶ source는 삭제 경로: web(웹 화면) / bot(디스코드 !drop). ▶ actorDisplayName/targetDisplayName은 길드 별명 ?? 전역 별명 ?? discord_id로 해석된 표시명이며, 웹 로그인 이력이 없는 봇 명령 사용자는 discord_id 그대로 나올 수 있습니다. actorMemberId가 \\'bot\\'이면 구버전 봇 요청이라 삭제자 미상입니다. ▶ 페이지네이션은 응답 헤더 X-Total-Count / X-Page / X-Limit / X-Total-Pages. ▶ type 쿼리로 필터 가능(all 기본). ▶ guildId는 Base64. ▶ 세션 로그인(guildManager 이상) 필요.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['type'] = { in: 'query', description: '로그 종류 필터 (all 기본)', type: 'string', enum: ['all', 'roleChange', 'replayDelete'] }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (1~100000, 기본값 1)', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (1~100, 기본값 50)', type: 'integer' }
+    #swagger.responses[200] = {
+      description: '조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다.',
+      schema: {
+        status: 'success',
+        message: 'Audit logs retrieved successfully',
+        data: [
+          { type: 'replayDelete', createDate: '2026-07-11T12:34:56.000Z', actorMemberId: '123456789012345678', actorDisplayName: '홍길동', targetMemberId: null, targetDisplayName: null, fromRole: null, toRole: null, gameId: 'RPY-20260205-xxxxxx-001', source: 'bot' },
+          { type: 'roleChange', createDate: '2026-07-10T09:00:00.000Z', actorMemberId: '123456789012345678', actorDisplayName: '홍길동', targetMemberId: '234567890123456789', targetDisplayName: '김철수', fromRole: 'userNormal', toRole: 'userUploader', gameId: null, source: null }
+        ]
+      }
+    }
+    #swagger.responses[401] = { description: '미인증 (세션 없음)', schema: { status: 'error', message: 'Unauthorized', data: null } }
+    #swagger.responses[403] = { description: 'guildManager 미만 권한', schema: { status: 'error', message: 'Forbidden: insufficient guild role', data: null } }
+  */
+  decodeGuildIdMiddleware,
+  requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
+  validateRequest(getAuditLogsSchema),
+  getGuildAuditLogs,
 );
 
 /**
