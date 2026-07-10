@@ -9,9 +9,12 @@ import {
   DiscordMemberRoleListAPIResponse,
   UpdateMemberRoleRequest,
   UpdateMemberRoleAPIResponse,
+  GuildAuditLogListAPIResponse,
+  GuildAuditLogType,
 } from '../types/guildMember.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { discordMemberRoleService } from '../services/discordMemberRole.service.js';
+import { guildAuditLogService } from '../services/guildAuditLog.service.js';
 import { BusinessError } from '../types/error.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
 
@@ -153,6 +156,56 @@ export const getGuildDiscordMembers = async (
     return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving discord members',
+      data: null,
+    });
+  }
+};
+
+/**
+ * @desc 클랜관리 화면용 관리 로그 조회 (역할 부여/회수 + 리플 삭제, 최신순)
+ * @route GET /api/guildMember/:guildId/audit-logs
+ * @access guildManager 이상 (admin bypass)
+ */
+export const getGuildAuditLogs = async (
+  req: Request<
+    { guildId: string },
+    GuildAuditLogListAPIResponse,
+    never,
+    { type?: string; page?: string; limit?: string }
+  >,
+  res: Response<GuildAuditLogListAPIResponse>,
+) => {
+  try {
+    const { guildId } = req.params;
+    const { type, page, limit } = req.query;
+
+    // zod 상한 검증과 별개로 방어적 클램프 (validateRequest는 transform 값을 전달하지 않음)
+    const pageNum = Math.min(Number(page) || 1, 100000);
+    const limitNum = Math.min(Number(limit) || 50, 100);
+    const typeFilter: GuildAuditLogType | 'all' =
+      type === 'roleChange' || type === 'replayDelete' ? type : 'all';
+
+    const { result, totalCount } = await guildAuditLogService.getGuildAuditLogs(guildId, {
+      type: typeFilter,
+      page: pageNum,
+      limit: limitNum,
+    });
+
+    res.setHeader('X-Total-Count', totalCount.toString());
+    res.setHeader('X-Page', pageNum.toString());
+    res.setHeader('X-Limit', limitNum.toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / limitNum).toString());
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Audit logs retrieved successfully',
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error retrieving audit logs:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving audit logs',
       data: null,
     });
   }

@@ -358,6 +358,327 @@
         ]
       }
     },
+    "/api/guilds/{guildId}/allow-all-uploads": {
+      "patch": {
+        "tags": [
+          "Guild"
+        ],
+        "summary": "allowAllUploads 토글",
+        "description": "[길드 설정: 전체 멤버 업로드 허용 스위치]. ▶ body.allowAllUploads에 원하는 최종 상태(true/false)를 보냅니다. ▶ true면 개별 uploader 권한과 무관하게 모든 멤버가 업로드 가능. ▶ 응답 data는 변경된 길드 객체(allowAllUploads 포함)이니 스위치 상태를 이 값으로 갱신하세요. ▶ guildId는 Base64. ▶ 세션 로그인(guildManager 이상) 필요.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID (Base64)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "description": "전체 업로드 허용 여부",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "allowAllUploads": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "allowAllUploads updated successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "example": "987654321098765432"
+                        },
+                        "name": {
+                          "type": "string",
+                          "example": "내 길드"
+                        },
+                        "languageCode": {
+                          "type": "string",
+                          "example": "ko"
+                        },
+                        "allowAllUploads": {
+                          "type": "boolean",
+                          "example": true
+                        },
+                        "createDate": {
+                          "type": "string",
+                          "example": "2026-01-15T09:00:00.000Z"
+                        },
+                        "updateDate": {
+                          "type": "string",
+                          "example": "2026-07-03T12:34:56.000Z"
+                        },
+                        "isDeleted": {
+                          "type": "boolean",
+                          "example": false
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "allowAllUploads updated successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "example": "987654321098765432"
+                        },
+                        "name": {
+                          "type": "string",
+                          "example": "내 길드"
+                        },
+                        "languageCode": {
+                          "type": "string",
+                          "example": "ko"
+                        },
+                        "allowAllUploads": {
+                          "type": "boolean",
+                          "example": true
+                        },
+                        "createDate": {
+                          "type": "string",
+                          "example": "2026-01-15T09:00:00.000Z"
+                        },
+                        "updateDate": {
+                          "type": "string",
+                          "example": "2026-07-03T12:34:56.000Z"
+                        },
+                        "isDeleted": {
+                          "type": "boolean",
+                          "example": false
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "allowAllUploads 누락 또는 boolean 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "allowAllUploads must be a boolean"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "allowAllUploads must be a boolean"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "미인증 (세션 없음)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "guildManager 미만 권한",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Forbidden: insufficient guild role"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Forbidden: insufficient guild role"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "길드 없음 또는 이미 삭제됨",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Guild not found or already deleted"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Guild not found or already deleted"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/replays/{guildId}": {
       "get": {
         "tags": [
@@ -698,6 +1019,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "session": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -767,6 +1093,60 @@
         }
       }
     },
+    "/api/guildMember/{guildId}/members": {
+      "get": {
+        "tags": [
+          "GuildMember"
+        ],
+        "summary": "멤버 목록 조회",
+        "description": "길드 멤버 목록을 조회합니다. status=1(활성, 기본값), status=2(탈퇴), status=all(전체)",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "1: 활성 (기본값), 2: 탈퇴, all: 전체",
+            "enum": [
+              "1",
+              "2",
+              "all"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "페이지당 개수 (기본값: 50)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/guildMember/{guildId}/sub-accounts": {
       "get": {
         "tags": [
@@ -788,6 +1168,864 @@
         "responses": {
           "default": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/api/guildMember/{guildId}/discord-members": {
+      "get": {
+        "tags": [
+          "GuildMember"
+        ],
+        "summary": "Discord 멤버 목록/검색 (권한 관리)",
+        "description": "[멤버 권한 관리 화면] 목록/검색용. 웹에 로그인한 적 있는 Discord 멤버만 반환합니다. 각 항목의 role로 현재 권한을 표시하세요. ▶ guildId는 Base64 인코딩해 path에 넣습니다. ▶ 페이지네이션(총 개수/현재 페이지/전체 페이지)은 응답 body가 아니라 응답 헤더 X-Total-Count / X-Page / X-Limit / X-Total-Pages 로 옵니다. ▶ search는 표시명 부분검색(선택). ▶ 세션 로그인(guildManager 이상) 필요.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID (Base64)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "표시명 부분 검색",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호 (1~100000, 기본값 1)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "페이지당 개수 (1~100, 기본값 50)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다. displayName = 길드 별명 ?? 전역 별명 ?? discord_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Discord members retrieved successfully"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "memberId": {
+                            "type": "string",
+                            "example": "234567890123456789"
+                          },
+                          "displayName": {
+                            "type": "string",
+                            "example": "김철수"
+                          },
+                          "role": {
+                            "type": "string",
+                            "example": "userNormal"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Discord members retrieved successfully"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "memberId": {
+                            "type": "string",
+                            "example": "234567890123456789"
+                          },
+                          "displayName": {
+                            "type": "string",
+                            "example": "김철수"
+                          },
+                          "role": {
+                            "type": "string",
+                            "example": "userNormal"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "미인증 (세션 없음)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "guildManager 미만 권한",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Forbidden: insufficient guild role"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Forbidden: insufficient guild role"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/guildMember/{guildId}/audit-logs": {
+      "get": {
+        "tags": [
+          "GuildMember"
+        ],
+        "summary": "관리 로그 조회 (역할 변경 + 리플 삭제)",
+        "description": "[클랜관리 화면] 관리 로그 목록용. 역할 부여/회수 이력과 리플(게임 기록) 삭제 이력을 하나의 시간순(최신순) 피드로 반환합니다. ▶ 항목의 type으로 구분: roleChange(역할 변경 — targetMemberId/fromRole/toRole 사용), replayDelete(리플 삭제 — gameId/source 사용, 나머지는 null). ▶ source는 삭제 경로: web(웹 화면) / bot(디스코드 !drop). ▶ actorDisplayName/targetDisplayName은 길드 별명 ?? 전역 별명 ?? discord_id로 해석된 표시명이며, 웹 로그인 이력이 없는 봇 명령 사용자는 discord_id 그대로 나올 수 있습니다. actorMemberId가 \\\\'bot\\\\'이면 구버전 봇 요청이라 삭제자 미상입니다. ▶ 페이지네이션은 응답 헤더 X-Total-Count / X-Page / X-Limit / X-Total-Pages. ▶ type 쿼리로 필터 가능(all 기본). ▶ guildId는 Base64. ▶ 세션 로그인(guildManager 이상) 필요.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "description": "길드 ID (Base64)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "로그 종류 필터 (all 기본)",
+            "enum": [
+              "all",
+              "roleChange",
+              "replayDelete"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호 (1~100000, 기본값 1)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "페이지당 개수 (1~100, 기본값 50)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Audit logs retrieved successfully"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "example": "roleChange"
+                          },
+                          "createDate": {
+                            "type": "string",
+                            "example": "2026-07-10T09:00:00.000Z"
+                          },
+                          "actorMemberId": {
+                            "type": "string",
+                            "example": "123456789012345678"
+                          },
+                          "actorDisplayName": {
+                            "type": "string",
+                            "example": "홍길동"
+                          },
+                          "targetMemberId": {
+                            "type": "string",
+                            "example": "234567890123456789"
+                          },
+                          "targetDisplayName": {
+                            "type": "string",
+                            "example": "김철수"
+                          },
+                          "fromRole": {
+                            "type": "string",
+                            "example": "userNormal"
+                          },
+                          "toRole": {
+                            "type": "string",
+                            "example": "userUploader"
+                          },
+                          "gameId": {},
+                          "source": {}
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Audit logs retrieved successfully"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "example": "roleChange"
+                          },
+                          "createDate": {
+                            "type": "string",
+                            "example": "2026-07-10T09:00:00.000Z"
+                          },
+                          "actorMemberId": {
+                            "type": "string",
+                            "example": "123456789012345678"
+                          },
+                          "actorDisplayName": {
+                            "type": "string",
+                            "example": "홍길동"
+                          },
+                          "targetMemberId": {
+                            "type": "string",
+                            "example": "234567890123456789"
+                          },
+                          "targetDisplayName": {
+                            "type": "string",
+                            "example": "김철수"
+                          },
+                          "fromRole": {
+                            "type": "string",
+                            "example": "userNormal"
+                          },
+                          "toRole": {
+                            "type": "string",
+                            "example": "userUploader"
+                          },
+                          "gameId": {},
+                          "source": {}
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "미인증 (세션 없음)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "guildManager 미만 권한",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Forbidden: insufficient guild role"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Forbidden: insufficient guild role"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/guildMember/{guildId}/discord-members/{memberId}/role": {
+      "patch": {
+        "tags": [
+          "GuildMember"
+        ],
+        "summary": "멤버 역할 부여/회수",
+        "description": "[업로더 권한 부여/회수 버튼]에 연결. ▶ body.role에 원하는 최종 상태를 그대로 보냅니다 — userUploader=권한 부여, userNormal=권한 회수 (토글이 아니라 원하는 값 지정). ▶ 이미 그 역할이면 에러가 아니라 200 + data.changed=false 로 응답하니 UI에서 그대로 반영하면 됩니다. ▶ 대상이 guildManager 이상이면 403, 웹 로그인 이력 없는 멤버면 404. ▶ guildId는 Base64. ▶ 세션 로그인(guildManager 이상) 필요.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "길드 ID (Base64)"
+          },
+          {
+            "name": "memberId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "대상 Discord 멤버 ID"
+          },
+          {
+            "name": "guildId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "description": "변경할 역할 (userNormal: 회수 / userUploader: 부여)",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "example": "userUploader"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "변경 성공. 이미 같은 역할이면 변경 없이 changed:false로 응답합니다(idempotent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Role updated to userUploader"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "memberId": {
+                          "type": "string",
+                          "example": "234567890123456789"
+                        },
+                        "guildId": {
+                          "type": "string",
+                          "example": "987654321098765432"
+                        },
+                        "role": {
+                          "type": "string",
+                          "example": "userUploader"
+                        },
+                        "changed": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Role updated to userUploader"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "memberId": {
+                          "type": "string",
+                          "example": "234567890123456789"
+                        },
+                        "guildId": {
+                          "type": "string",
+                          "example": "987654321098765432"
+                        },
+                        "role": {
+                          "type": "string",
+                          "example": "userUploader"
+                        },
+                        "changed": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "role 값이 userNormal/userUploader가 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Role must be 'userNormal' or 'userUploader'"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Role must be 'userNormal' or 'userUploader'"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "미인증 (세션 없음)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "guildManager 미만 권한이거나, 대상이 guildManager 이상이라 변경 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Cannot modify guildManager or higher role"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Cannot modify guildManager or higher role"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "대상 멤버가 이 길드에 없음 (웹 로그인 이력 필요)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Target member not found in this guild (web login history required)"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Target member not found in this guild (web login history required)"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "대상의 현재 역할이 관리 불가한 미지의 값",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Cannot modify unknown role: someRole"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Cannot modify unknown role: someRole"
+                    },
+                    "data": {}
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "내부 서버 오류"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -1141,7 +2379,7 @@
           "Matches"
         ],
         "summary": "게임 기록 삭제",
-        "description": "특정 게임 기록을 삭제(숨김) 처리합니다.",
+        "description": "특정 게임 기록을 삭제(숨김) 처리합니다. 삭제 이벤트는 guild_audit_log에 감사 기록되어 클랜관리 로그(GET /api/guildMember/{guildId}/audit-logs)에서 조회됩니다. 웹 세션 요청은 세션 사용자가 삭제자로 기록됩니다.",
         "parameters": [
           {
             "name": "guildId",
@@ -1166,7 +2404,12 @@
           "default": {
             "description": ""
           }
-        }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
       }
     },
     "/api/statistics/{guildId}/users": {

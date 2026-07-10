@@ -75,6 +75,16 @@ const gameDetailSchema = z.object({
   }),
 });
 
+// 게임 삭제용 스키마 — 봇(!drop) 경유 시 body.actorMemberId로 명령 사용자를 전달 (삭제 감사 로그용)
+const deleteMatchSchema = z.object({
+  params: gameDetailSchema.shape.params,
+  body: z
+    .object({
+      actorMemberId: z.string().min(1).max(64).optional(),
+    })
+    .optional(),
+});
+
 // --- Routes ---
 
 /**
@@ -217,8 +227,8 @@ router.delete(
   /* #swagger.auto = false
     #swagger.tags = ['Matches']
     #swagger.summary = '게임 기록 삭제'
-    #swagger.description = '특정 게임 기록을 삭제(숨김) 처리합니다.'
-    
+    #swagger.description = '특정 게임 기록을 삭제(숨김) 처리합니다. 삭제 이벤트는 guild_audit_log에 감사 기록되어 클랜관리 로그(GET /api/guildMember/{guildId}/audit-logs)에서 조회됩니다. 웹 세션 요청은 세션 사용자가 삭제자로 기록됩니다.'
+
     #swagger.parameters['guildId'] = { 
       in: 'path', 
       description: '길드 ID', 
@@ -235,7 +245,7 @@ router.delete(
   */
   decodeGuildIdMiddleware,
   requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
-  validateRequest(gameDetailSchema),
+  validateRequest(deleteMatchSchema),
   deleteMatch,
 );
 

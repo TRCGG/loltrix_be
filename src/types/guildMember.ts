@@ -107,6 +107,35 @@ export interface DiscordMemberRoleListAPIResponse {
   data?: DiscordMemberRoleItem[] | null;
 }
 
+// --- 클랜관리 통합 관리 로그 (역할 변경 + 리플 삭제) ---
+
+export type GuildAuditLogType = 'roleChange' | 'replayDelete';
+
+/**
+ * @desc 관리 로그 단일 항목 — 역할 부여/회수(roleChange) 또는 리플 삭제(replayDelete)
+ * - roleChange: targetMemberId/fromRole/toRole 채워짐, gameId/source는 null
+ * - replayDelete: gameId/source 채워짐, targetMemberId/fromRole/toRole은 null
+ * - displayName = guild 별명 ?? global 별명 ?? discord_id ('bot'은 그대로 'bot')
+ */
+export interface GuildAuditLogItem {
+  type: GuildAuditLogType;
+  createDate: Date;
+  actorMemberId: string;
+  actorDisplayName: string;
+  targetMemberId: string | null;
+  targetDisplayName: string | null;
+  fromRole: string | null;
+  toRole: string | null;
+  gameId: string | null;
+  source: string | null;
+}
+
+export interface GuildAuditLogListAPIResponse {
+  status: 'success' | 'error';
+  message: string;
+  data?: GuildAuditLogItem[] | null;
+}
+
 /** 역할 부여/회수 요청 body (상한: userUploader) */
 export interface UpdateMemberRoleRequest {
   role: 'userNormal' | 'userUploader';
