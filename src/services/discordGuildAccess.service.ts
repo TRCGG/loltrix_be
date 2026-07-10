@@ -13,16 +13,21 @@ const discordApiBaseUrl = 'https://discord.com/api';
 
 // findJoinedGmokGuilds 는 요청마다 Discord API를 (1 + 가입 gmok 길드 수)회 호출한다
 // (fetchUserGuilds 1회 + enrichWithNick N회). 프론트가 이 API를 반복 호출하면 그만큼 외부
-// 호출이 늘어 429/지연을 유발하므로, 유저별 gmok 길드 목록(nick 포함)을 짧은 TTL로 캐시해
-// 외부 호출만 상각한다.
+// 호출이 늘어 429/지연을 유발하므로, 유저별로 조회 promise를 짧은 TTL로 캐시해 외부 호출을
+// 상각한다. 값이 아니라 in-flight promise를 캐시하므로 동시 요청은 하나의 외부 조회를 공유한다
+// (캐시 스탬피드 방지).
 // - 캐시에는 "유저의 gmok 길드 목록(Discord 길드 ∩ gmok 등록 길드, nick 포함)"이 담긴다.
 //   따라서 nick뿐 아니라 길드 신규 등록/해제도 warm 캐시 유저에겐 최대 TTL만큼 지연 반영된다.
 //   반면 권한 계산·기본권한 보정·nick upsert·role 적용은 캐시와 무관하게 요청마다 수행되므로
 //   role 변경은 즉시 반영되고 "조회 시점 보정" 의도도 유지된다.
-// - nick 조회가 하나라도 실패한(429/timeout) 열화 결과는 캐시하지 않는다(장애 증폭 방지).
+// - reject 또는 nick 조회 실패(429/timeout)가 섞인 열화 결과는 resolve 후 캐시에서 제거해
+//   다음 요청이 재시도하게 한다(일시 장애가 TTL만큼 증폭되는 것 방지).
 // - 프로세스 로컬 캐시(공유 아님). 인스턴스가 여러 개면 인스턴스별로 존재하지만 TTL로 한계가 있다.
 const GUILD_LIST_TTL_MS = 60 * 1000;
-const guildListCache = new Map<string, { data: DiscordGuildWithoutRole[]; expiresAt: number }>();
+const guildListCache = new Map<
+  string,
+  { promise: Promise<DiscordGuildWithoutRole[]>; expiresAt: number }
+>();
 
 /**
  * @desc 유저가 접근 가능한 Gmok 길드 조회 서비스 (Discord API + 권한 조합)
@@ -103,9 +108,41 @@ export class DiscordGuildAccessService {
   ): Promise<DiscordGuildWithoutRole[]> {
     if (memberId) {
       const cached = guildListCache.get(memberId);
-      if (cached && cached.expiresAt > Date.now()) return cached.data;
+      if (cached && cached.expiresAt > Date.now()) return cached.promise;
     }
 
+    const promise = this.fetchJoinedGmokGuilds(accessToken);
+
+    if (memberId) {
+      const key = memberId;
+      // 만료 항목이 쌓이지 않도록 커지면 한 번 훑어 정리 (프로세스 로컬, 경량)
+      if (guildListCache.size > 1000) {
+        const now = Date.now();
+        for (const [k, value] of guildListCache) {
+          if (value.expiresAt <= now) guildListCache.delete(k);
+        }
+      }
+
+      const entry = { promise, expiresAt: Date.now() + GUILD_LIST_TTL_MS };
+      guildListCache.set(key, entry);
+
+      // reject 또는 nick 조회 실패(429/timeout)가 섞인 열화 결과는 캐시에서 제거해 다음 요청이
+      // 재시도하게 한다. 그 사이 새 항목이 들어왔으면 건드리지 않도록 동일 entry일 때만 삭제.
+      const evict = () => {
+        if (guildListCache.get(key) === entry) guildListCache.delete(key);
+      };
+      promise
+        .then((enriched) => {
+          if (enriched.some((g) => g.nick === undefined)) evict();
+        })
+        .catch(evict);
+    }
+
+    return promise;
+  }
+
+  /** Discord 조회 실체: gmok 등록 길드와 유저 가입 길드의 교집합 + nick enrich (캐시 없이 순수 조회) */
+  private async fetchJoinedGmokGuilds(accessToken: string): Promise<DiscordGuildWithoutRole[]> {
     const [gmokGuildsResponse, userDiscordGuilds] = await Promise.all([
       guildService.findAllGuilds({ page: 1, limit: 1000 }),
       this.fetchUserGuilds(accessToken),
@@ -114,24 +151,7 @@ export class DiscordGuildAccessService {
     const gmokGuildIdSet = new Set(gmokGuildsResponse.result.map((g) => g.id));
     const gmokGuilds = userDiscordGuilds.filter((g) => gmokGuildIdSet.has(g.id));
 
-    const enriched = await this.enrichWithNick(gmokGuilds, accessToken);
-
-    // nick이 하나라도 undefined면 member 조회 실패(429/timeout)가 섞인 열화 결과다
-    // (2xx 성공 시 nick은 항상 문자열 — username fallback). 이런 결과를 캐시하면 일시 장애가
-    // TTL(60초)만큼 증폭되므로, 완전한 결과만 캐시하고 실패 시엔 다음 요청이 재시도하게 둔다.
-    const hasNickFailure = enriched.some((g) => g.nick === undefined);
-    if (memberId && !hasNickFailure) {
-      // 만료 항목이 쌓이지 않도록 커지면 한 번 훑어 정리 (프로세스 로컬, 경량)
-      if (guildListCache.size > 1000) {
-        const now = Date.now();
-        for (const [key, value] of guildListCache) {
-          if (value.expiresAt <= now) guildListCache.delete(key);
-        }
-      }
-      guildListCache.set(memberId, { data: enriched, expiresAt: Date.now() + GUILD_LIST_TTL_MS });
-    }
-
-    return enriched;
+    return this.enrichWithNick(gmokGuilds, accessToken);
   }
 
   /**
@@ -200,23 +220,6 @@ export class DiscordGuildAccessService {
       .catch(() => {});
 
     return this.applyRolesToGuilds(joinedGmokGuilds, ensuredRoles);
-  }
-
-  /**
-   * @desc 사용자가 접근 가능한 Gmok 길드 목록과 길드별 권한 반환
-   */
-  public async findUserGmokGuilds(
-    accessToken: string,
-    activeRoles: DiscordMemberRole[],
-  ): Promise<DiscordGuildAPI[]> {
-    const isAdmin = activeRoles.some((r) => ADMIN_ROLES.includes(r.role as Role));
-
-    if (isAdmin) {
-      return this.findAdminGmokGuilds(activeRoles);
-    }
-
-    const guilds = await this.findJoinedGmokGuilds(accessToken);
-    return this.applyRolesToGuilds(guilds, activeRoles);
   }
 }
 
