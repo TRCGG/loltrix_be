@@ -98,6 +98,7 @@ export interface MemberListAPIResponse {
 export interface DiscordMemberRoleItem {
   memberId: string;
   displayName: string;
+  avatarUrl: string | null;
   role: string;
 }
 

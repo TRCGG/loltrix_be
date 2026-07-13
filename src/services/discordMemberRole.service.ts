@@ -98,6 +98,7 @@ export class DiscordMemberRoleService {
         .select({
           memberId: discordMemberRole.memberId,
           displayName: displayNameSql,
+          avatarUrl: discordMember.avatarUrl,
           role: discordMemberRole.role,
         })
         .from(discordMemberRole)

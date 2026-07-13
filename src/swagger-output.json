@@ -1216,7 +1216,7 @@
         ],
         "responses": {
           "200": {
-            "description": "조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다. displayName = 길드 별명 ?? 전역 별명 ?? discord_id",
+            "description": "조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다. displayName = 길드 별명 ?? 전역 별명 ?? discord_id. avatarUrl은 Discord 아바타 URL (없으면 null).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1243,6 +1243,7 @@
                             "type": "string",
                             "example": "김철수"
                           },
+                          "avatarUrl": {},
                           "role": {
                             "type": "string",
                             "example": "userNormal"
@@ -1281,6 +1282,7 @@
                             "type": "string",
                             "example": "김철수"
                           },
+                          "avatarUrl": {},
                           "role": {
                             "type": "string",
                             "example": "userNormal"

@@ -240,13 +240,13 @@ router.get(
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (1~100000, 기본값 1)', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (1~1000, 기본값 50)', type: 'integer' }
     #swagger.responses[200] = {
-      description: '조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다. displayName = 길드 별명 ?? 전역 별명 ?? discord_id',
+      description: '조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다. displayName = 길드 별명 ?? 전역 별명 ?? discord_id. avatarUrl은 Discord 아바타 URL (없으면 null).',
       schema: {
         status: 'success',
         message: 'Discord members retrieved successfully',
         data: [
-          { memberId: '123456789012345678', displayName: '홍길동', role: 'userUploader' },
-          { memberId: '234567890123456789', displayName: '김철수', role: 'userNormal' }
+          { memberId: '123456789012345678', displayName: '홍길동', avatarUrl: 'https://cdn.discordapp.com/avatars/123456789012345678/a1b2c3d4.png', role: 'userUploader' },
+          { memberId: '234567890123456789', displayName: '김철수', avatarUrl: null, role: 'userNormal' }
         ]
       }
     }
