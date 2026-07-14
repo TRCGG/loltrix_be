@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
-import { customMatch, matchBan, TournamentCode } from '../database/schema.js';
-import { MatchV5Dto } from '../clients/riot/index.js';
-import { getMatch } from '../clients/riot/index.js';
+import { customMatch, matchBan, matchV5Raw, TournamentCode } from '../database/schema.js';
+import { MatchTimelineDto, MatchV5Dto } from '../clients/riot/index.js';
+import { getMatch, getMatchTimeline } from '../clients/riot/index.js';
 import { guildService } from '../services/guild.service.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
 import { customMatchService } from '../services/customMatch.service.js';
@@ -53,7 +53,16 @@ export class TournamentSaveFacade {
       return { status: 'ignored', reason: 'tournament_code_mismatch' };
     }
 
-    const loaded = await this.loadMatch(matchV5, code);
+    // 타임라인 원본도 확보한다(읽기 — 트랜잭션 밖). 실패해도 적재는 막지 않는다.
+    // match_v5_raw.timeline_json NULL로 남고 추후 backfill 가능.
+    let timeline: MatchTimelineDto | null = null;
+    try {
+      timeline = await getMatchTimeline(matchId);
+    } catch (error) {
+      console.warn(`[tournamentSave] timeline 조회 실패(원본은 NULL로 적재) matchId=${matchId}`, error);
+    }
+
+    const loaded = await this.loadMatch(matchV5, timeline, code);
 
     // 신규 적재 성공 시에만 봇에게 다음 코드 게시를 지시한다(트랜잭션 밖, fire-and-forget).
     // 적재된 코드의 metadata에서 channelId를 꺼내 그 채널로 게시하도록 넘긴다. channelId 없으면 skip.
@@ -73,7 +82,11 @@ export class TournamentSaveFacade {
    * @desc 검증된 match-v5를 단일 트랜잭션으로 적재한다.
    * @returns loaded=true 신규 적재 / false 이미 적재된 경기(멱등 skip).
    */
-  private async loadMatch(matchV5: MatchV5Dto, code: TournamentCode): Promise<boolean> {
+  private async loadMatch(
+    matchV5: MatchV5Dto,
+    timeline: MatchTimelineDto | null,
+    code: TournamentCode,
+  ): Promise<boolean> {
     const matchId = matchV5AdapterService.getMatchId(matchV5);
     const guildId = code.guildId;
     const playedDate = matchV5AdapterService.getPlayedDate(matchV5);
@@ -137,6 +150,15 @@ export class TournamentSaveFacade {
         { id: matchId, gameType: '1', guildId, season },
         tx,
       );
+
+      // 3.5. match_v5_raw — match-v5 원본 전체 보존 (replay.raw_data 패턴).
+      //      어댑터가 버리는 필드(challenges·핑·팀 오브젝트 등)를 잃지 않기 위한 원천.
+      await tx.insert(matchV5Raw).values({
+        customMatchId: matchId,
+        guildId,
+        matchJson: matchV5,
+        timelineJson: timeline,
+      });
 
       // 4. match_participant.
       await matchParticipantService.insertMatchParticipants(

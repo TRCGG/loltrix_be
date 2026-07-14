@@ -635,3 +635,37 @@ export const matchBan = pgTable(
 
 export type MatchBan = typeof matchBan.$inferSelect;
 export type InsertMatchBan = typeof matchBan.$inferInsert;
+
+/**
+ * Match-V5 원본 보존 (replay.raw_data 패턴).
+ * 어댑터가 정규화하며 버리는 필드(challenges·핑·팀 오브젝트 등)를 잃지 않도록
+ * match-v5 응답 전체를 jsonb로 보존한다. 필요한 지표는 나중에 정규화 테이블로 승격.
+ * timeline_json은 별도 API 호출이라 실패 시 NULL 허용(적재를 막지 않음, 추후 backfill 가능).
+ * source: 적재 출처 구분 — 현재 TOURNAMENT(대회), 추후 일반내전 등 확장 대비.
+ */
+export const matchV5Raw = pgTable(
+  'match_v5_raw',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    customMatchId: varchar('custom_match_id', { length: 255 })
+      .notNull()
+      .unique('uq_match_v5_raw_custom_match')
+      .references(() => customMatch.id),
+    guildId: varchar('guild_id', { length: 128 })
+      .notNull()
+      .references(() => guild.id),
+    source: varchar('source', { length: 16 }).notNull().default('TOURNAMENT'),
+    matchJson: jsonb('match_json').notNull(), // match-v5 응답 원본 전체
+    timelineJson: jsonb('timeline_json'), // match-v5 timeline 원본(조회 실패 시 NULL)
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (t) => [index('idx_match_v5_raw_guild').on(t.guildId)],
+);
+
+export type MatchV5Raw = typeof matchV5Raw.$inferSelect;
+export type InsertMatchV5Raw = typeof matchV5Raw.$inferInsert;
