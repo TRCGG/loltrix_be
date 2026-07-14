@@ -106,10 +106,10 @@ export class TournamentSaveFacade {
         return false;
       }
 
-      const season = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
+      const season = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season', tx);
 
       // 1. 길드 확인 — 코드 발급 시 이미 존재하는 길드. 없으면 적재 중단(오염 방지).
-      const foundGuild = await guildService.findGuildById(guildId);
+      const foundGuild = await guildService.findGuildById(guildId, tx);
       if (!foundGuild) {
         throw new SystemError(`Guild not found for tournament code load: ${guildId}`, 500);
       }
@@ -172,14 +172,17 @@ export class TournamentSaveFacade {
       await guildMemberService.insertGuildMember(riotAccounts, guildId, tx);
 
       // 6. mmr_participant_metric — played_date=gameStartTimestamp (리플 경로는 업로드 시각).
-      const metricRows = await mmrMetricService.buildMetricRows({
-        rawData,
-        customMatchId: matchId,
-        guildId,
-        season,
-        playedDate,
-        puuidToPlayerCodeMap,
-      });
+      const metricRows = await mmrMetricService.buildMetricRows(
+        {
+          rawData,
+          customMatchId: matchId,
+          guildId,
+          season,
+          playedDate,
+          puuidToPlayerCodeMap,
+        },
+        tx,
+      );
       await mmrMetricService.insertMetrics(metricRows, tx);
 
       // 7. match_ban.

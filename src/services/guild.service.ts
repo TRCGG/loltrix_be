@@ -1,6 +1,6 @@
 // src/services/guild.service.ts
 import { eq, ilike, desc, sql, and } from 'drizzle-orm';
-import { db, TransactionType } from '../database/connectionPool.js';
+import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import { guild, InsertGuild } from '../database/schema.js';
 import { GetGuildsQuery, UpdateGuildRequest } from '../types/guild.js';
 import { SystemError } from '../types/error.js';
@@ -45,8 +45,8 @@ export class GuildService {
   /**
    * @desc ID로 길드 조회
    */
-  public async findGuildById(id: string) {
-    const result = await db
+  public async findGuildById(id: string, executor: DbOrTx = db) {
+    const result = await executor
       .select()
       .from(guild)
       .where(and(eq(guild.id, id), eq(guild.isDeleted, false)))
