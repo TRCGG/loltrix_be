@@ -46,9 +46,123 @@ export interface TournamentGamesDto {
   [key: string]: unknown;
 }
 
+/** Match-V5 룬 선택 1건. */
+export interface MatchV5PerkSelection {
+  perk: number;
+  var1?: number;
+  var2?: number;
+  var3?: number;
+}
+
+/** Match-V5 룬 스타일(트리) 1건. description: 'primaryStyle' | 'subStyle'. */
+export interface MatchV5PerkStyle {
+  description?: string;
+  /** 트리(스타일) id. subStyle의 이 값이 perk_sub_style로 저장된다. */
+  style: number;
+  selections: MatchV5PerkSelection[];
+}
+
+export interface MatchV5Perks {
+  styles: MatchV5PerkStyle[];
+  statPerks?: Record<string, number>;
+}
+
 /**
- * Match-V5 매치 DTO(최소).
- * info는 어댑터(단계 5)에서 상세 매핑하므로 느슨하게 둔다.
+ * Match-V5 참가자 DTO. 어댑터(단계 5)가 기존 rawData(대문자 키) 형태로 정규화하는 입력이다.
+ * 필요한 필드만 명시하고, 나머지는 index signature로 느슨하게 둔다.
+ */
+export interface MatchV5Participant {
+  puuid: string;
+  riotIdGameName?: string;
+  riotIdTagline?: string;
+  summonerName?: string;
+  championId: number;
+  championName: string;
+  teamId: number;
+  teamPosition: string;
+  win: boolean;
+  kills: number;
+  deaths: number;
+  assists: number;
+  goldEarned: number;
+  timeCCingOthers: number;
+  champExperience: number;
+  timePlayed: number;
+  totalDamageDealtToChampions: number;
+  damageDealtToBuildings: number;
+  totalDamageTaken: number;
+  visionScore: number;
+  visionWardsBoughtInGame: number;
+  champLevel: number;
+  pentaKills?: number;
+  doubleKills?: number;
+  tripleKills?: number;
+  quadraKills?: number;
+  killingSprees?: number;
+  largestKillingSpree?: number;
+  damageSelfMitigated?: number;
+  wardsPlaced?: number;
+  wardsKilled?: number;
+  detectorWardsPlaced?: number;
+  totalTimeSpentDead?: number;
+  longestTimeSpentLiving?: number;
+  damageDealtToObjectives?: number;
+  dragonKills?: number;
+  baronKills?: number;
+  turretKills?: number;
+  turretTakedowns?: number;
+  objectivesStolen?: number;
+  inhibitorKills?: number;
+  totalHealsOnTeammates?: number;
+  totalDamageShieldedOnTeammates?: number;
+  totalMinionsKilled?: number;
+  neutralMinionsKilled?: number;
+  enemyMissingPings?: number;
+  retreatPings?: number;
+  onMyWayPings?: number;
+  commandPings?: number;
+  item0: number;
+  item1: number;
+  item2: number;
+  item3: number;
+  item4: number;
+  item5: number;
+  item6: number;
+  summoner1Id?: number;
+  summoner2Id?: number;
+  gameEndedInSurrender?: boolean;
+  perks?: MatchV5Perks;
+  challenges?: Record<string, number>;
+  [key: string]: unknown;
+}
+
+/** Match-V5 팀 밴 1건. championId -1 = 밴 없음. */
+export interface MatchV5Ban {
+  championId: number;
+  pickTurn: number;
+}
+
+/** Match-V5 팀 DTO. */
+export interface MatchV5Team {
+  teamId: number;
+  win: boolean;
+  bans: MatchV5Ban[];
+}
+
+/** Match-V5 info DTO. 콜백 재검증(§보안)은 tournamentCode를 DB 코드와 대조한다. */
+export interface MatchV5Info {
+  /** 경기 시작 시각(epoch ms). played_date 원천(단계 5). */
+  gameStartTimestamp?: number;
+  gameDuration?: number;
+  gameId?: number;
+  tournamentCode?: string;
+  participants: MatchV5Participant[];
+  teams: MatchV5Team[];
+  [key: string]: unknown;
+}
+
+/**
+ * Match-V5 매치 DTO.
  * 콜백 재검증(§보안)은 info.tournamentCode를 DB 코드와 대조한다.
  */
 export interface MatchV5Dto {
@@ -57,10 +171,7 @@ export interface MatchV5Dto {
     matchId: string;
     participants: string[];
   };
-  info: {
-    tournamentCode?: string;
-    [key: string]: unknown;
-  };
+  info: MatchV5Info;
 }
 
 /** Match-V5 타임라인 DTO(최소). 상세 적재는 후순위이므로 느슨하게 둔다. */

@@ -1,5 +1,5 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
-import { db } from '../database/connectionPool.js';
+import { and, asc, desc, eq, lte } from 'drizzle-orm';
+import { db, TransactionType } from '../database/connectionPool.js';
 import { tournament, tournamentCode, tournamentProvider, TournamentCode } from '../database/schema.js';
 import {
   registerProvider,
@@ -173,10 +173,16 @@ export class TournamentService {
 
   /**
    * @desc 검증 통과한 코드를 COMPLETED로 전이하고 used_date를 갱신한다.
-   * custom_match_id는 적재(단계 5)에서 채워지므로 여기서는 선택적으로만 넘긴다.
+   * custom_match_id는 적재(단계 5)에서 채워진다.
+   * ⚠️ tx를 넘기면 적재 트랜잭션 안에서 전이한다(적재 실패 시 PENDING 유지 — 계획서 단계4 ⚠️ 요건).
    */
-  public async markCompleted(code: string, customMatchId?: string): Promise<void> {
-    await db
+  public async markCompleted(
+    code: string,
+    customMatchId?: string,
+    tx?: TransactionType,
+  ): Promise<void> {
+    const runner = tx ?? db;
+    await runner
       .update(tournamentCode)
       .set({
         status: 'COMPLETED',
@@ -184,6 +190,24 @@ export class TournamentService {
         ...(customMatchId ? { customMatchId } : {}),
       })
       .where(eq(tournamentCode.code, code));
+  }
+
+  /**
+   * @desc 폴백 폴링 대상: PENDING이고 issued_date가 기준시각(olderThan) 이전인 코드들.
+   * 콜백 유실/stub 무콜백을 games/by-code로 회수하기 위한 조회.
+   */
+  public async findDuePendingCodes(olderThan: Date): Promise<TournamentCode[]> {
+    return db
+      .select()
+      .from(tournamentCode)
+      .where(
+        and(
+          eq(tournamentCode.status, 'PENDING'),
+          eq(tournamentCode.isDeleted, false),
+          lte(tournamentCode.issuedDate, olderThan),
+        ),
+      )
+      .orderBy(asc(tournamentCode.issuedDate));
   }
 
   /** DB 행 → 응답 DTO. metadata(jsonb)에서 channelId를 꺼낸다. */

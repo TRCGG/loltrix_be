@@ -79,12 +79,33 @@
       ⚠️ **단계 5 필수 반영**: 현재 검증 통과 시 즉시 `markCompleted` — 적재가 붙으면
       상태 전이를 적재 트랜잭션 안으로 이동할 것 (적재 실패 시 COMPLETED로 남아
       폴링(PENDING 대상)이 건너뛰어 기록 유실되는 경로 차단)
-- [ ] 5. Match-V5 어댑터 + tournamentSave 파사드 (played_date=gameStartTimestamp, 밴픽 저장)
-- [ ] 6. 폴백 폴링 잡 (node-cron 도입)
-- [ ] 7. E2E 검증: 발급→시뮬 콜백→적재→기존 전적 화면에서 조회 확인
+- [x] 5. Match-V5 어댑터 + tournamentSave 파사드 (played_date=gameStartTimestamp, 밴픽 저장)
+      — `matchV5Adapter.service.ts`(match-v5→리플 rawData 대문자키 정규화 + match_ban 행),
+      `tournamentSave.facade.ts`(단일 트랜잭션: guild확인→riot_account→custom_match→participant→metric→ban
+      →tournament_code COMPLETED 전이). custom_match.id=matchId('KR_...'), matchId 중복 시 멱등 skip.
+      콜백 재검증·적재를 `ingestByMatchId`로 통합해 컨트롤러/폴링이 공유. markCompleted는 tx를 받도록
+      확장(적재 실패 시 PENDING 유지 — 단계4 ⚠️ 요건 충족).
+- [x] 6. 폴백 폴링 잡 (node-cron 도입)
+      — `tournamentPolling.job.ts`(TOURNAMENT_POLL_CRON 기본 10분, TOURNAMENT_POLL_MIN_AGE_HOURS 기본 1h,
+      PENDING→games/by-code→matchId→`ingestByMatchId` 재사용). `index.ts`는 RIOT_API_KEY 있을 때만 기동.
+- [x] 7. E2E 검증 (2026-07-07, dev DB + dev 키 + stub 실측):
+      ✅ 발급 체인: provider/tournament stub 등록 → 코드 2개 발급(STUB050a1-…) → PENDING 저장(channelId 메타 포함)
+      ✅ next-code 조회 (issued_date 오름차순 첫 코드)
+      ✅ 콜백 위조 방어 4케이스: 잘못된 시크릿→404 위장(수정 후 검증), 미등록 코드→ignored,
+        페이로드 불량→ignored, 실코드+가짜 gameId→match-v5 404→502 거부(PENDING 유지, 주입 불가)
+      ✅ 폴링 잡: PENDING 감지·코드별 실패 격리 확인
+      ⚠️ **stub 한계 2건** (프로덕션 전환 후 재확인 필요):
+        ① stub는 `games/by-code`를 403으로 거부 → 폴링 회수는 실 API에서만 검증 가능
+        ② stub 코드는 실경기가 없어 **적재(어댑터→트랜잭션) E2E 불가** — 단계 8에서 실경기로 검증
+      수정 1건: 콜백 시크릿 불일치 시 next() 폴스루가 인증 체인에 걸려 401이 나가던 것을
+      notFoundHandler 직접 호출로 교체(진짜 404와 동일 응답). E2E 실측으로 발견.
 - [ ] 8. (프로덕션 키 수령 후) 실경기 1판으로 Match-V5 조회 실증 — **#1156 리스크 게이트**
+      + stub 한계 2건(games/by-code 폴링 회수, 적재 트랜잭션) 실검증 포함
 
 구현 담당: **Opus** (본 계획 승인 후 전환). 기획·리뷰: Fable.
+
+> ⚠️ **머지 금지 (2026-07-07 결정)**: MVP 단계 동안 이 브랜치를 `dev`에 머지하지 않는다.
+> 프로덕션 키 신청·검증이 끝나고 별도 승인이 있을 때까지 피처 브랜치에서만 유지.
 
 ## 영향받는 불변식 / 리스크
 

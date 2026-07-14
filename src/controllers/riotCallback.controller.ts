@@ -1,7 +1,8 @@
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { tournamentService } from '../services/tournament.service.js';
-import { getMatch } from '../clients/riot/index.js';
+import { tournamentSaveFacade } from '../facade/tournamentSave.facade.js';
+import { notFoundHandler } from '../middlewares/notFoundHandler.js';
 import { RiotTournamentCallbackPayload } from '../types/tournament.js';
 
 /**
@@ -29,10 +30,13 @@ export const handleRiotCallback = async (
   res: Response,
   next: NextFunction,
 ) => {
-  // 1. 시크릿 검증. 불일치 시 next()로 넘겨 notFoundHandler의 404로 위장한다(실경로 존재 은닉).
+  // 1. 시크릿 검증. 불일치 시 notFoundHandler를 직접 호출해 진짜 미존재 경로와 동일한
+  //    ProblemDetails 404로 위장한다(실경로 존재 은닉).
+  //    ⚠️ `next()`로 넘기면 안 된다 — 이 라우트는 인증 체인보다 위에 있어 next()가
+  //    라우터 스택의 다음 미들웨어(restrictBotToLocalhost, verifyAuth)로 흘러 401이 나간다.
   const expected = process.env.RIOT_CALLBACK_SECRET;
   if (!expected || !secretEquals(req.params.secret, expected)) {
-    return next();
+    return notFoundHandler(req, res, next);
   }
 
   try {
@@ -52,24 +56,17 @@ export const handleRiotCallback = async (
       return res.status(200).json({ status: 'ignored', reason: 'unknown_or_used_code' });
     }
 
-    // 3. matchId 조립 후 match-v5 재조회.
+    // 3. matchId 조립 후 파사드로 재검증·적재.
+    //    match-v5 재조회 → info.tournamentCode 대조 → 단일 트랜잭션 적재 + COMPLETED 전이까지
+    //    파사드가 담당한다(상태 전이가 적재 트랜잭션 안에 있어 적재 실패 시 PENDING 유지).
     const matchId = `${region}_${gameId}`;
-    const matchV5 = await getMatch(matchId);
+    const result = await tournamentSaveFacade.ingestByMatchId(pending, matchId);
 
-    // 4. info.tournamentCode가 DB 코드와 일치할 때만 인정.
-    if (matchV5.info?.tournamentCode !== shortCode) {
-      return res.status(200).json({ status: 'ignored', reason: 'tournament_code_mismatch' });
+    if (result.status === 'ignored') {
+      return res.status(200).json({ status: 'ignored', reason: result.reason });
     }
 
-    // 검증 통과 — 코드 COMPLETED 전이 + used_date 갱신.
-    await tournamentService.markCompleted(shortCode);
-
-    // TODO(TRC-225 단계5): tournamentSave.facade 적재 호출.
-    //   검증된 match-v5 응답(matchV5)과 코드 컨텍스트(pending)를 넘겨 정규화 적재한다.
-    //   현재는 검증·상태 전이까지만 수행하고 적재 인터페이스만 남긴다.
-    void matchV5;
-
-    return res.status(200).json({ status: 'ok', matchId });
+    return res.status(200).json({ status: 'ok', matchId, loaded: result.loaded });
   } catch (error) {
     return next(error);
   }
