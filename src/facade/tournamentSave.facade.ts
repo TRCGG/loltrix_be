@@ -11,8 +11,10 @@ import { mmrMetricService } from '../services/mmrMetric.service.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { matchV5AdapterService } from '../services/matchV5Adapter.service.js';
 import { tournamentService } from '../services/tournament.service.js';
+import { botNotifyService } from '../services/botNotify.service.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
 import { SystemError } from '../types/error.js';
+import { TournamentCodeMetadata } from '../types/tournament.js';
 
 /** 적재 결과. status로 콜백/폴링이 응답을 구성한다. */
 export type TournamentIngestResult =
@@ -52,6 +54,18 @@ export class TournamentSaveFacade {
     }
 
     const loaded = await this.loadMatch(matchV5, code);
+
+    // 신규 적재 성공 시에만 봇에게 다음 코드 게시를 지시한다(트랜잭션 밖, fire-and-forget).
+    // 적재된 코드의 metadata에서 channelId를 꺼내 그 채널로 게시하도록 넘긴다. channelId 없으면 skip.
+    // botNotifyService는 절대 throw하지 않으므로 콜백/폴링 응답을 깨지 않는다.
+    if (loaded) {
+      const meta = (code.metadata ?? null) as TournamentCodeMetadata | null;
+      const channelId = meta?.channelId;
+      if (channelId) {
+        await botNotifyService.notifyNextCode(code.guildId, channelId);
+      }
+    }
+
     return { status: 'ok', matchId, loaded };
   }
 
