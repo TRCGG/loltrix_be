@@ -69,9 +69,16 @@
 - [x] 2. 스키마 3+1 테이블 + 마이그레이션 008 — schema.ts append + `migrations/008_tournament_code.sql`.
       결정: PK는 schema.ts 관례(`GENERATED ALWAYS AS IDENTITY`) 우선, `tournament_code`는 code 자연키,
       `match_ban.champion_id`는 nullable(밴 없음 -1 대응)·FK 미설정. 리뷰 완료(Fable)
-- [ ] 3. 발급 체인: provider/tournament 등록 스크립트 + 코드 발급 API (count 선발급)
-- [ ] 4. 콜백 엔드포인트 + match-v5 재검증 + **콜백 시뮬레이터**(stub는 실제 콜백이 안 오므로
+- [x] 3. 발급 체인: provider/tournament 등록 스크립트 + 코드 발급 API (count 선발급)
+      — 등록은 멱등(활성 행 재사용, `forceReregister`로 dev 키 재발급 대응). `POST /tournament/codes`
+      (봇 전용 구역, channelId→metadata), `GET /tournament/next-code`. 리뷰 완료(Fable)
+- [x] 4. 콜백 엔드포인트 + match-v5 재검증 + **콜백 시뮬레이터**(stub는 실제 콜백이 안 오므로
       로컬 테스트 스크립트로 POST 재현)
+      — 시크릿 sha256+timingSafeEqual, 불일치 시 notFoundHandler 폴스루로 404 위장.
+      미인정 콜백은 200 ignored ack(재시도 폭주 방지). 리뷰 완료(Fable)
+      ⚠️ **단계 5 필수 반영**: 현재 검증 통과 시 즉시 `markCompleted` — 적재가 붙으면
+      상태 전이를 적재 트랜잭션 안으로 이동할 것 (적재 실패 시 COMPLETED로 남아
+      폴링(PENDING 대상)이 건너뛰어 기록 유실되는 경로 차단)
 - [ ] 5. Match-V5 어댑터 + tournamentSave 파사드 (played_date=gameStartTimestamp, 밴픽 저장)
 - [ ] 6. 폴백 폴링 잡 (node-cron 도입)
 - [ ] 7. E2E 검증: 발급→시뮬 콜백→적재→기존 전적 화면에서 조회 확인

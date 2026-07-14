@@ -74,6 +74,8 @@ web_modules/
 
 # dotenv environment variable files
 .env.*
+# 템플릿은 커밋 대상 (실제 값 금지)
+!.env.example
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
