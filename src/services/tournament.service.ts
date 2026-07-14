@@ -8,7 +8,7 @@ import {
   TournamentCodeParams,
 } from '../clients/riot/index.js';
 import { SystemError } from '../types/error.js';
-import { IssuedCode, TournamentCodeMetadata } from '../types/tournament.js';
+import { IssuedCode, IssueSource, TournamentCodeMetadata } from '../types/tournament.js';
 
 // 코드 발급 기본 파라미터(기획 문서 §발급). 5v5 토너먼트 드래프트, 소환사의 협곡, 전체 관전.
 const DEFAULT_CODE_PARAMS = {
@@ -93,18 +93,26 @@ export class TournamentService {
 
   /**
    * @desc count개 코드를 선발급하고 tournament_code 행으로 저장한다(status PENDING).
-   * channelId는 metadata(jsonb)에 저장 — 콜백 수신 시 그 채널로 다음 코드를 게시하기 위함.
+   * channelId는 봇 발급 시에만 metadata(jsonb)에 저장 — 콜백 수신 시 그 채널로 다음 코드를
+   * 게시하기 위함. 웹 발급(source=WEB)은 채널이 없고 issuedBy로 발급자를 남긴다.
    */
   public async issueCodes(params: {
     guildId: string;
-    channelId: string;
+    channelId?: string;
     count: number;
+    source: IssueSource;
+    issuedBy?: string;
   }): Promise<IssuedCode[]> {
-    const { guildId, channelId, count } = params;
+    const { guildId, channelId, count, source, issuedBy } = params;
 
     const { tournamentId } = await this.ensureProviderAndTournament();
 
-    const metadata: TournamentCodeMetadata = { guildId, channelId };
+    const metadata: TournamentCodeMetadata = {
+      guildId,
+      source,
+      ...(channelId ? { channelId } : {}),
+      ...(issuedBy ? { issuedBy } : {}),
+    };
 
     // Riot 코드 임베드 metadata는 문자열. 콜백에서 반환되나 신뢰하지 않으므로 참고용.
     const codeParams: TournamentCodeParams = {
@@ -210,13 +218,14 @@ export class TournamentService {
       .orderBy(asc(tournamentCode.issuedDate));
   }
 
-  /** DB 행 → 응답 DTO. metadata(jsonb)에서 channelId를 꺼낸다. */
+  /** DB 행 → 응답 DTO. metadata(jsonb)에서 channelId·source를 꺼낸다(source 미존재=BOT, 과거 행). */
   private toIssuedCode(row: TournamentCode): IssuedCode {
     const meta = (row.metadata ?? null) as TournamentCodeMetadata | null;
     return {
       code: row.code,
       guildId: row.guildId,
       channelId: meta?.channelId ?? null,
+      source: meta?.source ?? 'BOT',
       status: row.status,
       issuedDate: row.issuedDate,
     };

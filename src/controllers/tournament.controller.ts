@@ -1,9 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import { AuthRequest } from '../middlewares/authHandler.js';
 import { tournamentService } from '../services/tournament.service.js';
 import { IssueCodesRequest } from '../types/tournament.js';
 
 /**
- * @desc 토너먼트 코드 발급 (봇 전용). count개 선발급 → tournament_code INSERT(PENDING).
+ * @desc 토너먼트 코드 발급 (봇/웹 공용). count개 선발급 → tournament_code INSERT(PENDING).
+ * 봇(localhost)은 channelId를 보내 콜백 시 다음 코드 게시 대상을 지정하고,
+ * 웹 세션(guildManager 이상)은 channelId 없이 발급 — issuedBy로 발급자를 남긴다.
  * @route POST /api/tournament/codes
  */
 export const issueCodes = async (
@@ -13,8 +16,15 @@ export const issueCodes = async (
 ) => {
   try {
     const { guildId, channelId, count } = req.body;
+    const auth = req as AuthRequest;
 
-    const codes = await tournamentService.issueCodes({ guildId, channelId, count });
+    const codes = await tournamentService.issueCodes({
+      guildId,
+      channelId,
+      count,
+      source: auth.isBot ? 'BOT' : 'WEB',
+      issuedBy: auth.discordMemberId,
+    });
 
     return res.status(201).json({
       status: 'success',

@@ -372,8 +372,8 @@
         "tags": [
           "Tournament"
         ],
-        "summary": "토너먼트 코드 발급 (봇 전용)",
-        "description": "count개 코드를 선발급하여 tournament_code(PENDING)로 저장합니다. channelId는 metadata에 저장되어 콜백 시 다음 코드 게시 대상이 됩니다.",
+        "summary": "토너먼트 코드 발급 (봇/웹 공용)",
+        "description": "count개 코드를 선발급하여 tournament_code(PENDING)로 저장합니다. 봇 발급은 channelId가 metadata에 저장되어 콜백 시 다음 코드 게시 대상이 되고, 웹 발급(guildManager 이상)은 channelId 없이 발급자(issuedBy)가 기록됩니다.",
         "parameters": [
           {
             "name": "body",
@@ -403,6 +403,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "session": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
