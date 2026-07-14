@@ -201,6 +201,29 @@ export class TournamentService {
   }
 
   /**
+   * @desc 발급 후 오래 지난 PENDING 코드를 INVALID로 만료 전이한다.
+   * 게임 없이 버려진 코드(여분 발급 등)가 폴링 대상으로 영구히 남아
+   * 매 주기 games/by-code를 소모하는 것을 차단한다. 경기는 보통 발급 후
+   * 1~2시간 내 진행되므로 기본 3시간이면 안전 마진 충분(확정 결정 2026-07-14).
+   * 기준 시간은 system_config TOURNAMENT_CODE_EXPIRE_HOURS로 무중단 조정 가능.
+   * @returns 전이된 코드 수
+   */
+  public async expireStalePendingCodes(olderThan: Date): Promise<number> {
+    const rows = await db
+      .update(tournamentCode)
+      .set({ status: 'INVALID' })
+      .where(
+        and(
+          eq(tournamentCode.status, 'PENDING'),
+          eq(tournamentCode.isDeleted, false),
+          lte(tournamentCode.issuedDate, olderThan),
+        ),
+      )
+      .returning({ code: tournamentCode.code });
+    return rows.length;
+  }
+
+  /**
    * @desc 폴백 폴링 대상: PENDING이고 issued_date가 기준시각(olderThan) 이전인 코드들.
    * 콜백 유실/stub 무콜백을 games/by-code로 회수하기 위한 조회.
    */

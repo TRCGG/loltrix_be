@@ -2,6 +2,7 @@ import { schedule, validate, type ScheduledTask } from 'node-cron';
 import { getGamesByCode } from '../clients/riot/index.js';
 import { tournamentService } from '../services/tournament.service.js';
 import { tournamentSaveFacade } from '../facade/tournamentSave.facade.js';
+import { systemConfigService } from '../services/systemConfig.service.js';
 
 /**
  * @desc 폴백 폴링 잡 (node-cron 인프로세스).
@@ -10,31 +11,56 @@ import { tournamentSaveFacade } from '../facade/tournamentSave.facade.js';
  * "PENDING이고 발급된 지 충분히 지난" 코드를 games/by-code로 조회하고, 경기가 잡혔으면
  * matchId를 조립해 **콜백과 동일한 검증·적재 경로(tournamentSaveFacade.ingestByMatchId)**로 회수한다.
  *
- * env:
- *  - TOURNAMENT_POLL_CRON: cron 식(기본 '*​/10 * * * *' — 10분마다)
- *  - TOURNAMENT_POLL_MIN_AGE_HOURS: 이 시간 이상 지난 PENDING만 대상(기본 1)
+ * env (부팅 시 1회 읽음 — 변경은 재시작 필요):
+ *  - TOURNAMENT_POLL_CRON: cron 식(기본 '*​/5 * * * *' — 5분마다)
  *  - RIOT_TOURNAMENT_REGION: matchId 조립 시 게임 응답에 region이 없을 때 폴백(기본 KR)
+ *
+ * system_config (매 주기 읽음 — DB에서 바꾸면 무중단 즉시 반영, 013 시드):
+ *  - TOURNAMENT_POLL_MIN_AGE_HOURS: 이 시간 이상 지난 PENDING만 회수 대상(기본 1)
+ *  - TOURNAMENT_CODE_EXPIRE_HOURS: 이 시간 이상 지난 PENDING은 INVALID로 만료(기본 3)
  */
 
-const DEFAULT_CRON = '*/10 * * * *';
+const DEFAULT_CRON = '*/5 * * * *';
 const DEFAULT_MIN_AGE_HOURS = 1;
+const DEFAULT_EXPIRE_HOURS = 3;
 
 let task: ScheduledTask | null = null;
 
-/** env에서 PENDING 최소 경과 시간(시간). 잘못된 값이면 기본값. */
-function getMinAgeHours(): number {
-  const raw = process.env.TOURNAMENT_POLL_MIN_AGE_HOURS;
-  const n = raw ? Number(raw) : NaN;
+/** system_config에서 PENDING 최소 경과 시간(시간). 미설정/불량 값이면 기본값(1h). */
+async function getMinAgeHours(): Promise<number> {
+  const n = await systemConfigService.getNumberConfig(
+    'TOURNAMENT_POLL_MIN_AGE_HOURS',
+    DEFAULT_MIN_AGE_HOURS,
+  );
   return Number.isFinite(n) && n >= 0 ? n : DEFAULT_MIN_AGE_HOURS;
+}
+
+/** system_config에서 코드 만료 시간(시간). 미설정/불량 값이면 기본값(3h). */
+async function getExpireHours(): Promise<number> {
+  const n = await systemConfigService.getNumberConfig(
+    'TOURNAMENT_CODE_EXPIRE_HOURS',
+    DEFAULT_EXPIRE_HOURS,
+  );
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_EXPIRE_HOURS;
 }
 
 /**
  * @desc 폴링 1회 실행. 스케줄러와 수동/테스트 실행이 공유한다.
+ * 만료 전이(INVALID)를 먼저 처리해 이번 주기 회수 대상에서 제외한다.
  */
 export async function runTournamentPollingOnce(): Promise<void> {
-  const minAgeHours = getMinAgeHours();
+  const minAgeHours = await getMinAgeHours();
   const olderThan = new Date(Date.now() - minAgeHours * 60 * 60 * 1000);
   const fallbackRegion = process.env.RIOT_TOURNAMENT_REGION || 'KR';
+
+  // 0. 만료: 발급 후 expireHours 지난 PENDING → INVALID (게임 없이 버려진 코드 폴링 중단).
+  //    경기 종료 콜백은 보통 발급 1~2시간 내에 오므로 기본 3h면 안전 마진 충분.
+  const expireHours = await getExpireHours();
+  const expireBefore = new Date(Date.now() - expireHours * 60 * 60 * 1000);
+  const expired = await tournamentService.expireStalePendingCodes(expireBefore);
+  if (expired > 0) {
+    console.log(`[tournamentPolling] 만료 전이 ${expired}건 (발급 ${expireHours}h+ 미사용 → INVALID).`);
+  }
 
   const dueCodes = await tournamentService.findDuePendingCodes(olderThan);
   if (dueCodes.length === 0) return;
