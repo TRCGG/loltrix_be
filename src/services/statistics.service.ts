@@ -7,6 +7,7 @@ import {
   champion,
   guildMember,
 } from '../database/schema.js';
+import { subAccountLink } from '../database/subAccountLink.js';
 import { systemConfigService } from './systemConfig.service.js';
 import { StatisticsDatePreset, StatisticsServiceOptions } from '../types/statistics.js';
 
@@ -114,6 +115,9 @@ export class StatisticsService {
     const orderCriteria =
       sortBy === 'winRate' ? desc(statColumns.winRate) : desc(statColumns.totalCount);
 
+    // 부캐 전적은 본캐(effective player_code)로 합산 (TRC-243 A안)
+    const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
+
     const whereCondition = and(
       eq(guildMember.guildId, guildId),
       eq(customMatch.guildId, guildId),
@@ -144,7 +148,8 @@ export class StatisticsService {
         ...statColumns,
       })
       .from(matchParticipant)
-      .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
+      .leftJoin(link.table, link.on)
+      .innerJoin(riotAccount, eq(riotAccount.playerCode, link.effectivePlayerCode))
       .innerJoin(guildMember, eq(riotAccount.playerCode, guildMember.account))
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
@@ -160,7 +165,8 @@ export class StatisticsService {
         code: riotAccount.playerCode,
       })
       .from(matchParticipant)
-      .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
+      .leftJoin(link.table, link.on)
+      .innerJoin(riotAccount, eq(riotAccount.playerCode, link.effectivePlayerCode))
       .innerJoin(guildMember, eq(riotAccount.playerCode, guildMember.account))
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
@@ -203,6 +209,9 @@ export class StatisticsService {
     const orderCriteria =
       sortBy === 'winRate' ? desc(statColumns.winRate) : desc(statColumns.totalCount);
 
+    // 부캐 전적은 본캐(effective player_code) 멤버십 기준으로 집계 (TRC-243 A안)
+    const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
+
     const whereCondition = and(
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
@@ -232,7 +241,8 @@ export class StatisticsService {
       .from(matchParticipant)
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .innerJoin(guildMember, eq(matchParticipant.playerCode, guildMember.account))
+      .leftJoin(link.table, link.on)
+      .innerJoin(guildMember, eq(guildMember.account, link.effectivePlayerCode))
       .where(whereCondition)
       .groupBy(...groupByColumns)
       .having(havingCondition)
@@ -246,7 +256,8 @@ export class StatisticsService {
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .innerJoin(guildMember, eq(matchParticipant.playerCode, guildMember.account))
+      .leftJoin(link.table, link.on)
+      .innerJoin(guildMember, eq(guildMember.account, link.effectivePlayerCode))
       .where(whereCondition)
       .groupBy(
         matchParticipant.championId,
