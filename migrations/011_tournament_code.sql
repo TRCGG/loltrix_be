@@ -1,8 +1,9 @@
--- 토너먼트코드 MVP (TRC-225) 스키마. 발급 체인 + 밴픽 저장용 테이블 4종.
--- tournament_provider / tournament : Riot Tournament(-stub) API 등록 결과(dev 키 24h 만료 → 재등록).
--- tournament_code : 선발급 코드 1개 = 1행. status PENDING → COMPLETED / INVALID.
--- match_ban : Match-V5 밴 1개 = 1행.
--- 기존 테이블·마이그레이션(001~007)은 건드리지 않는다.
+-- 토너먼트코드 MVP (TRC-225) 스키마 통합본.
+-- 구성: 발급 체인 테이블 4종 + match_v5_raw 원본 보존(구 012) + 폴링 파라미터 시드(구 013)
+--       + tournament_code.game_type(경기 유형) — 별도 파일이던 012~014를 이 파일로 통합.
+-- 전체가 멱등(IF NOT EXISTS / ON CONFLICT DO NOTHING)이라 구 008/011로 일부 적용된 DB(dev)에도
+-- 파일 전체 재실행으로 안전하게 나머지가 반영된다.
+-- 기존 테이블·마이그레이션(001~010)은 건드리지 않는다.
 
 -- 토너먼트 프로바이더 (Riot provider 등록 결과). 보통 활성 1행, 재등록 이력 누적 가능.
 CREATE TABLE IF NOT EXISTS tournament_provider (
@@ -29,10 +30,12 @@ CREATE TABLE IF NOT EXISTS tournament (
 -- 토너먼트 코드. 선발급 코드 1개 = 1행.
 -- status PENDING(미사용) → COMPLETED(적재됨) / INVALID(무효).
 -- custom_match_id는 경기 적재 시 채워짐(발급 시점 NULL). metadata는 코드 임베드 메타.
+-- game_type: 발급 시 지정한 경기 유형(1=일반내전/2=스크림/3=대회) — 적재 시 custom_match.game_type으로 전파.
 CREATE TABLE IF NOT EXISTS tournament_code (
   code            VARCHAR(128) PRIMARY KEY,
   tournament_id   INTEGER      NOT NULL,
   guild_id        VARCHAR(128) NOT NULL,
+  game_type       CHAR(1)      NOT NULL DEFAULT '1',   -- 1=일반내전/2=스크림/3=대회
   custom_match_id VARCHAR(255),                        -- 사용 후 채워짐
   metadata        JSONB,
   status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING',
@@ -42,6 +45,11 @@ CREATE TABLE IF NOT EXISTS tournament_code (
   update_date     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   is_deleted      BOOLEAN      NOT NULL DEFAULT FALSE
 );
+
+-- game_type 이전(구 008/011)으로 tournament_code가 이미 생성된 DB(dev) 대응 — 컬럼만 추가.
+-- 기존 행은 전부 일반내전이므로 DEFAULT '1' 백필로 충분.
+ALTER TABLE tournament_code
+  ADD COLUMN IF NOT EXISTS game_type CHAR(1) NOT NULL DEFAULT '1';
 
 -- 폴백 폴링: PENDING 코드를 issued_date 기준으로 조회.
 CREATE INDEX IF NOT EXISTS idx_tournament_code_status_issued ON tournament_code (status, issued_date);
@@ -66,3 +74,32 @@ CREATE TABLE IF NOT EXISTS match_ban (
 
 -- 같은 경기 밴 조회.
 CREATE INDEX IF NOT EXISTS idx_match_ban_custom_match ON match_ban (custom_match_id);
+
+-- Match-V5 원본 보존 테이블 (구 012 — 대회 경기 전체 데이터 확보).
+-- 어댑터가 리플 rawData 형태로 정규화하며 버리는 필드(challenges·핑·팀 오브젝트 등)를
+-- 잃지 않도록 match-v5 응답 전체를 jsonb로 보존한다 (replay.raw_data 패턴).
+-- timeline_json은 별도 API 호출이라 실패 시 NULL 허용(적재를 막지 않음, 추후 backfill 가능).
+-- source: 적재 출처 구분 — 현재 TOURNAMENT(대회), 추후 일반내전 등 확장 대비.
+CREATE TABLE IF NOT EXISTS match_v5_raw (
+  id              INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  custom_match_id VARCHAR(255) NOT NULL REFERENCES custom_match (id),
+  guild_id        VARCHAR(128) NOT NULL REFERENCES guild (id),
+  source          VARCHAR(16)  NOT NULL DEFAULT 'TOURNAMENT',
+  match_json      JSONB        NOT NULL,               -- match-v5 응답 원본 전체
+  timeline_json   JSONB,                               -- match-v5 timeline 원본(조회 실패 시 NULL)
+  create_date     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  update_date     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  is_deleted      BOOLEAN      NOT NULL DEFAULT FALSE,
+  CONSTRAINT uq_match_v5_raw_custom_match UNIQUE (custom_match_id)
+);
+
+-- 길드별 원본 조회.
+CREATE INDEX IF NOT EXISTS idx_match_v5_raw_guild ON match_v5_raw (guild_id);
+
+-- 토너먼트 폴링 운영 파라미터 system_config 시드 (구 013).
+-- 폴링 잡이 매 주기 읽으므로 DB에서 값을 바꾸면 재배포·재시작 없이 즉시 반영된다.
+-- 행이 없어도 코드 기본값(1h / 3h)으로 동작 — 시드는 운영 가시성·조정 편의 목적.
+INSERT INTO system_config (key, value, description) VALUES
+  ('TOURNAMENT_POLL_MIN_AGE_HOURS', '1', '토너먼트 폴백 폴링: 발급 후 이 시간(시간) 이상 지난 PENDING 코드만 회수 대상'),
+  ('TOURNAMENT_CODE_EXPIRE_HOURS', '3', '토너먼트 코드 만료: 발급 후 이 시간(시간) 지나도록 미사용(PENDING)이면 INVALID 전이')
+ON CONFLICT (key) DO NOTHING;

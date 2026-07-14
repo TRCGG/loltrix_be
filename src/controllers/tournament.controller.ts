@@ -15,7 +15,7 @@ export const issueCodes = async (
   next: NextFunction,
 ) => {
   try {
-    const { guildId, channelId, count } = req.body;
+    const { guildId, channelId, count, gameType } = req.body;
     const auth = req as AuthRequest;
 
     const codes = await tournamentService.issueCodes({
@@ -24,6 +24,7 @@ export const issueCodes = async (
       count,
       source: auth.isBot ? 'BOT' : 'WEB',
       issuedBy: auth.discordMemberId,
+      gameType,
     });
 
     return res.status(201).json({

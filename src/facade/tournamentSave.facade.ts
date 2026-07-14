@@ -146,8 +146,9 @@ export class TournamentSaveFacade {
       });
 
       // 3. custom_match — id는 match-v5 matchId('KR_...'). 리플('RPY-...')과 충돌 없음.
+      //    game_type은 발급 시 코드에 확정된 값(1=일반내전/2=스크림/3=대회)을 전파.
       await customMatchService.insertCustomMatch(
-        { id: matchId, gameType: '1', guildId, season },
+        { id: matchId, gameType: code.gameType, guildId, season },
         tx,
       );
 

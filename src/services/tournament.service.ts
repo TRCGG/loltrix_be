@@ -8,7 +8,7 @@ import {
   TournamentCodeParams,
 } from '../clients/riot/index.js';
 import { SystemError } from '../types/error.js';
-import { IssuedCode, IssueSource, TournamentCodeMetadata } from '../types/tournament.js';
+import { GameType, IssuedCode, IssueSource, TournamentCodeMetadata } from '../types/tournament.js';
 
 // 코드 발급 기본 파라미터(기획 문서 §발급). 5v5 토너먼트 드래프트, 소환사의 협곡, 전체 관전.
 const DEFAULT_CODE_PARAMS = {
@@ -95,6 +95,7 @@ export class TournamentService {
    * @desc count개 코드를 선발급하고 tournament_code 행으로 저장한다(status PENDING).
    * channelId는 봇 발급 시에만 metadata(jsonb)에 저장 — 콜백 수신 시 그 채널로 다음 코드를
    * 게시하기 위함. 웹 발급(source=WEB)은 채널이 없고 issuedBy로 발급자를 남긴다.
+   * gameType(1=일반내전/2=스크림/3=대회)은 발급 시 확정되어 적재 시 custom_match로 전파된다.
    */
   public async issueCodes(params: {
     guildId: string;
@@ -102,8 +103,9 @@ export class TournamentService {
     count: number;
     source: IssueSource;
     issuedBy?: string;
+    gameType?: GameType;
   }): Promise<IssuedCode[]> {
-    const { guildId, channelId, count, source, issuedBy } = params;
+    const { guildId, channelId, count, source, issuedBy, gameType = '1' } = params;
 
     const { tournamentId } = await this.ensureProviderAndTournament();
 
@@ -131,6 +133,7 @@ export class TournamentService {
       code,
       tournamentId,
       guildId,
+      gameType,
       metadata,
       status: 'PENDING',
     }));
@@ -249,6 +252,7 @@ export class TournamentService {
       guildId: row.guildId,
       channelId: meta?.channelId ?? null,
       source: meta?.source ?? 'BOT',
+      gameType: row.gameType,
       status: row.status,
       issuedDate: row.issuedDate,
     };

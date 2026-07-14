@@ -49,7 +49,7 @@ export const replay = pgTable('replay', {
   fileUrl: varchar('file_url', { length: 255 }).notNull(),
   rawData: jsonb('raw_data').notNull(),
   hashData: varchar('hash_data', { length: 128 }).notNull(),
-  gameType: char('game_type', { length: 1 }).notNull().default('1'),
+  gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
   season: varchar('season', { length: 32 }).notNull(),
   patchVersion: varchar('patch_version', { length: 32 }),
   createUser: varchar('create_user', { length: 255 }).notNull(),
@@ -166,7 +166,7 @@ export type AuthSession = typeof authSession.$inferSelect;
 export type InsertAuthSession = typeof authSession.$inferInsert;
 export const customMatch = pgTable('custom_match', {
   id: varchar('id', { length: 255 }).primaryKey(),
-  gameType: char('game_type', { length: 1 }).notNull().default('1'),
+  gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
   guildId: varchar('guild_id', { length: 128 }).notNull(),
   season: varchar('season', { length: 32 }).notNull(),
   createDate: timestamp('create_date').notNull().defaultNow(),
@@ -573,6 +573,7 @@ export type InsertTournament = typeof tournament.$inferInsert;
  * status: PENDING(발급됨/미사용) → COMPLETED(경기 완료·적재됨) / INVALID(무효).
  * custom_match_id는 콜백/폴링으로 경기가 적재될 때 채워짐(발급 시점엔 NULL).
  * metadata는 코드에 임베드한 자체 메타(길드·경기 설정 등).
+ * game_type은 발급 시 지정한 경기 유형(1=일반내전/2=스크림/3=대회) — 적재 시 custom_match.game_type으로 전파.
  */
 export const tournamentCode = pgTable(
   'tournament_code',
@@ -580,6 +581,7 @@ export const tournamentCode = pgTable(
     code: varchar('code', { length: 128 }).primaryKey(),
     tournamentId: integer('tournament_id').notNull(),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
+    gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
     customMatchId: varchar('custom_match_id', { length: 255 }), // 사용 후 채워짐
     metadata: jsonb('metadata'),
     status: varchar('status', { length: 16 }).notNull().default('PENDING'),

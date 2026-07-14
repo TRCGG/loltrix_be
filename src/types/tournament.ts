@@ -3,6 +3,9 @@
 /** 발급 주체. BOT=디스코드 봇(localhost), WEB=웹 세션 유저(guildManager 이상). */
 export type IssueSource = 'BOT' | 'WEB';
 
+/** 경기 유형. replay·custom_match·tournament_code.game_type 공통 값 체계. */
+export type GameType = '1' | '2' | '3'; // 1=일반내전, 2=스크림, 3=대회
+
 /** POST /tournament/codes 요청 바디 (봇/웹 공용). */
 export interface IssueCodesRequest {
   guildId: string;
@@ -13,6 +16,8 @@ export interface IssueCodesRequest {
   channelId?: string;
   /** 선발급 개수. */
   count: number;
+  /** 경기 유형(1=일반내전/2=스크림/3=대회). 생략 시 일반내전. */
+  gameType?: GameType;
 }
 
 /** tournament_code.metadata(jsonb)에 저장하는 자체 메타. */
@@ -33,6 +38,8 @@ export interface IssuedCode {
   channelId: string | null;
   /** 발급 주체. 과거 행(메타에 source 없음)은 BOT. */
   source: IssueSource;
+  /** 경기 유형(1=일반내전/2=스크림/3=대회). */
+  gameType: string;
   status: string;
   issuedDate: Date;
 }
