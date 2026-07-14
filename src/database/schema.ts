@@ -526,3 +526,112 @@ export const mmrParticipantMetric = pgTable(
 
 export type MmrParticipantMetric = typeof mmrParticipantMetric.$inferSelect;
 export type InsertMmrParticipantMetric = typeof mmrParticipantMetric.$inferInsert;
+
+/**
+ * 토너먼트 프로바이더 (Riot Tournament API provider 등록 결과).
+ * dev 키 24h 만료 → 재등록 필요. 보통 활성 1행이지만 재등록 이력이 쌓일 수 있어 serial PK 유지.
+ * provider_id는 Riot이 발급한 id.
+ */
+export const tournamentProvider = pgTable('tournament_provider', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  providerId: integer('provider_id').notNull(), // Riot provider id
+  region: varchar('region', { length: 8 }).notNull(), // KR
+  callbackUrl: varchar('callback_url', { length: 512 }).notNull(),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type TournamentProvider = typeof tournamentProvider.$inferSelect;
+export type InsertTournamentProvider = typeof tournamentProvider.$inferInsert;
+
+/**
+ * 토너먼트 (Riot Tournament API tournament 등록 결과). provider 하위.
+ * tournament_id는 Riot이 발급한 id.
+ */
+export const tournament = pgTable('tournament', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  tournamentId: integer('tournament_id').notNull(), // Riot tournament id
+  providerId: integer('provider_id').notNull(), // Riot provider id
+  name: varchar('name', { length: 128 }).notNull(),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type Tournament = typeof tournament.$inferSelect;
+export type InsertTournament = typeof tournament.$inferInsert;
+
+/**
+ * 토너먼트 코드. Riot Tournament API로 선발급한 코드 1개 = 1행.
+ * status: PENDING(발급됨/미사용) → COMPLETED(경기 완료·적재됨) / INVALID(무효).
+ * custom_match_id는 콜백/폴링으로 경기가 적재될 때 채워짐(발급 시점엔 NULL).
+ * metadata는 코드에 임베드한 자체 메타(길드·경기 설정 등).
+ */
+export const tournamentCode = pgTable(
+  'tournament_code',
+  {
+    code: varchar('code', { length: 128 }).primaryKey(),
+    tournamentId: integer('tournament_id').notNull(),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    customMatchId: varchar('custom_match_id', { length: 255 }), // 사용 후 채워짐
+    metadata: jsonb('metadata'),
+    status: varchar('status', { length: 16 }).notNull().default('PENDING'),
+    issuedDate: timestamp('issued_date', { withTimezone: true }).notNull().defaultNow(), // 발급 시각
+    usedDate: timestamp('used_date', { withTimezone: true }), // 사용(경기 완료) 시각
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (t) => [
+    // 폴백 폴링: PENDING 코드를 issued_date 기준으로 조회.
+    index('idx_tournament_code_status_issued').on(t.status, t.issuedDate),
+    // 길드별 코드 조회.
+    index('idx_tournament_code_guild').on(t.guildId),
+    // 적재된 경기 → 코드 역조회.
+    index('idx_tournament_code_custom_match').on(t.customMatchId),
+  ],
+);
+
+export type TournamentCode = typeof tournamentCode.$inferSelect;
+export type InsertTournamentCode = typeof tournamentCode.$inferInsert;
+
+/**
+ * 밴픽 밴 정보. Match-V5 info.teams[].bans[] → 1밴 = 1행.
+ * champion_id는 champion.id(varchar) 관례를 따름 — 밴 없음(-1)이면 NULL(FK 미설정).
+ * team=blue/red, ban_order=pickTurn.
+ */
+export const matchBan = pgTable(
+  'match_ban',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    customMatchId: varchar('custom_match_id', { length: 255 })
+      .notNull()
+      .references(() => customMatch.id),
+    team: varchar('team', { length: 8 }).notNull(), // blue/red
+    championId: varchar('champion_id', { length: 16 }), // champion.id, 밴 없음이면 NULL
+    banOrder: integer('ban_order').notNull(), // pickTurn
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (t) => [
+    index('idx_match_ban_custom_match').on(t.customMatchId),
+    unique('uq_match_ban_match_team_order').on(t.customMatchId, t.team, t.banOrder),
+  ],
+);
+
+export type MatchBan = typeof matchBan.$inferSelect;
+export type InsertMatchBan = typeof matchBan.$inferInsert;
