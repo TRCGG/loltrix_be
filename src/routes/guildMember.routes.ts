@@ -173,6 +173,22 @@ router.post(
       }
     }
     #swagger.security = [{ "session": [] }]
+    #swagger.responses[200] = {
+      description: '연결 성공. data는 부계정의 guild_member 레코드(isMain=false, mainAccount=본계정 playerCode)입니다. 부계정의 해당 길드 경기 기록도 본계정으로 병합됩니다.',
+      schema: {
+        status: 'success',
+        message: 'Sub-account linked successfully to primary account.',
+        data: { id: 12, status: '1', account: 'PLR_000456', mainAccount: 'PLR_000123', isMain: false, guildId: '987654321098765432', createDate: '2026-01-15T09:00:00.000Z', updateDate: '2026-07-03T12:34:56.000Z', isDeleted: false }
+      }
+    }
+    #swagger.responses[400] = {
+      description: '계정을 DB에서 찾을 수 없음 / 동일 계정끼리 연결 시도 / 길드에 등록되지 않은 계정. 에러는 ProblemDetails 형식으로 응답합니다.',
+      schema: { type: 'business-error', title: 'Business Error', status: 400, detail: 'Primary or Secondary Riot Account not found in DB.' }
+    }
+    #swagger.responses[409] = {
+      description: '부계정이 이미 다른 계정에 연결됨 / 본계정이 이미 다른 계정의 부계정(중첩 불가). 에러는 ProblemDetails 형식으로 응답합니다.',
+      schema: { type: 'business-error', title: 'Business Error', status: 409, detail: 'SubName is already linked as a sub-account.' }
+    }
   */
   requireGuildRole('guildManager', { from: 'body', key: 'guildId' }),
   validateRequest(linkSubAccountSchema),
@@ -193,6 +209,16 @@ router.get(
     #swagger.parameters['status'] = { in: 'query', description: '1: 활성 (기본값), 2: 탈퇴, all: 전체', type: 'string', enum: ['1', '2', 'all'] }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (기본값: 50)', type: 'integer' }
+    #swagger.responses[200] = {
+      description: '조회 성공 (본계정만, 최신 가입순). 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다.',
+      schema: {
+        status: 'success',
+        message: 'Members retrieved successfully',
+        data: [
+          { playerCode: 'PLR_000123', riotName: '홍길동', riotNameTag: 'KR1', status: '1', createDate: '2026-01-15T09:00:00.000Z', updateDate: '2026-07-03T12:34:56.000Z' }
+        ]
+      }
+    }
   */
   decodeGuildIdMiddleware,
   validateRequest(getMembersSchema),
@@ -210,11 +236,21 @@ router.get(
     #swagger.summary = '부계정 목록 조회'
     #swagger.description = '특정 길드 내의 연결된 부계정 목록을 조회합니다.'
     
-    #swagger.parameters['guildId'] = { 
+    #swagger.parameters['guildId'] = {
       in: 'path',
       description: '길드 ID',
       required: true,
       type: 'string'
+    }
+    #swagger.responses[200] = {
+      description: '조회 성공. 부계정이 없으면 404가 아니라 200 + data 빈 배열([])로 응답합니다.',
+      schema: {
+        status: 'success',
+        message: 'Sub-accounts retrieved successfully',
+        data: [
+          { guildId: '987654321098765432', subRiotName: '홍길동부캐', subRiotNameTag: 'KR2', mainRiotName: '홍길동', mainRiotNameTag: 'KR1' }
+        ]
+      }
     }
   */
   decodeGuildIdMiddleware,
@@ -361,6 +397,17 @@ router.get(
      }
     #swagger.parameters['riotNameTag'] = { in: 'query', description: 'Riot Tag (선택)', type: 'string' }
     #swagger.parameters['limit'] = { in: 'query', description: '조회 개수 제한', type: 'integer' }
+    #swagger.responses[200] = {
+      description: '검색 성공. 정확히 일치하는 계정이 있으면 그 결과만, 없으면 유사(공백/대소문자 무시 부분일치) 검색 결과를 반환합니다.',
+      schema: {
+        status: 'success',
+        message: 'Guild members retrieved successfully',
+        data: [
+          { playerCode: 'PLR_000123', riotName: '홍길동', riotNameTag: 'KR1', isMain: true, guildId: '987654321098765432', createDate: '2026-01-15T09:00:00.000Z', updateDate: '2026-07-03T12:34:56.000Z', isDeleted: false }
+        ]
+      }
+    }
+    #swagger.responses[404] = { description: '검색 결과 없음', schema: { status: 'error', message: 'Guild members not found', data: null } }
   */
   decodeGuildIdMiddleware,
   validateRequest(searchGuildMembersSchema),
@@ -389,6 +436,19 @@ router.put(
         status: '1'
       }
     }
+    #swagger.responses[200] = {
+      description: '변경 성공. data는 상태가 변경된 guild_member 레코드 배열(본계정 + 딸린 부계정 일괄)입니다. message는 status=1이면 restored, 2면 withdrawn.',
+      schema: {
+        status: 'success',
+        message: 'Member and sub-accounts successfully withdrawn.',
+        data: [
+          { id: 11, status: '2', account: 'PLR_000123', mainAccount: null, isMain: true, guildId: '987654321098765432', createDate: '2026-01-15T09:00:00.000Z', updateDate: '2026-07-03T12:34:56.000Z', isDeleted: false },
+          { id: 12, status: '2', account: 'PLR_000456', mainAccount: 'PLR_000123', isMain: false, guildId: '987654321098765432', createDate: '2026-02-01T09:00:00.000Z', updateDate: '2026-07-03T12:34:56.000Z', isDeleted: false }
+        ]
+      }
+    }
+    #swagger.responses[400] = { description: 'status 값이 1/2가 아님', schema: { status: 'error', message: "Status must be '1' (Active) or '2' (Withdrawn)", data: null } }
+    #swagger.responses[404] = { description: '해당 닉네임/태그의 라이엇 계정 없음', schema: { status: 'error', message: 'Riot Account not found', data: null } }
   */
   requireGuildRole('guildManager', { from: 'body', key: 'guildId' }),
   validateRequest(updateMemberStatusSchema),
@@ -421,6 +481,15 @@ router.delete(
         }
       }
     }
+    #swagger.responses[200] = {
+      description: '연결 해제 성공. data는 본계정으로 승격된(isMain=true, mainAccount=null) guild_member 레코드입니다.',
+      schema: {
+        status: 'success',
+        message: 'Sub-account link removed successfully.',
+        data: { id: 12, status: '1', account: 'PLR_000456', mainAccount: null, isMain: true, guildId: '987654321098765432', createDate: '2026-01-15T09:00:00.000Z', updateDate: '2026-07-03T12:34:56.000Z', isDeleted: false }
+      }
+    }
+    #swagger.responses[404] = { description: '해당 닉네임/태그의 부계정을 찾을 수 없음', schema: { status: 'error', message: 'Sub-account not found', data: null } }
   */
   requireGuildRole('guildManager', { from: 'body', key: 'guildId' }),
   validateRequest(removeSubAccountSchema),

@@ -82,6 +82,16 @@ router.get(
     #swagger.parameters['guildId'] = { in: 'path', description: 'Discord 길드 ID', required: true }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (기본값: 1)', required: false }
     #swagger.parameters['limit'] = { in: 'query', description: '조회 개수 (1~10, 기본값: 10)', required: false }
+    #swagger.responses[200] = {
+      description: '조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다. patchVersion은 파싱 전이면 null.',
+      schema: {
+        status: 'success',
+        message: 'Replays retrieved successfully',
+        data: [
+          { id: 42, replayCode: 'RPY-260711-game1-42', fileName: 'game1.rofl', gameType: '1', season: 'S13', patchVersion: '26.13', createUser: 'gmokuser/01', guildId: '987654321098765432', createDate: '2026-07-11T12:34:56.000Z' }
+        ]
+      }
+    }
   */
   decodeGuildIdMiddleware,
   validateRequest(getReplayListSchema),
