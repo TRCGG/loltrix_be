@@ -431,8 +431,8 @@ export const mmrParticipantMetric = pgTable(
     // 식별 / 메타
     customMatchId: varchar('custom_match_id', { length: 255 }).notNull(), // = replay.replay_code
     puuid: varchar('puuid', { length: 128 }).notNull(),
-    // 본계정 병합 식별자 (match_participant.player_code와 동일 규칙: 부계정이면 본계정 playerCode).
-    // 자연키는 puuid라 nullable 유지. H2H 식별은 이 컬럼 기준.
+    // 실제 계정 식별자 (병합 없음 — TRC-243 A안. match_participant.player_code와 동일 규칙).
+    // 자연키는 puuid라 nullable 유지. 본계정 단위 식별은 조회 시 subAccountLink 헬퍼로 해석.
     playerCode: varchar('player_code', { length: 64 }),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
     season: varchar('season', { length: 32 }).notNull(),

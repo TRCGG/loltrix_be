@@ -2,6 +2,7 @@ import { and, eq, ne, sql, SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db } from '../database/connectionPool.js';
 import { mmrParticipantMetric, riotAccount, guildMember, champion } from '../database/schema.js';
+import { subAccountLink } from '../database/subAccountLink.js';
 import {
   FrequentH2hItem,
   H2hProfile,
@@ -38,8 +39,8 @@ const avg = (vals: (number | null)[]): number | null => {
 
 /**
  * @desc 상대전적(H2H) 서비스 — mmr_participant_metric 기반.
- * metric.player_code는 적재 시 본계정으로 병합 저장되므로(match_participant와 동일),
- * H2H 식별·집계는 player_code 기준 단순 조인으로 처리한다.
+ * metric.player_code는 실제 계정 코드로 저장되며(TRC-243 A안), 본계정 단위 식별·집계는
+ * subAccountLink 헬퍼의 effective player_code(링크된 부캐 → 본캐)로 조회 시점에 해석한다.
  * 기준 유저는 컨트롤러가 riotName 검색으로 활성 본계정 playerCode를 해석해 넘긴다.
  */
 export class H2hService {
@@ -57,6 +58,9 @@ export class H2hService {
 
     const mpmMe = alias(mmrParticipantMetric, 'mpm_me');
     const mpmOp = alias(mmrParticipantMetric, 'mpm_op');
+    // 나·상대 각각 effective player_code(링크된 부캐 → 본캐)로 해석 (TRC-243 A안)
+    const linkMe = subAccountLink('link_me', guildId, mpmMe.playerCode);
+    const linkOp = subAccountLink('link_op', guildId, mpmOp.playerCode);
     const seasonFilter = season === null ? undefined : eq(mpmMe.season, season);
 
     const matchupsExpr = sql<number>`COUNT(DISTINCT ${mpmMe.customMatchId})::integer`;
@@ -74,23 +78,25 @@ export class H2hService {
       })
       .from(mpmMe)
       .innerJoin(mpmOp, eq(mpmMe.customMatchId, mpmOp.customMatchId))
+      .leftJoin(linkMe.table, linkMe.on)
+      .leftJoin(linkOp.table, linkOp.on)
       // 상대 본계정이 활성 메인 멤버일 때만
       .innerJoin(
         guildMember,
         and(
-          eq(guildMember.account, mpmOp.playerCode),
+          eq(guildMember.account, linkOp.effectivePlayerCode),
           eq(guildMember.guildId, guildId),
           eq(guildMember.isMain, true),
           eq(guildMember.status, '1'),
           eq(guildMember.isDeleted, false),
         ),
       )
-      .innerJoin(riotAccount, eq(riotAccount.playerCode, mpmOp.playerCode))
+      .innerJoin(riotAccount, eq(riotAccount.playerCode, linkOp.effectivePlayerCode))
       .where(
         and(
-          eq(mpmMe.playerCode, mePlayerCode),
+          eq(linkMe.effectivePlayerCode, mePlayerCode),
           eq(mpmMe.guildId, guildId),
-          ne(mpmOp.playerCode, mePlayerCode), // 내 계정군 제외
+          ne(linkOp.effectivePlayerCode, mePlayerCode), // 내 계정군 제외
           ne(mpmMe.gameTeam, mpmOp.gameTeam), // 맞붙은(다른 팀)
           eq(mpmMe.isDeleted, false),
           eq(mpmOp.isDeleted, false),
@@ -187,6 +193,9 @@ export class H2hService {
       .where(eq(riotAccount.playerCode, playerCode))
       .limit(1);
 
+    // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
+    const link = subAccountLink('link_me', guildId, mmrParticipantMetric.playerCode);
+
     const [agg] = await db
       .select({
         mostLane: sql<
@@ -197,9 +206,10 @@ export class H2hService {
         avgKda: sql<string | null>`AVG(${mmrParticipantMetric.kda})`,
       })
       .from(mmrParticipantMetric)
+      .leftJoin(link.table, link.on)
       .where(
         and(
-          eq(mmrParticipantMetric.playerCode, playerCode),
+          eq(link.effectivePlayerCode, playerCode),
           eq(mmrParticipantMetric.guildId, guildId),
           eq(mmrParticipantMetric.isDeleted, false),
           this.seasonCond(season),
@@ -229,6 +239,9 @@ export class H2hService {
   ): Promise<{ totalMet: number; firstMet: Date | null; lastMet: Date | null }> {
     const mp = alias(mmrParticipantMetric, 'mp_meta');
     const op = alias(mmrParticipantMetric, 'op_meta');
+    // 나·상대 각각 effective player_code 로 해석 (TRC-243 A안)
+    const linkMe = subAccountLink('link_me', guildId, mp.playerCode);
+    const linkOp = subAccountLink('link_op', guildId, op.playerCode);
     const seasonFilter = season === null ? undefined : eq(mp.season, season);
 
     const [r] = await db
@@ -239,10 +252,12 @@ export class H2hService {
       })
       .from(mp)
       .innerJoin(op, eq(mp.customMatchId, op.customMatchId))
+      .leftJoin(linkMe.table, linkMe.on)
+      .leftJoin(linkOp.table, linkOp.on)
       .where(
         and(
-          eq(mp.playerCode, mePlayerCode),
-          eq(op.playerCode, oppoPlayerCode),
+          eq(linkMe.effectivePlayerCode, mePlayerCode),
+          eq(linkOp.effectivePlayerCode, oppoPlayerCode),
           eq(mp.guildId, guildId),
           eq(mp.isDeleted, false),
           eq(op.isDeleted, false),
@@ -269,6 +284,9 @@ export class H2hService {
     const op = alias(mmrParticipantMetric, 'op_ag');
     const cMp = alias(champion, 'champ_mp');
     const cOp = alias(champion, 'champ_op');
+    // 나·상대 각각 effective player_code 로 해석 (TRC-243 A안)
+    const linkMe = subAccountLink('link_me', guildId, mp.playerCode);
+    const linkOp = subAccountLink('link_op', guildId, op.playerCode);
     const seasonFilter = season === null ? undefined : eq(mp.season, season);
 
     return db
@@ -351,12 +369,14 @@ export class H2hService {
       })
       .from(mp)
       .innerJoin(op, eq(mp.customMatchId, op.customMatchId))
+      .leftJoin(linkMe.table, linkMe.on)
+      .leftJoin(linkOp.table, linkOp.on)
       .leftJoin(cMp, eq(mp.championId, cMp.id))
       .leftJoin(cOp, eq(op.championId, cOp.id))
       .where(
         and(
-          eq(mp.playerCode, mePlayerCode),
-          eq(op.playerCode, oppoPlayerCode),
+          eq(linkMe.effectivePlayerCode, mePlayerCode),
+          eq(linkOp.effectivePlayerCode, oppoPlayerCode),
           eq(mp.guildId, guildId),
           ne(mp.gameTeam, op.gameTeam), // 맞붙은(다른 팀)
           eq(mp.isDeleted, false),
@@ -559,6 +579,9 @@ export class H2hService {
     const op = alias(mmrParticipantMetric, 'op_wg');
     const cMp = alias(champion, 'champ_mp_wg');
     const cOp = alias(champion, 'champ_op_wg');
+    // 나·상대 각각 effective player_code 로 해석 (TRC-243 A안)
+    const linkMe = subAccountLink('link_me', guildId, mp.playerCode);
+    const linkOp = subAccountLink('link_op', guildId, op.playerCode);
     const seasonFilter = season === null ? undefined : eq(mp.season, season);
 
     return db
@@ -582,12 +605,14 @@ export class H2hService {
       })
       .from(mp)
       .innerJoin(op, eq(mp.customMatchId, op.customMatchId))
+      .leftJoin(linkMe.table, linkMe.on)
+      .leftJoin(linkOp.table, linkOp.on)
       .leftJoin(cMp, eq(mp.championId, cMp.id))
       .leftJoin(cOp, eq(op.championId, cOp.id))
       .where(
         and(
-          eq(mp.playerCode, mePlayerCode),
-          eq(op.playerCode, oppoPlayerCode),
+          eq(linkMe.effectivePlayerCode, mePlayerCode),
+          eq(linkOp.effectivePlayerCode, oppoPlayerCode),
           eq(mp.guildId, guildId),
           eq(mp.gameTeam, op.gameTeam), // 함께한(같은 팀)
           eq(mp.isDeleted, false),

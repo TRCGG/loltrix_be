@@ -1,15 +1,7 @@
 import { eq, desc, sql, and, or, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, TransactionType } from '../database/connectionPool.js';
-import {
-  guildMember,
-  InsertGuildMember,
-  matchParticipant,
-  mmrParticipantMetric,
-  customMatch,
-  riotAccount,
-  RiotAccount,
-} from '../database/schema.js';
+import { guildMember, InsertGuildMember, riotAccount, RiotAccount } from '../database/schema.js';
 import { GetGuildMemberQuery, LinkSubAccountRequest } from '../types/guildMember.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
@@ -183,7 +175,10 @@ export class GuildMemberService {
    * 2. 부계정이 이미 다른 본계정의 부계정인지 확인
    * 3. 본계정이 이미 다른 본계정의 부계정인지 확인
    * 4. 부계정 is_main, main_account 업데이트
-   * 5. 부계정 경기 기록 player_code 본계정으로 변경
+   *
+   * [TRC-243 A안] guild_member 링크만 변경한다. match_participant /
+   * mmr_participant_metric 의 player_code 는 건드리지 않으며(원본 보존),
+   * 본캐 합산은 조회 시점에 subAccountLink 헬퍼가 해석한다. 해제 시 즉시 원상복구.
    */
   public async linkSubAccount({
     guildId,
@@ -265,7 +260,7 @@ export class GuildMemberService {
         );
       }
 
-      // 3. GuildMember 테이블 업데이트
+      // 3. GuildMember 테이블 업데이트 — 링크만 기록 (경기 기록 테이블은 무변경)
       const result = await tx
         .update(guildMember)
         .set({
@@ -275,43 +270,6 @@ export class GuildMemberService {
         })
         .where(eq(guildMember.id, secMember.id))
         .returning();
-
-      // 4. MatchParticipant 테이블 업데이트 (playerCode 변경)
-      //    match_participant엔 guildId 컬럼이 없어 custom_match 서브쿼리로 해당 길드 경기만 병합
-      //    (다른 길드에서 연결 안 된 부캐 전적이 본캐로 섞이는 것 방지)
-      await tx
-        .update(matchParticipant)
-        .set({
-          playerCode: priRiot.playerCode,
-          updateDate: new Date(),
-        })
-        .where(
-          and(
-            eq(matchParticipant.playerCode, secRiot.playerCode),
-            inArray(
-              matchParticipant.customMatchId,
-              tx
-                .select({ id: customMatch.id })
-                .from(customMatch)
-                .where(eq(customMatch.guildId, guildId)),
-            ),
-          ),
-        );
-
-      // 5. mmr_participant_metric도 동일하게 병합 (match_participant와 상태 일치 유지)
-      //    이쪽은 guildId 컬럼이 있어 직접 조건으로 해당 길드만 병합
-      await tx
-        .update(mmrParticipantMetric)
-        .set({
-          playerCode: priRiot.playerCode,
-          updateDate: new Date(),
-        })
-        .where(
-          and(
-            eq(mmrParticipantMetric.playerCode, secRiot.playerCode),
-            eq(mmrParticipantMetric.guildId, guildId),
-          ),
-        );
 
       return result[0];
     });
@@ -345,30 +303,6 @@ export class GuildMemberService {
       )
       .orderBy(desc(guildMember.id));
     return result;
-  }
-
-  /**
-   * @desc 참여자 목록 중 부캐인 경우 본캐 정보 조회
-   */
-  public async findMainAccountsForSubMembers(
-    playerCodes: string[],
-    guildId: string,
-    tx: TransactionType,
-  ) {
-    return tx
-      .select({
-        account: guildMember.account,
-        mainAccount: guildMember.mainAccount,
-      })
-      .from(guildMember)
-      .where(
-        and(
-          eq(guildMember.guildId, guildId),
-          inArray(guildMember.account, playerCodes), // 참여자 목록에 있고
-          eq(guildMember.isMain, false), // 부캐이며
-          eq(guildMember.isDeleted, false), // 삭제되지 않은 멤버
-        ),
-      );
   }
 
   /**
@@ -457,6 +391,8 @@ export class GuildMemberService {
 
   /**
    * @desc 닉네임/태그로 부계정을 찾아 본계정 연동 해제
+   * guild_member 링크만 되돌린다 — 경기 기록은 원본 그대로이므로
+   * 해제 즉시 부캐 전적이 본캐 합산에서 분리된다 (TRC-243 A안).
    */
   public async deleteSubAccountByRiotId(guildId: string, riotName: string, riotNameTag: string) {
     const [targetAccount] = await db

@@ -106,7 +106,8 @@ export interface BuildMetricRowsInput {
   guildId: string;
   season: string;
   playedDate: Date;
-  /** puuid → 본계정 병합 playerCode (match_participant와 동일). 적재 시 player_code 컬럼에 저장 */
+  /** puuid → 실제 계정 playerCode (병합 없음, match_participant와 동일 — TRC-243 A안).
+   *  본계정 합산은 조회 시점에 subAccountLink 헬퍼로 해석한다. */
   puuidToPlayerCodeMap: Map<string, string>;
 }
 

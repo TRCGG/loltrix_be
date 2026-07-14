@@ -80,25 +80,11 @@ export class ReplaySaveFacade {
       );
     }
 
-    const playerCodes = riotAccounts.map((acc) => acc.playerCode);
-
-    const subAccountLinks = await guildMemberService.findMainAccountsForSubMembers(
-      playerCodes,
-      savedReplay.guildId,
-      tx,
-    );
-
-    const subToMainMap = new Map<string, string>();
-    subAccountLinks.forEach((link) => {
-      if (link.mainAccount) {
-        subToMainMap.set(link.account, link.mainAccount);
-      }
-    });
-
+    // 부캐 병합 없이 항상 실제 계정 코드로 저장한다.
+    // 부캐 → 본캐 해석은 조회 시점에 subAccountLink 헬퍼로 처리 (TRC-243 A안).
     const puuidToPlayerCodeMap = new Map<string, string>();
     riotAccounts.forEach((acc) => {
-      const targetPlayerCode = subToMainMap.get(acc.playerCode) || acc.playerCode;
-      puuidToPlayerCodeMap.set(acc.puuid, targetPlayerCode);
+      puuidToPlayerCodeMap.set(acc.puuid, acc.playerCode);
     });
 
     const customMatchData = {
