@@ -83,8 +83,8 @@ export const getMembers = async (
     const { guildId } = req.params;
     const { status = '1', page, limit } = req.query;
 
-    const pageNum = Number(page) || 1;
-    const limitNum = Number(limit) || 50;
+    const pageNum = Math.min(Number(page) || 1, 100000);
+    const limitNum = Math.min(Number(limit) || 50, 1000);
 
     const { result, totalCount } = await guildMemberService.findMembersByGuildId(
       guildId,
