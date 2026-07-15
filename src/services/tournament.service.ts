@@ -95,7 +95,8 @@ export class TournamentService {
    * @desc count개 코드를 선발급하고 tournament_code 행으로 저장한다(status PENDING).
    * channelId는 봇 발급 시에만 metadata(jsonb)에 저장 — 콜백 수신 시 그 채널로 다음 코드를
    * 게시하기 위함. 웹 발급(source=WEB)은 채널이 없고 issuedBy로 발급자를 남긴다.
-   * gameType(1=일반내전/2=스크림/3=대회)은 발급 시 확정되어 적재 시 custom_match로 전파된다.
+   * gameType(1=일반내전/2=스크림/3=대회)은 발급 시 코드 행에 확정 기록된다
+   * (MVP raw-only — 추후 raw→정규화 승격 시 custom_match로 전파).
    */
   public async issueCodes(params: {
     guildId: string;
@@ -184,7 +185,7 @@ export class TournamentService {
 
   /**
    * @desc 검증 통과한 코드를 COMPLETED로 전이하고 used_date를 갱신한다.
-   * custom_match_id는 적재(단계 5)에서 채워진다.
+   * custom_match_id에는 match-v5 matchId가 기록된다 (raw-only — custom_match 행은 없음).
    * ⚠️ tx를 넘기면 적재 트랜잭션 안에서 전이한다(적재 실패 시 PENDING 유지 — 계획서 단계4 ⚠️ 요건).
    */
   public async markCompleted(

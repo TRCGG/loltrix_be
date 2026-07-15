@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS tournament (
 -- 토너먼트 코드. 선발급 코드 1개 = 1행.
 -- status PENDING(미사용) → COMPLETED(적재됨) / INVALID(무효).
 -- custom_match_id는 경기 적재 시 채워짐(발급 시점 NULL). metadata는 코드 임베드 메타.
--- game_type: 발급 시 지정한 경기 유형(1=일반내전/2=스크림/3=대회) — 적재 시 custom_match.game_type으로 전파.
+-- game_type: 발급 시 지정한 경기 유형(1=일반내전/2=스크림/3=대회) — MVP raw-only에선 코드에만 기록,
+--            추후 raw→정규화 승격 시 custom_match.game_type으로 전파.
 CREATE TABLE IF NOT EXISTS tournament_code (
   code            VARCHAR(128) PRIMARY KEY,
   tournament_id   INTEGER      NOT NULL,
@@ -60,6 +61,8 @@ CREATE INDEX IF NOT EXISTS idx_tournament_code_custom_match  ON tournament_code 
 
 -- 밴픽 밴 정보. Match-V5 info.teams[].bans[] → 1밴 = 1행.
 -- champion_id는 champion.id(varchar) 관례. 밴 없음(-1)이면 NULL. team=blue/red, ban_order=pickTurn.
+-- ⚠️ MVP raw-only 결정(2026-07-15)으로 현재 적재 경로는 이 테이블에 쓰지 않는다.
+--    dev DB에 이미 존재해 테이블은 유지 — 추후 raw→정규화 승격 시 사용.
 CREATE TABLE IF NOT EXISTS match_ban (
   id              INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   custom_match_id VARCHAR(255) NOT NULL REFERENCES custom_match (id),
@@ -76,13 +79,16 @@ CREATE TABLE IF NOT EXISTS match_ban (
 CREATE INDEX IF NOT EXISTS idx_match_ban_custom_match ON match_ban (custom_match_id);
 
 -- Match-V5 원본 보존 테이블 (구 012 — 대회 경기 전체 데이터 확보).
--- 어댑터가 리플 rawData 형태로 정규화하며 버리는 필드(challenges·핑·팀 오브젝트 등)를
--- 잃지 않도록 match-v5 응답 전체를 jsonb로 보존한다 (replay.raw_data 패턴).
+-- MVP raw-only 결정(2026-07-15): 토너먼트코드 적재는 이 테이블에만 저장한다.
+-- 정규화(custom_match/match_participant/metric/match_ban)는 하지 않으므로
+-- custom_match FK 없이 match-v5 matchId(match_id)를 직접 키로 쓰는 독립 테이블.
+-- 필요한 지표는 추후 raw에서 backfill로 정규화 테이블에 승격.
 -- timeline_json은 별도 API 호출이라 실패 시 NULL 허용(적재를 막지 않음, 추후 backfill 가능).
 -- source: 적재 출처 구분 — 현재 TOURNAMENT(대회), 추후 일반내전 등 확장 대비.
+-- ⚠️ 구 정의(custom_match_id FK)로 이미 생성된 DB는 없음(dev 미적용 상태에서 변경, 2026-07-15).
 CREATE TABLE IF NOT EXISTS match_v5_raw (
   id              INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  custom_match_id VARCHAR(255) NOT NULL REFERENCES custom_match (id),
+  match_id        VARCHAR(255) NOT NULL,               -- match-v5 matchId (예: KR_123...) — 멱등 키
   guild_id        VARCHAR(128) NOT NULL REFERENCES guild (id),
   source          VARCHAR(16)  NOT NULL DEFAULT 'TOURNAMENT',
   match_json      JSONB        NOT NULL,               -- match-v5 응답 원본 전체
@@ -90,7 +96,7 @@ CREATE TABLE IF NOT EXISTS match_v5_raw (
   create_date     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   update_date     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   is_deleted      BOOLEAN      NOT NULL DEFAULT FALSE,
-  CONSTRAINT uq_match_v5_raw_custom_match UNIQUE (custom_match_id)
+  CONSTRAINT uq_match_v5_raw_match UNIQUE (match_id)
 );
 
 -- 길드별 원본 조회.

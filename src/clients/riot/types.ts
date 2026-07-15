@@ -68,7 +68,7 @@ export interface MatchV5Perks {
 }
 
 /**
- * Match-V5 참가자 DTO. 어댑터(단계 5)가 기존 rawData(대문자 키) 형태로 정규화하는 입력이다.
+ * Match-V5 참가자 DTO. (MVP raw-only — 현재 직접 소비처 없음, 추후 raw→정규화 승격 시 사용)
  * 필요한 필드만 명시하고, 나머지는 index signature로 느슨하게 둔다.
  */
 export interface MatchV5Participant {

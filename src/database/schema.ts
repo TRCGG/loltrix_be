@@ -573,7 +573,8 @@ export type InsertTournament = typeof tournament.$inferInsert;
  * status: PENDING(발급됨/미사용) → COMPLETED(경기 완료·적재됨) / INVALID(무효).
  * custom_match_id는 콜백/폴링으로 경기가 적재될 때 채워짐(발급 시점엔 NULL).
  * metadata는 코드에 임베드한 자체 메타(길드·경기 설정 등).
- * game_type은 발급 시 지정한 경기 유형(1=일반내전/2=스크림/3=대회) — 적재 시 custom_match.game_type으로 전파.
+ * game_type은 발급 시 지정한 경기 유형(1=일반내전/2=스크림/3=대회) — MVP raw-only에선 코드에만 기록,
+ * 추후 raw→정규화 승격 시 custom_match.game_type으로 전파.
  */
 export const tournamentCode = pgTable(
   'tournament_code',
@@ -582,7 +583,7 @@ export const tournamentCode = pgTable(
     tournamentId: integer('tournament_id').notNull(),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
     gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
-    customMatchId: varchar('custom_match_id', { length: 255 }), // 사용 후 채워짐
+    customMatchId: varchar('custom_match_id', { length: 255 }), // 사용 후 match-v5 matchId 기록 (raw-only라 custom_match 행은 없음)
     metadata: jsonb('metadata'),
     status: varchar('status', { length: 16 }).notNull().default('PENDING'),
     issuedDate: timestamp('issued_date', { withTimezone: true }).notNull().defaultNow(), // 발급 시각
@@ -640,8 +641,10 @@ export type InsertMatchBan = typeof matchBan.$inferInsert;
 
 /**
  * Match-V5 원본 보존 (replay.raw_data 패턴).
- * 어댑터가 정규화하며 버리는 필드(challenges·핑·팀 오브젝트 등)를 잃지 않도록
- * match-v5 응답 전체를 jsonb로 보존한다. 필요한 지표는 나중에 정규화 테이블로 승격.
+ * MVP raw-only 결정(2026-07-15): 토너먼트코드 적재는 이 테이블에만 저장한다.
+ * 정규화(custom_match/match_participant/metric/match_ban)는 하지 않고,
+ * 필요한 지표는 나중에 raw에서 backfill로 정규화 테이블에 승격한다.
+ * 따라서 custom_match FK 없이 match-v5 matchId를 직접 키로 쓰는 독립 테이블.
  * timeline_json은 별도 API 호출이라 실패 시 NULL 허용(적재를 막지 않음, 추후 backfill 가능).
  * source: 적재 출처 구분 — 현재 TOURNAMENT(대회), 추후 일반내전 등 확장 대비.
  */
@@ -649,10 +652,9 @@ export const matchV5Raw = pgTable(
   'match_v5_raw',
   {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
-    customMatchId: varchar('custom_match_id', { length: 255 })
+    matchId: varchar('match_id', { length: 255 })
       .notNull()
-      .unique('uq_match_v5_raw_custom_match')
-      .references(() => customMatch.id),
+      .unique('uq_match_v5_raw_match'), // match-v5 matchId (예: KR_123...) — 멱등 키
     guildId: varchar('guild_id', { length: 128 })
       .notNull()
       .references(() => guild.id),
