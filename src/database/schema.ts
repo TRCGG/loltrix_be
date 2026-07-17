@@ -49,7 +49,7 @@ export const replay = pgTable('replay', {
   fileUrl: varchar('file_url', { length: 255 }).notNull(),
   rawData: jsonb('raw_data').notNull(),
   hashData: varchar('hash_data', { length: 128 }).notNull(),
-  gameType: char('game_type', { length: 1 }).notNull().default('1'),
+  gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
   season: varchar('season', { length: 32 }).notNull(),
   patchVersion: varchar('patch_version', { length: 32 }),
   createUser: varchar('create_user', { length: 255 }).notNull(),
@@ -166,7 +166,7 @@ export type AuthSession = typeof authSession.$inferSelect;
 export type InsertAuthSession = typeof authSession.$inferInsert;
 export const customMatch = pgTable('custom_match', {
   id: varchar('id', { length: 255 }).primaryKey(),
-  gameType: char('game_type', { length: 1 }).notNull().default('1'),
+  gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
   guildId: varchar('guild_id', { length: 128 }).notNull(),
   season: varchar('season', { length: 32 }).notNull(),
   createDate: timestamp('create_date').notNull().defaultNow(),
@@ -526,3 +526,150 @@ export const mmrParticipantMetric = pgTable(
 
 export type MmrParticipantMetric = typeof mmrParticipantMetric.$inferSelect;
 export type InsertMmrParticipantMetric = typeof mmrParticipantMetric.$inferInsert;
+
+/**
+ * 토너먼트 프로바이더 (Riot Tournament API provider 등록 결과).
+ * dev 키 24h 만료 → 재등록 필요. 보통 활성 1행이지만 재등록 이력이 쌓일 수 있어 serial PK 유지.
+ * provider_id는 Riot이 발급한 id.
+ */
+export const tournamentProvider = pgTable('tournament_provider', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  providerId: integer('provider_id').notNull(), // Riot provider id
+  region: varchar('region', { length: 8 }).notNull(), // KR
+  callbackUrl: varchar('callback_url', { length: 512 }).notNull(),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type TournamentProvider = typeof tournamentProvider.$inferSelect;
+export type InsertTournamentProvider = typeof tournamentProvider.$inferInsert;
+
+/**
+ * 토너먼트 (Riot Tournament API tournament 등록 결과). provider 하위.
+ * tournament_id는 Riot이 발급한 id.
+ */
+export const tournament = pgTable('tournament', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  tournamentId: integer('tournament_id').notNull(), // Riot tournament id
+  providerId: integer('provider_id').notNull(), // Riot provider id
+  name: varchar('name', { length: 128 }).notNull(),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type Tournament = typeof tournament.$inferSelect;
+export type InsertTournament = typeof tournament.$inferInsert;
+
+/**
+ * 토너먼트 코드. Riot Tournament API로 선발급한 코드 1개 = 1행.
+ * status: PENDING(발급됨/미사용) → COMPLETED(경기 완료·적재됨) / INVALID(무효).
+ * custom_match_id는 콜백/폴링으로 경기가 적재될 때 채워짐(발급 시점엔 NULL).
+ * metadata는 코드에 임베드한 자체 메타(길드·경기 설정 등).
+ * game_type은 발급 시 지정한 경기 유형(1=일반내전/2=스크림/3=대회) — MVP raw-only에선 코드에만 기록,
+ * 추후 raw→정규화 승격 시 custom_match.game_type으로 전파.
+ */
+export const tournamentCode = pgTable(
+  'tournament_code',
+  {
+    code: varchar('code', { length: 128 }).primaryKey(),
+    tournamentId: integer('tournament_id').notNull(),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
+    customMatchId: varchar('custom_match_id', { length: 255 }), // 사용 후 match-v5 matchId 기록 (raw-only라 custom_match 행은 없음)
+    metadata: jsonb('metadata'),
+    status: varchar('status', { length: 16 }).notNull().default('PENDING'),
+    issuedDate: timestamp('issued_date', { withTimezone: true }).notNull().defaultNow(), // 발급 시각
+    usedDate: timestamp('used_date', { withTimezone: true }), // 사용(경기 완료) 시각
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (t) => [
+    // 폴백 폴링: PENDING 코드를 issued_date 기준으로 조회.
+    index('idx_tournament_code_status_issued').on(t.status, t.issuedDate),
+    // 길드별 코드 조회.
+    index('idx_tournament_code_guild').on(t.guildId),
+    // 적재된 경기 → 코드 역조회.
+    index('idx_tournament_code_custom_match').on(t.customMatchId),
+  ],
+);
+
+export type TournamentCode = typeof tournamentCode.$inferSelect;
+export type InsertTournamentCode = typeof tournamentCode.$inferInsert;
+
+/**
+ * 밴픽 밴 정보. Match-V5 info.teams[].bans[] → 1밴 = 1행.
+ * champion_id는 champion.id(varchar) 관례를 따름 — 밴 없음(-1)이면 NULL(FK 미설정).
+ * team=blue/red, ban_order=pickTurn.
+ */
+export const matchBan = pgTable(
+  'match_ban',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    customMatchId: varchar('custom_match_id', { length: 255 })
+      .notNull()
+      .references(() => customMatch.id),
+    team: varchar('team', { length: 8 }).notNull(), // blue/red
+    championId: varchar('champion_id', { length: 16 }), // champion.id, 밴 없음이면 NULL
+    banOrder: integer('ban_order').notNull(), // pickTurn
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (t) => [
+    index('idx_match_ban_custom_match').on(t.customMatchId),
+    unique('uq_match_ban_match_team_order').on(t.customMatchId, t.team, t.banOrder),
+  ],
+);
+
+export type MatchBan = typeof matchBan.$inferSelect;
+export type InsertMatchBan = typeof matchBan.$inferInsert;
+
+/**
+ * Match-V5 원본 보존 (replay.raw_data 패턴).
+ * MVP raw-only 결정(2026-07-15): 토너먼트코드 적재는 이 테이블에만 저장한다.
+ * 정규화(custom_match/match_participant/metric/match_ban)는 하지 않고,
+ * 필요한 지표는 나중에 raw에서 backfill로 정규화 테이블에 승격한다.
+ * 따라서 custom_match FK 없이 match-v5 matchId를 직접 키로 쓰는 독립 테이블.
+ * timeline_json은 별도 API 호출이라 실패 시 NULL 허용(적재를 막지 않음, 추후 backfill 가능).
+ * source: 적재 출처 구분 — 현재 TOURNAMENT(대회), 추후 일반내전 등 확장 대비.
+ */
+export const matchV5Raw = pgTable(
+  'match_v5_raw',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    matchId: varchar('match_id', { length: 255 })
+      .notNull()
+      .unique('uq_match_v5_raw_match'), // match-v5 matchId (예: KR_123...) — 멱등 키
+    guildId: varchar('guild_id', { length: 128 })
+      .notNull()
+      .references(() => guild.id),
+    source: varchar('source', { length: 16 }).notNull().default('TOURNAMENT'),
+    matchJson: jsonb('match_json').notNull(), // match-v5 응답 원본 전체
+    timelineJson: jsonb('timeline_json'), // match-v5 timeline 원본(조회 실패 시 NULL)
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (t) => [index('idx_match_v5_raw_guild').on(t.guildId)],
+);
+
+export type MatchV5Raw = typeof matchV5Raw.$inferSelect;
+export type InsertMatchV5Raw = typeof matchV5Raw.$inferInsert;

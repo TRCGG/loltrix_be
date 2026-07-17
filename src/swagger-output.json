@@ -343,6 +343,121 @@
         }
       }
     },
+    "/api/callback/riot/{secret}": {
+      "post": {
+        "tags": [
+          "Tournament"
+        ],
+        "summary": "Riot 토너먼트 콜백 수신",
+        "description": "경기 종료 콜백. 경로 시크릿 검증(불일치 시 404 위장) → match-v5 재검증(info.tournamentCode 대조) → 코드 COMPLETED 전이. 페이로드는 신뢰하지 않습니다.",
+        "parameters": [
+          {
+            "name": "secret",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/tournament/codes": {
+      "post": {
+        "tags": [
+          "Tournament"
+        ],
+        "summary": "토너먼트 코드 발급 (봇/웹 공용)",
+        "description": "count개 코드를 선발급하여 tournament_code(PENDING)로 저장합니다. 봇 발급은 channelId가 metadata에 저장되어 콜백 시 다음 코드 게시 대상이 되고, 웹 발급(guildManager 이상)은 channelId 없이 발급자(issuedBy)가 기록됩니다.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "guildId": {
+                  "type": "string",
+                  "example": "123"
+                },
+                "channelId": {
+                  "type": "string",
+                  "example": "456"
+                },
+                "count": {
+                  "type": "number",
+                  "example": 3
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guildId": {
+                    "example": "any"
+                  },
+                  "channelId": {
+                    "example": "any"
+                  },
+                  "count": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tournament/next-code": {
+      "get": {
+        "tags": [
+          "Tournament"
+        ],
+        "summary": "미사용 다음 코드 조회",
+        "description": "PENDING 코드 중 issued_date 오름차순 첫 코드를 반환합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "query",
+            "description": "길드 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공"
+          },
+          "404": {
+            "description": "찾을 수 없음"
+          }
+        }
+      }
+    },
     "/api/guilds/": {
       "post": {
         "tags": [
