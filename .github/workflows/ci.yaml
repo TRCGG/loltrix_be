@@ -3,6 +3,11 @@ name: CI
 on:
   pull_request:
     branches: [dev, main]
+  # feature 브랜치 push에서도 검증 — 로컬 머지 후 dev 직접 push 워크플로우에선
+  # PR CI가 안 돌아서, lockfile 불일치 등이 머지 전에 안 잡히던 문제 보완.
+  # dev/main push는 CD가 동일 검증(frozen-lockfile 설치+빌드)을 하므로 제외.
+  push:
+    branches-ignore: [dev, main]
 
 concurrency:
   group: ci-${{ github.ref }}
