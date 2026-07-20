@@ -1,5 +1,5 @@
 import querystring from 'querystring';
-import { eq, sql, and, isNull } from 'drizzle-orm';
+import { eq, sql, and, isNull, gt } from 'drizzle-orm';
 import { db, TransactionType } from '../database/connectionPool.js';
 import { discordMember, discordToken, authSession } from '../database/schema.js';
 import {
@@ -420,7 +420,15 @@ export class DiscordAuthService {
     const result = await db
       .select()
       .from(authSession)
-      .where(and(eq(authSession.sessionUid, sessionUid), eq(authSession.isActive, true)))
+      .where(
+        and(
+          eq(authSession.sessionUid, sessionUid),
+          eq(authSession.isActive, true),
+          // 토큰 갱신 때마다 re_expires_date가 연장돼 리프레시 만료로는 세션이 끊기지 않는다.
+          // 만료 상한은 여기서만 걸린다.
+          gt(authSession.expiresDate, new Date()),
+        ),
+      )
       .limit(1);
 
     return result[0];
