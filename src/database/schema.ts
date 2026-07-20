@@ -374,7 +374,8 @@ export type InsertDiscordGuildMember = typeof discordGuildMember.$inferInsert;
 
 /** guild_audit_log 타입별 페이로드 (event_type에 따라 하나가 들어감) */
 export type GuildAuditLogDetail =
-  | { fromRole: string; toRole: string } // eventType 'roleChange'
+  // eventType 'roleChange' — source 생략 시 웹 수동 부여/회수
+  | { fromRole: string; toRole: string; source?: 'discordPermission' }
   | { gameId: string; source: 'web' | 'bot' }; // eventType 'replayDelete'
 
 /**

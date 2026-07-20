@@ -40,6 +40,8 @@ export interface DiscordGuildAPI {
   banner: string;
   nick?: string;
   role: Role;
+  /** Discord 권한 비트마스크 — 내부 판정용이라 응답에서는 제외된다 */
+  permissions?: string;
 }
 
 export type DiscordGuildWithoutRole = Omit<DiscordGuildAPI, 'role'>;
