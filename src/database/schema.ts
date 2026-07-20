@@ -612,6 +612,9 @@ export type InsertTournamentCode = typeof tournamentCode.$inferInsert;
  * 밴픽 밴 정보. Match-V5 info.teams[].bans[] → 1밴 = 1행.
  * champion_id는 champion.id(varchar) 관례를 따름 — 밴 없음(-1)이면 NULL(FK 미설정).
  * team=blue/red, ban_order=pickTurn.
+ * ⚠️ MVP raw-only 결정(2026-07-15)으로 미사용 — 쓰기·읽기 경로 없음.
+ *    dev DB에만 기존 테이블이 남아 있고, 운영 DB엔 미생성(011에서 제외).
+ *    추후 raw→정규화 승격 시 마이그레이션과 함께 사용 재개.
  */
 export const matchBan = pgTable(
   'match_ban',

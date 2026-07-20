@@ -1,9 +1,12 @@
 -- 토너먼트코드 MVP (TRC-225) 스키마 통합본.
--- 구성: 발급 체인 테이블 4종 + match_v5_raw 원본 보존(구 012) + 폴링 파라미터 시드(구 013)
+-- 구성: 발급 체인 테이블 3종(tournament_provider/tournament/tournament_code)
+--       + match_v5_raw 원본 보존(구 012) + 폴링 파라미터 시드(구 013)
 --       + tournament_code.game_type(경기 유형) — 별도 파일이던 012~014를 이 파일로 통합.
 -- 전체가 멱등(IF NOT EXISTS / ON CONFLICT DO NOTHING)이라 구 008/011로 일부 적용된 DB(dev)에도
 -- 파일 전체 재실행으로 안전하게 나머지가 반영된다.
 -- 기존 테이블·마이그레이션(001~010)은 건드리지 않는다.
+-- ※ match_ban은 MVP raw-only 결정(2026-07-15)으로 미사용이라 본 파일에서 제외 —
+--    dev DB에만 기존 생성분이 남아 있고(유지), 추후 raw→정규화 승격 시 별도 마이그레이션으로 재도입.
 
 -- 토너먼트 프로바이더 (Riot provider 등록 결과). 보통 활성 1행, 재등록 이력 누적 가능.
 CREATE TABLE IF NOT EXISTS tournament_provider (
@@ -58,25 +61,6 @@ CREATE INDEX IF NOT EXISTS idx_tournament_code_status_issued ON tournament_code 
 CREATE INDEX IF NOT EXISTS idx_tournament_code_guild         ON tournament_code (guild_id);
 -- 적재된 경기 → 코드 역조회.
 CREATE INDEX IF NOT EXISTS idx_tournament_code_custom_match  ON tournament_code (custom_match_id);
-
--- 밴픽 밴 정보. Match-V5 info.teams[].bans[] → 1밴 = 1행.
--- champion_id는 champion.id(varchar) 관례. 밴 없음(-1)이면 NULL. team=blue/red, ban_order=pickTurn.
--- ⚠️ MVP raw-only 결정(2026-07-15)으로 현재 적재 경로는 이 테이블에 쓰지 않는다.
---    dev DB에 이미 존재해 테이블은 유지 — 추후 raw→정규화 승격 시 사용.
-CREATE TABLE IF NOT EXISTS match_ban (
-  id              INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  custom_match_id VARCHAR(255) NOT NULL REFERENCES custom_match (id),
-  team            VARCHAR(8)   NOT NULL,
-  champion_id     VARCHAR(16),
-  ban_order       INTEGER      NOT NULL,
-  create_date     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  update_date     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  is_deleted      BOOLEAN      NOT NULL DEFAULT FALSE,
-  CONSTRAINT uq_match_ban_match_team_order UNIQUE (custom_match_id, team, ban_order)
-);
-
--- 같은 경기 밴 조회.
-CREATE INDEX IF NOT EXISTS idx_match_ban_custom_match ON match_ban (custom_match_id);
 
 -- Match-V5 원본 보존 테이블 (구 012 — 대회 경기 전체 데이터 확보).
 -- MVP raw-only 결정(2026-07-15): 토너먼트코드 적재는 이 테이블에만 저장한다.
