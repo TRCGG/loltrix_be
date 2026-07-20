@@ -1,6 +1,10 @@
 -- TRC-222 guildManager 웹 uploader 권한 부여/회수 기능용 테이블.
--- 1) discord_guild_member: 길드별 Discord 별명 저장 (멤버 식별 표시명).
--- 2) discord_member_role_log: 역할 부여/회수 감사 로그 (append-only).
+-- (구 008_add_guild_member_role_management — 008 중복을 해소하며 009로 리네임, 2026-07-20)
+--
+-- 전제: discord_member / discord_member_role 은 마이그레이션 체계 도입 전에 생성된 기존 테이블.
+-- ※ 역할 감사 로그(discord_member_role_log)는 TRC-241에서 guild_audit_log로 흡수·폐기가
+--    확정되어 본 파일에서 제외 — 010_add_guild_audit_log.sql이 통합 테이블을 생성한다.
+--    (dev DB의 구 테이블은 2026-07-13 이관·drop 완료)
 
 -- 길드별 Discord 별명 (member, guild 당 1행). 표시명 = nickname ?? discord_member.display_name ?? member_id.
 CREATE TABLE IF NOT EXISTS discord_guild_member (
@@ -13,21 +17,6 @@ CREATE TABLE IF NOT EXISTS discord_guild_member (
   is_deleted    BOOLEAN      NOT NULL DEFAULT FALSE,
   CONSTRAINT uq_discord_guild_member UNIQUE (member_id, guild_id)
 );
-
--- 역할 부여/회수 감사 로그 (append-only, update/delete 없음).
-CREATE TABLE IF NOT EXISTS discord_member_role_log (
-  id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-  member_id        TEXT         NOT NULL,   -- 대상 멤버
-  guild_id         VARCHAR(128) NOT NULL,
-  actor_member_id  TEXT         NOT NULL,   -- 변경을 수행한 guildManager(또는 admin)
-  from_role        VARCHAR(32)  NOT NULL,   -- 변경 전 역할
-  to_role          VARCHAR(32)  NOT NULL,   -- 변경 후 역할
-  create_date      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
-
--- 특정 (member, guild)의 변경 이력을 시간순으로 조회.
-CREATE INDEX IF NOT EXISTS idx_dmrl_member_guild_created
-  ON discord_member_role_log (member_id, guild_id, create_date);
 
 -- 멤버 관리 목록 API: discord_member_role을 guild_id로 필터 + update_date 정렬.
 -- (기존 uq_member_guild는 member_id 선행이라 guild 단독 필터를 서빙하지 못해 seq scan 발생)
