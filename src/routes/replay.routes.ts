@@ -21,7 +21,11 @@ const webCreateReplaySchema = z.object({
       .string()
       .min(1, 'guildId is required')
       .max(128, 'guildId must be less than 128 characters'),
-    gameType: z.string().length(1, '게임 타입은 1자여야 합니다.').default('1'),
+    gameType: z
+      .enum(['1', '2', '3'], {
+        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(대회) 중 하나여야 합니다.' }),
+      })
+      .default('1'),
     nick: z
       .string()
       .min(1, 'nick is required')
@@ -48,7 +52,11 @@ const createReplaySchema = z.object({
       .min(1, 'File name is required')
       .max(128, 'File name must be less than 128 characters'),
     fileUrl: z.string().max(255, '파일 URL은 255자 이하여야 합니다.'),
-    gameType: z.string().length(1, '게임 타입은 1자여야 합니다.').default('1'),
+    gameType: z
+      .enum(['1', '2', '3'], {
+        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(대회) 중 하나여야 합니다.' }),
+      })
+      .default('1'),
     createUser: z
       .string()
       .min(1, '생성 유저는 필수 입력 사항입니다.')
@@ -82,6 +90,16 @@ router.get(
     #swagger.parameters['guildId'] = { in: 'path', description: 'Discord 길드 ID', required: true }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (기본값: 1)', required: false }
     #swagger.parameters['limit'] = { in: 'query', description: '조회 개수 (1~10, 기본값: 10)', required: false }
+    #swagger.responses[200] = {
+      description: '조회 성공. 페이지네이션 정보는 응답 헤더(X-Total-Count, X-Page, X-Limit, X-Total-Pages)로 전달됩니다. patchVersion은 파싱 전이면 null.',
+      schema: {
+        status: 'success',
+        message: 'Replays retrieved successfully',
+        data: [
+          { id: 42, replayCode: 'RPY-260711-game1-42', fileName: 'game1.rofl', gameType: '1', season: 'S13', patchVersion: '26.13', createUser: 'gmokuser/01', guildId: '987654321098765432', createDate: '2026-07-11T12:34:56.000Z' }
+        ]
+      }
+    }
   */
   decodeGuildIdMiddleware,
   validateRequest(getReplayListSchema),
@@ -149,7 +167,7 @@ router.post(
               },
               gameType: {
                 type: 'string',
-                description: '게임 타입 (기본값: 1)',
+                description: '게임 타입 1=일반내전/2=스크림/3=대회 (기본값: 1)',
                 example: '1'
               },
               nick: {

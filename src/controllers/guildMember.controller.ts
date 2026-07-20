@@ -6,9 +6,17 @@ import {
   SubAccountsAPIResponse,
   UpdateGuildMemberStatusRequest,
   MemberListAPIResponse,
+  DiscordMemberRoleListAPIResponse,
+  UpdateMemberRoleRequest,
+  UpdateMemberRoleAPIResponse,
+  GuildAuditLogListAPIResponse,
+  GuildAuditLogType,
 } from '../types/guildMember.js';
 import { guildMemberService } from '../services/guildMember.service.js';
+import { discordMemberRoleService } from '../services/discordMemberRole.service.js';
+import { guildAuditLogService } from '../services/guildAuditLog.service.js';
 import { BusinessError } from '../types/error.js';
+import { AuthRequest } from '../middlewares/authHandler.js';
 
 /**
  * @desc 길드 멤버 및 라이엇 계정 정보 통합 검색
@@ -75,8 +83,8 @@ export const getMembers = async (
     const { guildId } = req.params;
     const { status = '1', page, limit } = req.query;
 
-    const pageNum = Number(page) || 1;
-    const limitNum = Number(limit) || 50;
+    const pageNum = Math.min(Number(page) || 1, 100000);
+    const limitNum = Math.min(Number(limit) || 50, 1000);
 
     const { result, totalCount } = await guildMemberService.findMembersByGuildId(
       guildId,
@@ -100,6 +108,150 @@ export const getMembers = async (
     return res.status(500).json({
       status: 'error',
       message: 'Internal server error while retrieving members',
+      data: null,
+    });
+  }
+};
+
+/**
+ * @desc 멤버 관리 화면용 Discord 멤버 목록/검색 (길드 스코프 역할 포함)
+ * @route GET /api/guildMember/:guildId/discord-members
+ * @access guildManager 이상 (admin bypass)
+ */
+export const getGuildDiscordMembers = async (
+  req: Request<
+    { guildId: string },
+    DiscordMemberRoleListAPIResponse,
+    never,
+    { search?: string; page?: string; limit?: string }
+  >,
+  res: Response<DiscordMemberRoleListAPIResponse>,
+) => {
+  try {
+    const { guildId } = req.params;
+    const { search, page, limit } = req.query;
+
+    // zod 상한 검증과 별개로 방어적 클램프 (validateRequest는 transform 값을 전달하지 않음)
+    const pageNum = Math.min(Number(page) || 1, 100000);
+    const limitNum = Math.min(Number(limit) || 50, 1000);
+
+    const { result, totalCount } = await discordMemberRoleService.getGuildMembersWithRoles(guildId, {
+      search,
+      page: pageNum,
+      limit: limitNum,
+    });
+
+    res.setHeader('X-Total-Count', totalCount.toString());
+    res.setHeader('X-Page', pageNum.toString());
+    res.setHeader('X-Limit', limitNum.toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / limitNum).toString());
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Discord members retrieved successfully',
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error retrieving discord members:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving discord members',
+      data: null,
+    });
+  }
+};
+
+/**
+ * @desc 클랜관리 화면용 관리 로그 조회 (역할 부여/회수 + 리플 삭제, 최신순)
+ * @route GET /api/guildMember/:guildId/audit-logs
+ * @access guildManager 이상 (admin bypass)
+ */
+export const getGuildAuditLogs = async (
+  req: Request<
+    { guildId: string },
+    GuildAuditLogListAPIResponse,
+    never,
+    { type?: string; page?: string; limit?: string }
+  >,
+  res: Response<GuildAuditLogListAPIResponse>,
+) => {
+  try {
+    const { guildId } = req.params;
+    const { type, page, limit } = req.query;
+
+    // zod 상한 검증과 별개로 방어적 클램프 (validateRequest는 transform 값을 전달하지 않음)
+    const pageNum = Math.min(Number(page) || 1, 100000);
+    const limitNum = Math.min(Number(limit) || 50, 100);
+    const typeFilter: GuildAuditLogType | 'all' =
+      type === 'roleChange' || type === 'replayDelete' ? type : 'all';
+
+    const { result, totalCount } = await guildAuditLogService.getGuildAuditLogs(guildId, {
+      type: typeFilter,
+      page: pageNum,
+      limit: limitNum,
+    });
+
+    res.setHeader('X-Total-Count', totalCount.toString());
+    res.setHeader('X-Page', pageNum.toString());
+    res.setHeader('X-Limit', limitNum.toString());
+    res.setHeader('X-Total-Pages', Math.ceil(totalCount / limitNum).toString());
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Audit logs retrieved successfully',
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error retrieving audit logs:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while retrieving audit logs',
+      data: null,
+    });
+  }
+};
+
+/**
+ * @desc 멤버 역할 부여/회수 (userNormal <-> userUploader)
+ * @route PATCH /api/guildMember/:guildId/discord-members/:memberId/role
+ * @access guildManager 이상 (admin bypass)
+ */
+export const updateGuildMemberRole = async (
+  req: AuthRequest,
+  res: Response<UpdateMemberRoleAPIResponse>,
+) => {
+  try {
+    const { guildId, memberId } = req.params as { guildId: string; memberId: string };
+    const { role } = req.body as UpdateMemberRoleRequest;
+    // 요청 주체(actor). requireGuildRole이 non-bot의 discordMemberId 존재를 보장, bot은 bypass.
+    const actorMemberId = req.discordMemberId ?? 'bot';
+
+    const result = await discordMemberRoleService.grantOrRevokeRole(
+      actorMemberId,
+      guildId,
+      memberId,
+      role,
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      message: result.changed
+        ? `Role updated to ${result.role}`
+        : `Role already ${result.role} (no change)`,
+      data: result,
+    });
+  } catch (error) {
+    if (error instanceof BusinessError) {
+      return res.status(error.status).json({
+        status: 'error',
+        message: error.message,
+        data: null,
+      });
+    }
+    console.error('Error updating member role:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error while updating member role',
       data: null,
     });
   }

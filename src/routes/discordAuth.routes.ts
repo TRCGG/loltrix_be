@@ -66,16 +66,23 @@ router.post(
  */
 router.get(
   '/me',
+  // security 설정 생략 -> 전역 설정(cookieAuth OR botAuth) 자동 적용됨
   /* #swagger.tags = ['Auth']
     #swagger.summary = '내 정보 조회'
     #swagger.description = '현재 로그인된 세션 정보를 바탕으로 유저 정보를 조회합니다. (쿠키 또는 봇 헤더 필요)'
-    // security 설정 생략 -> 전역 설정(cookieAuth OR botAuth) 자동 적용됨
     #swagger.responses[200] = {
-      description: '성공',
+      description: '성공. avatar는 완성된 이미지 URL(없으면 null)이라 프론트에서 그대로 img src로 사용 가능.',
       schema: {
-        userId: 'string',
-        username: 'string',
-        avatar: 'string'
+        status: 'success',
+        message: 'session OK',
+        data: {
+          user: {
+            id: '123456789012345678',
+            username: 'gildong',
+            global_name: '홍길동',
+            avatar: 'https://cdn.discordapp.com/avatars/123456789012345678/abc123.png'
+          }
+        }
       }
     }
   */
@@ -90,10 +97,21 @@ router.get(
  */
 router.get(
   '/gmokGuilds',
+  // security 설정 생략 -> 전역 설정 자동 적용
   /* #swagger.tags = ['Auth']
     #swagger.summary = '내 길드 목록 조회'
     #swagger.description = '현재 유저가 속한 GMOK 길드 목록을 조회합니다.'
-    // security 설정 생략 -> 전역 설정 자동 적용
+    #swagger.responses[200] = {
+      description: '조회 성공. role은 해당 길드에서의 내 권한(userNormal/userUploader/guildManager/adminNormal/adminSuper). icon/banner는 Discord 해시 값(전체 URL 아님)이며 없으면 null, admin 계정 조회 시에는 빈 문자열. nick은 길드 별명(없으면 필드 생략).',
+      schema: {
+        status: 'success',
+        message: 'gmok Guilds find successfully',
+        data: [
+          { id: '987654321098765432', name: '내 길드', icon: 'a1b2c3d4e5f6a7b8c9d0', banner: null, nick: '홍길동', role: 'guildManager' },
+          { id: '876543210987654321', name: '다른 길드', icon: null, banner: null, role: 'userNormal' }
+        ]
+      }
+    }
   */
   verifyAuth,
   getGmokGuilds,

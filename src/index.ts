@@ -14,6 +14,7 @@ import { initConnectionPool } from './init.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { notFoundHandler } from './middlewares/notFoundHandler.js';
 import apiRoutes from './routes/index.js';
+import { startTournamentPolling } from './jobs/tournamentPolling.job.js';
 
 // Define currentDirname for ES modules
 const currentFilename = fileURLToPath(import.meta.url);
@@ -67,7 +68,7 @@ app.use(
   cors({
     origin: ['https://gmok.kr', 'https://dev.gmok.kr'],
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: [
       'Content-Type',
       'Authorization',
@@ -76,6 +77,8 @@ app.use(
       'Accept',
       'x-discord-bot',
     ],
+    // 페이지네이션 헤더를 프론트 JS가 읽을 수 있도록 노출 (목록 API 공통)
+    exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Limit', 'X-Total-Pages'],
   }),
 );
 
@@ -99,5 +102,12 @@ app.use(errorHandler);
 app.listen(app.get('port'), () => {
   console.log(`Server running at http://localhost:${app.get('port')}`);
 });
+
+// 토너먼트코드 폴백 폴링 잡 — RIOT_API_KEY 있을 때만 기동(서버 기동은 깨지 않음).
+if (process.env.RIOT_API_KEY) {
+  startTournamentPolling();
+} else {
+  console.warn('RIOT_API_KEY 미설정 — 토너먼트 폴링 잡을 시작하지 않습니다.');
+}
 
 export default app;

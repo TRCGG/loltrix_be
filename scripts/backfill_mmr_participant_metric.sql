@@ -107,8 +107,8 @@ calc AS (
 )
 SELECT
   c.custom_match_id, c.puuid,
-  -- 본계정 병합 player_code: 해당 길드에서 부계정이면 main_account, 아니면 본인 playerCode
-  CASE WHEN gm.is_main = false THEN gm.main_account ELSE ra.player_code END AS player_code,
+  -- 실제 계정 player_code (병합 없음 — TRC-243 A안. 본계정 합산은 조회 시점에 해석)
+  ra.player_code AS player_code,
   c.guild_id, c.season, ch.id AS champion_id,
   c.game_team, c.position, c.game_result, c.played_date,
   c.kills, c.deaths, c.assists, c.double_kills, c.triple_kills, c.quadra_kills, c.penta_kills,
@@ -143,9 +143,5 @@ SELECT
   false AS is_deleted
 FROM calc c
 LEFT JOIN champion ch ON ch.champ_name_eng = c.skin
--- player_code 병합용 조인 (puuid → 본인 playerCode → 길드 본계정)
-LEFT JOIN riot_account ra ON ra.puuid = c.puuid
-LEFT JOIN guild_member gm
-  ON gm.account = ra.player_code
- AND gm.guild_id = c.guild_id
- AND gm.is_deleted = false;
+-- player_code 해석 (puuid → 실제 계정 playerCode)
+LEFT JOIN riot_account ra ON ra.puuid = c.puuid;

@@ -12,7 +12,9 @@ import {
   guildMember,
   summonerSpell,
   perks,
+  guildAuditLog,
 } from '../database/schema.js'; // 스키마 import 추가
+import { subAccountLink } from '../database/subAccountLink.js';
 import { SystemError } from '../types/error.js';
 import { replayService } from './replay.service.js';
 
@@ -263,14 +265,17 @@ export class MatchParticipantService {
   public async getRecentMonthRecord(playerCode: string, guildId: string) {
     // 통계 쿼리 실행
     const statColumns = this.getStatSqlChunks();
+    // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
+    const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
     const [result] = await db
       .select(statColumns)
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .leftJoin(link.table, link.on)
       .where(
         and(
-          eq(matchParticipant.playerCode, playerCode),
+          eq(link.effectivePlayerCode, playerCode),
           eq(customMatch.guildId, guildId),
           eq(matchParticipant.isDeleted, false),
           eq(customMatch.isDeleted, false),
@@ -296,6 +301,8 @@ export class MatchParticipantService {
   public async getLineRecord(playerCode: string, season: string, guildId: string) {
     // 포지션별 통계 집계
     const statColumns = this.getStatSqlChunks();
+    // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
+    const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
     const result = await db
       .select({
@@ -304,9 +311,10 @@ export class MatchParticipantService {
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .leftJoin(link.table, link.on)
       .where(
         and(
-          eq(matchParticipant.playerCode, playerCode),
+          eq(link.effectivePlayerCode, playerCode),
           eq(matchParticipant.isDeleted, false),
           eq(customMatch.isDeleted, false),
           eq(customMatch.guildId, guildId),
@@ -345,9 +353,11 @@ export class MatchParticipantService {
     const statColumns = this.getStatSqlChunks();
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
+    // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
+    const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
     const whereCondition = and(
-      eq(matchParticipant.playerCode, playerCode),
+      eq(link.effectivePlayerCode, playerCode),
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       eq(customMatch.guildId, guildId),
@@ -364,6 +374,7 @@ export class MatchParticipantService {
       .from(matchParticipant)
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .leftJoin(link.table, link.on)
       .where(whereCondition)
       .groupBy(champion.champName, champion.champNameEng)
       .orderBy(desc(sql`count(*)`))
@@ -376,6 +387,7 @@ export class MatchParticipantService {
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .leftJoin(link.table, link.on)
       .where(whereCondition);
 
     const [mostPicks, countResult] = await Promise.all([picksQuery, countQuery]);
@@ -402,8 +414,12 @@ export class MatchParticipantService {
     const keystone = alias(perks, 'keystone');
     const substyle = alias(perks, 'substyle');
 
+    // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
+    // riotAccount도 effective 기준으로 조인해 본캐 계정명으로 노출한다 (기존 응답 유지).
+    const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
+
     const whereCondition = and(
-      eq(matchParticipant.playerCode, playerCode),
+      eq(link.effectivePlayerCode, playerCode),
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       eq(customMatch.guildId, guildId),
@@ -466,7 +482,8 @@ export class MatchParticipantService {
       .from(matchParticipant)
       // Standard Joins
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
+      .leftJoin(link.table, link.on)
+      .innerJoin(riotAccount, eq(riotAccount.playerCode, link.effectivePlayerCode))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       // Left Joins (Alias 사용)
       .leftJoin(sp1, eq(matchParticipant.summonerSpell1, sp1.id))
@@ -483,6 +500,7 @@ export class MatchParticipantService {
       .select({ count: sql<number>`count(*)::integer` })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .leftJoin(link.table, link.on)
       .where(whereCondition);
 
     const [games, countResult] = await Promise.all([gamesQuery, countQuery]);
@@ -500,6 +518,8 @@ export class MatchParticipantService {
     const sp2 = alias(summonerSpell, 'sp2');
     const keystone = alias(perks, 'keystone');
     const substyle = alias(perks, 'substyle');
+    // 링크된 부캐는 본캐 계정명으로 노출 (TRC-243 A안, 기존 응답 유지)
+    const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
     return db
       .select({
@@ -556,7 +576,8 @@ export class MatchParticipantService {
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .innerJoin(riotAccount, eq(matchParticipant.playerCode, riotAccount.playerCode))
+      .leftJoin(link.table, link.on)
+      .innerJoin(riotAccount, eq(riotAccount.playerCode, link.effectivePlayerCode))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       .leftJoin(sp1, eq(matchParticipant.summonerSpell1, sp1.id))
       .leftJoin(sp2, eq(matchParticipant.summonerSpell2, sp2.id))
@@ -597,6 +618,10 @@ export class MatchParticipantService {
     const mpMe = alias(matchParticipant, 'mp_me');
     const mpTeammate = alias(matchParticipant, 'mp_teammate');
 
+    // 부캐 전적 포함: 나·팀원 각각 effective player_code 로 해석 (TRC-243 A안)
+    const linkMe = subAccountLink('link_me', guildId, mpMe.playerCode);
+    const linkTeammate = subAccountLink('link_teammate', guildId, mpTeammate.playerCode);
+
     // 2. 통계 SQL 생성 (팀원 기준 통계)
     const statColumns = this.getStatSqlChunks(mpTeammate);
 
@@ -615,16 +640,18 @@ export class MatchParticipantService {
           eq(mpTeammate.gameTeam, mpMe.gameTeam), // 같은 팀
         ),
       )
-      .innerJoin(riotAccount, eq(mpTeammate.playerCode, riotAccount.playerCode))
+      .leftJoin(linkMe.table, linkMe.on)
+      .leftJoin(linkTeammate.table, linkTeammate.on)
+      .innerJoin(riotAccount, eq(riotAccount.playerCode, linkTeammate.effectivePlayerCode))
       .innerJoin(customMatch, eq(mpTeammate.customMatchId, customMatch.id))
       // Join 2: 팀원의 길드 멤버십 (탈퇴/부계정 제외용)
       .innerJoin(guildMember, eq(riotAccount.playerCode, guildMember.account))
       .where(
         and(
-          // 조건 1: 나는 '나'여야 함
-          eq(mpMe.playerCode, playerCode),
-          // 조건 2: 팀원은 '나'가 아니어야 함
-          ne(mpTeammate.playerCode, playerCode),
+          // 조건 1: 나는 '나'여야 함 (부캐 포함)
+          eq(linkMe.effectivePlayerCode, playerCode),
+          // 조건 2: 팀원은 '나'가 아니어야 함 (내 부캐도 제외)
+          ne(linkTeammate.effectivePlayerCode, playerCode),
           // 조건 3: 시즌 필터
           eq(customMatch.season, season),
           // 조건 4: 삭제되지 않은 데이터
@@ -649,8 +676,13 @@ export class MatchParticipantService {
   /**
    * @desc 게임 기록 소프트 삭제
    * customMatch와 연관된 matchParticipant를 모두 isDeleted = true 처리
+   * @param actor 삭제 수행자 — guild_audit_log에 감사 기록 (웹 세션 memberId 또는 봇 !drop 사용자)
    */
-  public async deleteMatch(gameId: string, guildId: string) {
+  public async deleteMatch(
+    gameId: string,
+    guildId: string,
+    actor: { memberId: string; source: 'web' | 'bot' },
+  ) {
     return db.transaction(async (tx) => {
       // 1. CustomMatch 삭제
       const [deletedMatch] = await tx
@@ -700,6 +732,14 @@ export class MatchParticipantService {
 
       // 3. 연관된 replays 삭제
       await replayService.softDeleteReplayByCode(gameId, tx);
+
+      // 4. 삭제 감사 로그 (append-only) — 누가 어느 게임을 지웠는지
+      await tx.insert(guildAuditLog).values({
+        guildId,
+        eventType: 'replayDelete',
+        actorMemberId: actor.memberId,
+        detail: { gameId, source: actor.source },
+      });
 
       return deletedMatch;
     });

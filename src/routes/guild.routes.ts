@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { requireAdmin } from '../middlewares/requireRole.js';
+import { requireAdmin, requireGuildRole } from '../middlewares/requireRole.js';
+import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 import {
   createGuild,
   getGuildById,
   getAllGuilds,
   updateGuild,
   deleteGuild,
+  updateAllowAllUploads,
 } from '../controllers/guild.controller.js';
 
 const router: Router = Router();
@@ -78,6 +80,18 @@ const deleteGuildSchema = z.object({
       .string()
       .min(1, 'Guild ID is required')
       .max(128, 'Guild ID must be less than 128 characters'),
+  }),
+});
+
+const allowAllUploadsSchema = z.object({
+  params: z.object({
+    guildId: z.string().min(1, 'Guild ID is required').max(128),
+  }),
+  body: z.object({
+    allowAllUploads: z.boolean({
+      required_error: 'allowAllUploads is required',
+      invalid_type_error: 'allowAllUploads must be a boolean',
+    }),
   }),
 });
 
@@ -185,6 +199,53 @@ router.delete(
   requireAdmin('adminNormal'),
   validateRequest(deleteGuildSchema),
   deleteGuild,
+);
+
+/**
+ * @route PATCH /api/guilds/:guildId/allow-all-uploads
+ * @desc allowAllUploads(전체 업로드 허용) 플래그만 토글
+ * @access guildManager 이상 (admin bypass)
+ * @note 기존 PUT /api/guilds/:id(adminNormal)를 넓히지 않고 이 플래그 전용으로 신설
+ */
+router.patch(
+  '/:guildId/allow-all-uploads',
+  /* #swagger.auto = false
+    #swagger.tags = ['Guild']
+    #swagger.summary = 'allowAllUploads 토글'
+    #swagger.description = '[길드 설정: 전체 멤버 업로드 허용 스위치]. ▶ body.allowAllUploads에 원하는 최종 상태(true/false)를 보냅니다. ▶ true면 개별 uploader 권한과 무관하게 모든 멤버가 업로드 가능. ▶ 응답 data는 변경된 길드 객체(allowAllUploads 포함)이니 스위치 상태를 이 값으로 갱신하세요. ▶ guildId는 Base64. ▶ 세션 로그인(guildManager 이상) 필요.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: '전체 업로드 허용 여부',
+      required: true,
+      schema: { allowAllUploads: true }
+    }
+    #swagger.responses[200] = {
+      description: '변경 성공',
+      schema: {
+        status: 'success',
+        message: 'allowAllUploads updated successfully',
+        data: {
+          id: '987654321098765432',
+          name: '내 길드',
+          languageCode: 'ko',
+          allowAllUploads: true,
+          createDate: '2026-01-15T09:00:00.000Z',
+          updateDate: '2026-07-03T12:34:56.000Z',
+          isDeleted: false
+        }
+      }
+    }
+    #swagger.responses[400] = { description: 'allowAllUploads 누락 또는 boolean 아님', schema: { status: 'error', message: 'allowAllUploads must be a boolean', data: null } }
+    #swagger.responses[401] = { description: '미인증 (세션 없음)', schema: { status: 'error', message: 'Unauthorized', data: null } }
+    #swagger.responses[403] = { description: 'guildManager 미만 권한', schema: { status: 'error', message: 'Forbidden: insufficient guild role', data: null } }
+    #swagger.responses[404] = { description: '길드 없음 또는 이미 삭제됨', schema: { status: 'error', message: 'Guild not found or already deleted', data: null } }
+  */
+  decodeGuildIdMiddleware,
+  requireGuildRole('guildManager', { from: 'params', key: 'guildId' }),
+  validateRequest(allowAllUploadsSchema),
+  updateAllowAllUploads,
 );
 
 export default router;

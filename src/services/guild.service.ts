@@ -1,6 +1,6 @@
 // src/services/guild.service.ts
 import { eq, ilike, desc, sql, and } from 'drizzle-orm';
-import { db, TransactionType } from '../database/connectionPool.js';
+import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import { guild, InsertGuild } from '../database/schema.js';
 import { GetGuildsQuery, UpdateGuildRequest } from '../types/guild.js';
 import { SystemError } from '../types/error.js';
@@ -45,8 +45,8 @@ export class GuildService {
   /**
    * @desc ID로 길드 조회
    */
-  public async findGuildById(id: string) {
-    const result = await db
+  public async findGuildById(id: string, executor: DbOrTx = db) {
+    const result = await executor
       .select()
       .from(guild)
       .where(and(eq(guild.id, id), eq(guild.isDeleted, false)))
@@ -89,6 +89,19 @@ export class GuildService {
     const result = await db
       .update(guild)
       .set(updateData)
+      .where(and(eq(guild.id, id), eq(guild.isDeleted, false)))
+      .returning();
+    return result[0];
+  }
+
+  /**
+   * @desc allowAllUploads 플래그만 변경 (guildManager 스코프 전용 엔드포인트에서 사용)
+   * - 전체 길드 수정(updateGuild)은 adminNormal 전용이라, 권한을 넓히지 않도록 이 플래그만 별도 변경.
+   */
+  public async updateAllowAllUploads(id: string, allowAllUploads: boolean) {
+    const result = await db
+      .update(guild)
+      .set({ allowAllUploads, updateDate: new Date() })
       .where(and(eq(guild.id, id), eq(guild.isDeleted, false)))
       .returning();
     return result[0];

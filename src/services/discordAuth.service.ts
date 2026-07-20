@@ -200,7 +200,10 @@ export class DiscordAuthService {
         id: userData.id,
         username: userData.username,
         global_name: userData.global_name,
-        avatar: userData.avatar,
+        // 해시 원본 대신 완성 URL로 반환 (로그인 콜백의 avatar_url 저장 형식과 동일)
+        avatar: userData.avatar
+          ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
+          : null,
       };
     } catch (error) {
       console.error('fetchUser service error', error);
