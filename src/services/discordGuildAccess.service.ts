@@ -26,7 +26,6 @@ const discordApiBaseUrl = 'https://discord.com/api';
 // - 프로세스 로컬 캐시(공유 아님). 인스턴스가 여러 개면 인스턴스별로 존재하지만 TTL로 한계가 있다.
 const GUILD_LIST_TTL_MS = 60 * 1000;
 
-/** 저장된 길드 별명 재조회 주기 — 표시명 용도라 길게 잡는다 (7일) */
 const NICK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const guildListCache = new Map<
   string,
@@ -146,11 +145,7 @@ export class DiscordGuildAccessService {
     return promise;
   }
 
-  /**
-   * Discord 조회 실체: gmok 등록 길드와 유저 가입 길드의 교집합 + nick 확보 (캐시 없이 순수 조회).
-   * nick은 저장값 우선, 미보유·NICK_TTL_MS 경과분만 Discord 조회 — 길드 수만큼 외부 호출이
-   * 나가던 유일한 구간이라 정상 상태에서 0으로 만든다.
-   */
+  /** nick은 저장값 우선, 미보유·TTL 경과분만 Discord 조회 (길드 수만큼 외부 호출이 나가던 구간) */
   private async fetchJoinedGmokGuilds(
     accessToken: string,
     memberId?: string,
@@ -188,7 +183,7 @@ export class DiscordGuildAccessService {
         .catch(() => {});
     }
 
-    // 조회분 우선, 없으면 저장값. 둘 다 없으면 undefined → 상위 캐시가 열화로 보고 evict.
+    // 둘 다 없으면 undefined로 남겨야 상위 캐시가 열화로 보고 evict한다.
     return gmokGuilds.map((g) => ({
       ...g,
       nick: fetchedNickByGuildId.get(g.id) ?? stored.get(g.id)?.nickname ?? undefined,
@@ -221,7 +216,7 @@ export class DiscordGuildAccessService {
   ): DiscordGuildAPI[] {
     const roleByGuildId = new Map(activeRoles.map((r) => [r.guildId, r.role as Role]));
 
-    // permissions는 동기화 판정용 내부 값이라 클라이언트 응답에서 제외한다.
+    // permissions는 내부 판정용이라 응답에서 제외한다.
     return guilds.map(({ permissions, ...g }) => ({
       ...g,
       role: roleByGuildId.get(g.id) ?? ('userNormal' as Role),
@@ -251,7 +246,7 @@ export class DiscordGuildAccessService {
       activeRoles,
     );
 
-    // ensureDefaultRoles 이후에 실행해야 동기화 대상 역할 행이 존재한다.
+    // ensureDefaultRoles 이후여야 동기화 대상 역할 행이 존재한다.
     const syncedRoles = await discordMemberRoleService.syncGuildManagerRoles(
       memberId,
       joinedGmokGuilds.map((g) => ({
@@ -261,8 +256,8 @@ export class DiscordGuildAccessService {
       ensuredRoles,
     );
 
-    // 별명 저장은 실제 Discord에서 새로 받아온 건에 한해 fetchJoinedGmokGuilds가 처리한다
-    // (여기서 전건 upsert하면 update_date가 매번 갱신돼 재조회 TTL이 영원히 리셋된다).
+    // 별명 저장은 fetchJoinedGmokGuilds가 새로 받아온 건만 처리한다
+    // (여기서 전건 upsert하면 update_date가 매번 갱신돼 재조회 TTL이 리셋된다).
     return this.applyRolesToGuilds(joinedGmokGuilds, syncedRoles);
   }
 }

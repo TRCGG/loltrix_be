@@ -13,7 +13,6 @@ import { BusinessError } from '../types/error.js';
 /** guildManager가 웹에서 부여/회수할 수 있는 역할 (권한 상한: userUploader까지) */
 export type ManageableRole = Extract<Role, 'userNormal' | 'userUploader'>;
 
-/** Discord 권한 자동 동기화가 남기는 감사 로그 행위자 (사람이 아님) */
 const SYNC_ACTOR = 'discord_sync';
 
 /**
@@ -72,8 +71,7 @@ export class DiscordMemberRoleService {
   }
 
   /**
-   * @desc Discord 길드 권한 기준으로 guildManager 역할 부여/회수 (TRC-247).
-   * 운영진이면 guildManager로 승격, 아니면 userNormal로 강등한다.
+   * @desc Discord 길드 권한 기준 guildManager 부여/회수.
    * admin 이상과 guildManager 미만의 수동 부여(userUploader)는 건드리지 않는다.
    */
   public async syncGuildManagerRoles(
@@ -90,7 +88,7 @@ export class DiscordMemberRoleService {
       const current = roleByGuildId.get(guildId);
       if (!current) continue;
 
-      // 알 수 없는 role 값은 hasMinRole 판정이 무의미해지므로 조작하지 않는다.
+      // 알 수 없는 role 값은 hasMinRole 판정이 무의미해져 가드가 뚫린다.
       if (!(ROLES as readonly string[]).includes(current.role)) continue;
 
       const currentRole = current.role as Role;

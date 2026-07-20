@@ -73,7 +73,6 @@ export class DiscordGuildNicknameService {
 
       return new Map(rows.map((r) => [r.guildId, { nickname: r.nickname, updateDate: r.updateDate }]));
     } catch (error) {
-      // 실패 시 전부 미보유로 간주 → Discord 재조회로 폴백.
       console.warn(`findNicknames failed (member ${memberId})`, error);
       return new Map();
     }
