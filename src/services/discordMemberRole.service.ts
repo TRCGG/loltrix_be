@@ -13,6 +13,9 @@ import { BusinessError } from '../types/error.js';
 /** guildManager가 웹에서 부여/회수할 수 있는 역할 (권한 상한: userUploader까지) */
 export type ManageableRole = Extract<Role, 'userNormal' | 'userUploader'>;
 
+/** Discord 권한 자동 동기화가 남기는 감사 로그 행위자 (사람이 아님) */
+const SYNC_ACTOR = 'discord_sync';
+
 /**
  * @desc discord_member_role DB 조작 서비스
  */
@@ -66,6 +69,64 @@ export class DiscordMemberRoleService {
       .onConflictDoNothing();
 
     return this.getActiveRoles(memberId);
+  }
+
+  /**
+   * @desc Discord 길드 권한 기준으로 guildManager 역할 부여/회수 (TRC-247).
+   * 운영진이면 guildManager로 승격, 아니면 userNormal로 강등한다.
+   * admin 이상과 guildManager 미만의 수동 부여(userUploader)는 건드리지 않는다.
+   */
+  public async syncGuildManagerRoles(
+    memberId: string,
+    guildManagerFlags: { guildId: string; isDiscordManager: boolean }[],
+    activeRoles: DiscordMemberRole[],
+  ): Promise<DiscordMemberRole[]> {
+    if (activeRoles.some((r) => ADMIN_ROLES.includes(r.role as Role))) return activeRoles;
+
+    const roleByGuildId = new Map(activeRoles.map((r) => [r.guildId, r]));
+    let changed = false;
+
+    for (const { guildId, isDiscordManager } of guildManagerFlags) {
+      const current = roleByGuildId.get(guildId);
+      if (!current) continue;
+
+      // 알 수 없는 role 값은 hasMinRole 판정이 무의미해지므로 조작하지 않는다.
+      if (!(ROLES as readonly string[]).includes(current.role)) continue;
+
+      const currentRole = current.role as Role;
+      if (hasMinRole(currentRole, 'adminNormal')) continue;
+
+      const isManagerRole = currentRole === 'guildManager';
+      if (isDiscordManager === isManagerRole) continue;
+
+      const toRole: Role = isDiscordManager ? 'guildManager' : 'userNormal';
+
+      try {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(discordMemberRole)
+            .set({ role: toRole, updateDate: new Date() })
+            .where(eq(discordMemberRole.id, current.id));
+
+          await tx.insert(guildAuditLog).values({
+            guildId,
+            eventType: 'roleChange',
+            actorMemberId: SYNC_ACTOR,
+            targetMemberId: memberId,
+            detail: { fromRole: currentRole, toRole, source: 'discordPermission' },
+          });
+        });
+        changed = true;
+      } catch (error) {
+        // 한 길드 실패가 길드 목록 응답을 막지 않도록 격리.
+        console.error(
+          `[roleSync] 동기화 실패 member=${memberId} guild=${guildId} ${currentRole}→${toRole}`,
+          error,
+        );
+      }
+    }
+
+    return changed ? this.getActiveRoles(memberId) : activeRoles;
   }
 
   /**

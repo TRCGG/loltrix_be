@@ -6,6 +6,7 @@ import { DiscordMemberRole } from '../database/schema.js';
 import { SystemError } from '../types/error.js';
 import { DiscordGuildAPI, DiscordGuildWithoutRole } from '../types/discordAuth.js';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
+import { isDiscordGuildManager } from '../utils/discordPermission.js';
 
 const guildService = new GuildService();
 
@@ -24,6 +25,9 @@ const discordApiBaseUrl = 'https://discord.com/api';
 //   다음 요청이 재시도하게 한다(일시 장애가 TTL만큼 증폭되는 것 방지).
 // - 프로세스 로컬 캐시(공유 아님). 인스턴스가 여러 개면 인스턴스별로 존재하지만 TTL로 한계가 있다.
 const GUILD_LIST_TTL_MS = 60 * 1000;
+
+/** 저장된 길드 별명 재조회 주기 — 표시명 용도라 길게 잡는다 (7일) */
+const NICK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const guildListCache = new Map<
   string,
   { promise: Promise<DiscordGuildWithoutRole[]>; expiresAt: number }
@@ -54,6 +58,7 @@ export class DiscordGuildAccessService {
         name: guild.name,
         icon: guild.icon,
         banner: guild.banner,
+        permissions: guild.permissions,
       }));
     } catch (error) {
       console.error('fetchUserGuilds service error', error);
@@ -111,7 +116,7 @@ export class DiscordGuildAccessService {
       if (cached && cached.expiresAt > Date.now()) return cached.promise;
     }
 
-    const promise = this.fetchJoinedGmokGuilds(accessToken);
+    const promise = this.fetchJoinedGmokGuilds(accessToken, memberId);
 
     if (memberId) {
       const key = memberId;
@@ -141,8 +146,15 @@ export class DiscordGuildAccessService {
     return promise;
   }
 
-  /** Discord 조회 실체: gmok 등록 길드와 유저 가입 길드의 교집합 + nick enrich (캐시 없이 순수 조회) */
-  private async fetchJoinedGmokGuilds(accessToken: string): Promise<DiscordGuildWithoutRole[]> {
+  /**
+   * Discord 조회 실체: gmok 등록 길드와 유저 가입 길드의 교집합 + nick 확보 (캐시 없이 순수 조회).
+   * nick은 저장값 우선, 미보유·NICK_TTL_MS 경과분만 Discord 조회 — 길드 수만큼 외부 호출이
+   * 나가던 유일한 구간이라 정상 상태에서 0으로 만든다.
+   */
+  private async fetchJoinedGmokGuilds(
+    accessToken: string,
+    memberId?: string,
+  ): Promise<DiscordGuildWithoutRole[]> {
     const [gmokGuildsResponse, userDiscordGuilds] = await Promise.all([
       guildService.findAllGuilds({ page: 1, limit: 1000 }),
       this.fetchUserGuilds(accessToken),
@@ -151,7 +163,36 @@ export class DiscordGuildAccessService {
     const gmokGuildIdSet = new Set(gmokGuildsResponse.result.map((g) => g.id));
     const gmokGuilds = userDiscordGuilds.filter((g) => gmokGuildIdSet.has(g.id));
 
-    return this.enrichWithNick(gmokGuilds, accessToken);
+    if (!memberId) return this.enrichWithNick(gmokGuilds, accessToken);
+
+    const stored = await discordGuildNicknameService.findNicknames(
+      memberId,
+      gmokGuilds.map((g) => g.id),
+    );
+    const freshBefore = Date.now() - NICK_TTL_MS;
+    const isFresh = (guildId: string) => {
+      const row = stored.get(guildId);
+      return !!row?.nickname && !!row.updateDate && row.updateDate.getTime() > freshBefore;
+    };
+
+    const staleGuilds = gmokGuilds.filter((g) => !isFresh(g.id));
+    const fetched = await this.enrichWithNick(staleGuilds, accessToken);
+    const fetchedNickByGuildId = new Map(fetched.map((g) => [g.id, g.nick]));
+
+    if (fetched.length > 0) {
+      discordGuildNicknameService
+        .upsertGuildNicknames(
+          memberId,
+          fetched.map((g) => ({ guildId: g.id, nickname: g.nick })),
+        )
+        .catch(() => {});
+    }
+
+    // 조회분 우선, 없으면 저장값. 둘 다 없으면 undefined → 상위 캐시가 열화로 보고 evict.
+    return gmokGuilds.map((g) => ({
+      ...g,
+      nick: fetchedNickByGuildId.get(g.id) ?? stored.get(g.id)?.nickname ?? undefined,
+    }));
   }
 
   /**
@@ -180,7 +221,8 @@ export class DiscordGuildAccessService {
   ): DiscordGuildAPI[] {
     const roleByGuildId = new Map(activeRoles.map((r) => [r.guildId, r.role as Role]));
 
-    return guilds.map((g) => ({
+    // permissions는 동기화 판정용 내부 값이라 클라이언트 응답에서 제외한다.
+    return guilds.map(({ permissions, ...g }) => ({
       ...g,
       role: roleByGuildId.get(g.id) ?? ('userNormal' as Role),
     }));
@@ -189,8 +231,7 @@ export class DiscordGuildAccessService {
   /**
    * @desc 로그인 유저의 gmok 길드 목록(길드별 role 포함)을 반환 — getGmokGuilds 컨트롤러의 오케스트레이션.
    *  흐름: 활성 권한 조회 → (admin이면 전체 gmok 길드 / 아니면 가입 gmok 길드 조회 + 기본권한 보정)
-   *        → 멤버관리 표시용 nick upsert(fire-and-forget) → 길드별 role 적용.
-   *  동작은 기존 컨트롤러 인라인 로직과 동일. Discord 외부 호출은 findJoinedGmokGuilds 캐시로 상각됨.
+   *        → Discord 권한 기준 guildManager 동기화 → 길드별 role 적용.
    */
   public async getGmokGuildsForMember(
     memberId: string,
@@ -210,16 +251,19 @@ export class DiscordGuildAccessService {
       activeRoles,
     );
 
-    // 멤버 관리 화면 식별용 길드 별명 저장 (best-effort). 응답을 막지 않도록 fire-and-forget
-    // (서비스 내부에서 이미 에러 로깅 — 여기선 unhandled rejection만 방지).
-    discordGuildNicknameService
-      .upsertGuildNicknames(
-        memberId,
-        joinedGmokGuilds.map((g) => ({ guildId: g.id, nickname: g.nick })),
-      )
-      .catch(() => {});
+    // ensureDefaultRoles 이후에 실행해야 동기화 대상 역할 행이 존재한다.
+    const syncedRoles = await discordMemberRoleService.syncGuildManagerRoles(
+      memberId,
+      joinedGmokGuilds.map((g) => ({
+        guildId: g.id,
+        isDiscordManager: isDiscordGuildManager(g.permissions),
+      })),
+      ensuredRoles,
+    );
 
-    return this.applyRolesToGuilds(joinedGmokGuilds, ensuredRoles);
+    // 별명 저장은 실제 Discord에서 새로 받아온 건에 한해 fetchJoinedGmokGuilds가 처리한다
+    // (여기서 전건 upsert하면 update_date가 매번 갱신돼 재조회 TTL이 영원히 리셋된다).
+    return this.applyRolesToGuilds(joinedGmokGuilds, syncedRoles);
   }
 }
 

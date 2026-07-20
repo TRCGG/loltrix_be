@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
 import { discordGuildMember } from '../database/schema.js';
 
@@ -38,13 +38,44 @@ export class DiscordGuildNicknameService {
           target: [discordGuildMember.memberId, discordGuildMember.guildId],
           set: {
             nickname: sql`excluded.nickname`,
+            // 값이 그대로여도 update_date를 갱신해야 재조회 TTL이 리셋된다
+            // (안 그러면 별명이 안 바뀐 멤버가 영구히 stale로 판정돼 매번 Discord를 다시 탄다).
             updateDate: new Date(),
           },
-          where: sql`${discordGuildMember.nickname} IS DISTINCT FROM excluded.nickname`,
         });
     } catch (error) {
       // 별명은 부가정보 → 저장 실패해도 길드 조회 흐름은 진행. 추적 위해 로깅만.
       console.warn(`upsertGuildNicknames failed (member ${memberId})`, error);
+    }
+  }
+
+  /** @desc 저장된 길드별 별명 조회 (재조회 대상 판정용) */
+  public async findNicknames(
+    memberId: string,
+    guildIds: string[],
+  ): Promise<Map<string, { nickname: string | null; updateDate: Date | null }>> {
+    if (guildIds.length === 0) return new Map();
+
+    try {
+      const rows = await db
+        .select({
+          guildId: discordGuildMember.guildId,
+          nickname: discordGuildMember.nickname,
+          updateDate: discordGuildMember.updateDate,
+        })
+        .from(discordGuildMember)
+        .where(
+          and(
+            eq(discordGuildMember.memberId, memberId),
+            inArray(discordGuildMember.guildId, guildIds),
+          ),
+        );
+
+      return new Map(rows.map((r) => [r.guildId, { nickname: r.nickname, updateDate: r.updateDate }]));
+    } catch (error) {
+      // 실패 시 전부 미보유로 간주 → Discord 재조회로 폴백.
+      console.warn(`findNicknames failed (member ${memberId})`, error);
+      return new Map();
     }
   }
 }
