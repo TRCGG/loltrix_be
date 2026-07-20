@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { verifyAuth } from '../middlewares/authHandler.js';
 import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 import { requireUploadPermission } from '../middlewares/requireRole.js';
 
@@ -196,7 +195,6 @@ router.post(
     #swagger.responses[401] = { description: '인증 실패' }
     #swagger.responses[403] = { description: '업로드 권한 부족' }
   */
-  verifyAuth,
   upload.array('files', 10),
   validateRequest(webCreateReplaySchema),
   requireUploadPermission({ from: 'body', key: 'guildId' }),

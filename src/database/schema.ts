@@ -149,18 +149,22 @@ export type InsertDiscordToken = typeof discordToken.$inferInsert;
  * 인증 세션 정보
  * discord_member 테이블의 id를 참조합니다.
  */
-export const authSession = pgTable('auth_session', {
-  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
-  discordMemberId: text('discord_member_id').notNull(),
-  sessionUid: uuid('session_uid').defaultRandom().notNull(),
-  userAgent: text('user_agent'),
-  ipAddr: text('ip_addr'),
-  deviceName: text('device_name'),
-  isActive: boolean('is_active').default(true),
-  expiresDate: timestamp('expires_date', { withTimezone: true }).notNull(),
-  createDate: timestamp('create_date', { withTimezone: true }).defaultNow(),
-  updateDate: timestamp('update_date', { withTimezone: true }).defaultNow(),
-});
+export const authSession = pgTable(
+  'auth_session',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    discordMemberId: text('discord_member_id').notNull(),
+    sessionUid: uuid('session_uid').defaultRandom().notNull(),
+    userAgent: text('user_agent'),
+    ipAddr: text('ip_addr'),
+    deviceName: text('device_name'),
+    isActive: boolean('is_active').default(true),
+    expiresDate: timestamp('expires_date', { withTimezone: true }).notNull(),
+    createDate: timestamp('create_date', { withTimezone: true }).defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true }).defaultNow(),
+  },
+  (t) => [index('idx_auth_session_uid').on(t.sessionUid)],
+);
 
 export type AuthSession = typeof authSession.$inferSelect;
 export type InsertAuthSession = typeof authSession.$inferInsert;
