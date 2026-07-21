@@ -13,6 +13,8 @@ import { BusinessError } from '../types/error.js';
 /** guildManager가 웹에서 부여/회수할 수 있는 역할 (권한 상한: userUploader까지) */
 export type ManageableRole = Extract<Role, 'userNormal' | 'userUploader'>;
 
+const SYNC_ACTOR = 'discord_sync';
+
 /**
  * @desc discord_member_role DB 조작 서비스
  */
@@ -66,6 +68,76 @@ export class DiscordMemberRoleService {
       .onConflictDoNothing();
 
     return this.getActiveRoles(memberId);
+  }
+
+  /**
+   * @desc Discord 길드 권한 기준 guildManager 부여/회수.
+   * admin 이상과 guildManager 미만의 수동 부여(userUploader)는 건드리지 않는다.
+   */
+  public async syncGuildManagerRoles(
+    memberId: string,
+    guildManagerFlags: { guildId: string; isDiscordManager: boolean }[],
+    activeRoles: DiscordMemberRole[],
+  ): Promise<DiscordMemberRole[]> {
+    if (activeRoles.some((r) => ADMIN_ROLES.includes(r.role as Role))) return activeRoles;
+
+    const roleByGuildId = new Map(activeRoles.map((r) => [r.guildId, r]));
+    let changed = false;
+
+    for (const { guildId, isDiscordManager } of guildManagerFlags) {
+      const current = roleByGuildId.get(guildId);
+      if (!current) continue;
+
+      // 알 수 없는 role 값은 hasMinRole 판정이 무의미해져 가드가 뚫린다.
+      if (!(ROLES as readonly string[]).includes(current.role)) continue;
+
+      const snapshotRole = current.role as Role;
+      if (hasMinRole(snapshotRole, 'adminNormal')) continue;
+      if (isDiscordManager === (snapshotRole === 'guildManager')) continue;
+
+      try {
+        // 스냅샷은 트랜잭션 밖에서 읽은 값이라 그대로 쓰면 동시 요청끼리 감사 로그가 중복되고,
+        // 사이에 낀 수동 부여를 덮어쓰며 fromRole까지 틀리게 남는다. 잠근 뒤 다시 판정한다.
+        const applied = await db.transaction(async (tx) => {
+          const [locked] = await tx
+            .select()
+            .from(discordMemberRole)
+            .where(and(eq(discordMemberRole.id, current.id), eq(discordMemberRole.isDeleted, false)))
+            .limit(1)
+            .for('update');
+
+          if (!locked || !(ROLES as readonly string[]).includes(locked.role)) return false;
+
+          const lockedRole = locked.role as Role;
+          if (hasMinRole(lockedRole, 'adminNormal')) return false;
+          if (isDiscordManager === (lockedRole === 'guildManager')) return false;
+
+          const toRole: Role = isDiscordManager ? 'guildManager' : 'userNormal';
+
+          await tx
+            .update(discordMemberRole)
+            .set({ role: toRole, updateDate: new Date() })
+            .where(eq(discordMemberRole.id, locked.id));
+
+          await tx.insert(guildAuditLog).values({
+            guildId,
+            eventType: 'roleChange',
+            actorMemberId: SYNC_ACTOR,
+            targetMemberId: memberId,
+            detail: { fromRole: lockedRole, toRole, source: 'discordPermission' },
+          });
+
+          return true;
+        });
+
+        if (applied) changed = true;
+      } catch (error) {
+        // 한 길드 실패가 길드 목록 응답을 막지 않도록 격리.
+        console.error(`[roleSync] 동기화 실패 member=${memberId} guild=${guildId}`, error);
+      }
+    }
+
+    return changed ? this.getActiveRoles(memberId) : activeRoles;
   }
 
   /**
