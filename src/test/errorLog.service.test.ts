@@ -1,20 +1,30 @@
-import { Request } from 'express';
-import {
-  logError,
-  logErrorFromRequest,
-  extractRequestData,
-  ErrorLogData,
-} from '../services/errorLog.service.js';
-import { db } from '../database/connectionPool.js';
-import { errorLog } from '../database/schema.js';
+import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import type { Request } from 'express';
 
-// Mock database
-jest.mock('../database/connectionPool.js');
-const mockDb = db as jest.Mocked<typeof db>;
+// 소스가 ESM 이라 jest.mock 호이스팅이 동작하지 않는다.
+// unstable_mockModule 로 등록한 뒤 대상 모듈을 동적 import 해야 목이 적용된다.
+type AsyncFn = (...args: any[]) => Promise<any>;
+
+const values = jest.fn<AsyncFn>();
+const insert = jest.fn<(table: unknown) => { values: typeof values }>(() => ({ values }));
+
+jest.unstable_mockModule('../database/connectionPool.js', () => ({
+  db: { insert },
+}));
+
+const { logError, logErrorFromRequest, extractRequestData } = await import(
+  '../services/errorLog.service.js'
+);
+const { errorLog } = await import('../database/schema.js');
+
+type ErrorLogData = Parameters<typeof logError>[0];
+
+// ERR-YYMMDD-<nanoid 6자> — nanoid 기본 알파벳은 A-Za-z0-9_-
+const ERROR_CODE_PATTERN = /^ERR-\d{6}-[\w-]{6}$/;
 
 describe('Error Log Service Tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    values.mockResolvedValue([]);
   });
 
   describe('extractRequestData', () => {
@@ -23,7 +33,7 @@ describe('Error Log Service Tests', () => {
         method: 'POST',
         url: '/api/test',
         originalUrl: '/api/test?param=value',
-        get: jest.fn((header) => {
+        get: jest.fn((header: string) => {
           switch (header) {
             case 'user-agent':
               return 'Mozilla/5.0';
@@ -79,21 +89,6 @@ describe('Error Log Service Tests', () => {
 
   describe('logError', () => {
     test('should log error and return tracking code', async () => {
-      // Mock generateErrorCode
-      const mockSelect = {
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([]),
-      };
-
-      const mockInsert = {
-        values: jest.fn().mockResolvedValue([{ errorCode: 'ERR-20250925-001' }]),
-      };
-
-      mockDb.select = jest.fn().mockReturnValue(mockSelect);
-      mockDb.insert = jest.fn().mockReturnValue(mockInsert);
-
       const errorData: ErrorLogData = {
         error: {
           message: 'Test error',
@@ -106,9 +101,9 @@ describe('Error Log Service Tests', () => {
 
       const result = await logError(errorData);
 
-      expect(result).toMatch(/^ERR-\d{8}-\d{3}$/);
-      expect(mockDb.insert).toHaveBeenCalledWith(errorLog);
-      expect(mockInsert.values).toHaveBeenCalledWith(
+      expect(result).toMatch(ERROR_CODE_PATTERN);
+      expect(insert).toHaveBeenCalledWith(errorLog);
+      expect(values).toHaveBeenCalledWith(
         expect.objectContaining({
           errorCode: expect.any(String),
           error: errorData.error,
@@ -121,20 +116,6 @@ describe('Error Log Service Tests', () => {
 
   describe('logErrorFromRequest', () => {
     test('should log error from Express request', async () => {
-      const mockSelect = {
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([]),
-      };
-
-      const mockInsert = {
-        values: jest.fn().mockResolvedValue([]),
-      };
-
-      mockDb.select = jest.fn().mockReturnValue(mockSelect);
-      mockDb.insert = jest.fn().mockReturnValue(mockInsert);
-
       const error = new Error('Test error');
       const req = {
         method: 'POST',
@@ -145,13 +126,14 @@ describe('Error Log Service Tests', () => {
         query: {},
         params: {},
         ip: '127.0.0.1',
-        connection: { remoteAddress: '127.0.0.1' },
+        socket: { remoteAddress: '127.0.0.1' },
+        headers: {},
       } as unknown as Request;
 
       const result = await logErrorFromRequest(error, req, 500);
 
-      expect(result).toMatch(/^ERR-\d{8}-\d{3}$/);
-      expect(mockInsert.values).toHaveBeenCalledWith(
+      expect(result).toMatch(ERROR_CODE_PATTERN);
+      expect(values).toHaveBeenCalledWith(
         expect.objectContaining({
           error: expect.objectContaining({
             message: 'Test error',
@@ -171,20 +153,6 @@ describe('Error Log Service Tests', () => {
     });
 
     test('should classify 4xx errors as warnings', async () => {
-      const mockSelect = {
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue([]),
-      };
-
-      const mockInsert = {
-        values: jest.fn().mockResolvedValue([]),
-      };
-
-      mockDb.select = jest.fn().mockReturnValue(mockSelect);
-      mockDb.insert = jest.fn().mockReturnValue(mockInsert);
-
       const error = new Error('Client error');
       const req = {
         method: 'GET',
@@ -195,11 +163,13 @@ describe('Error Log Service Tests', () => {
         query: {},
         params: {},
         ip: '127.0.0.1',
-      } as Partial<Request> as Request;
+        socket: { remoteAddress: '127.0.0.1' },
+        headers: {},
+      } as unknown as Request;
 
       await logErrorFromRequest(error, req, 400);
 
-      expect(mockInsert.values).toHaveBeenCalledWith(
+      expect(values).toHaveBeenCalledWith(
         expect.objectContaining({
           severity: 'warning',
           status: 400,
