@@ -114,6 +114,63 @@ describe('Error Log Service Tests', () => {
     });
   });
 
+  // 이 함수가 reject하면 컨트롤러 catch 안에서 unhandledRejection이 되어
+  // 응답을 못 내보낸 채 프로세스가 죽는다. 절대 던지지 않는지 고정한다.
+  describe('logError - DB 기록 실패 시 폴백', () => {
+    test('throw하지 않고 null을 반환한다', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      values.mockRejectedValue(
+        Object.assign(new Error('Failed query: insert into error_log ...'), {
+          cause: { code: '22P05' },
+        }),
+      );
+
+      await expect(logError({ error: { message: 'BOOM' }, status: 500 })).resolves.toBeNull();
+
+      consoleError.mockRestore();
+    });
+
+    test('원본 에러와 SQLSTATE를 stderr에 남긴다', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      values.mockRejectedValue(
+        Object.assign(new Error('Failed query: insert into error_log ...'), {
+          cause: { code: '22P05' },
+        }),
+      );
+
+      await logError({ error: { message: 'BOOM' }, status: 500 });
+
+      const logged = consoleError.mock.calls[0].map(String).join(' ');
+      expect(logged).toContain('[error_log FALLBACK]');
+      expect(logged).toContain('BOOM'); // 원본 에러가 유실되지 않는다
+      expect(logged).toContain('22P05'); // 원인 특정에 필요한 SQLSTATE
+
+      consoleError.mockRestore();
+    });
+
+    test('logErrorFromRequest도 동일하게 null을 반환한다', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      values.mockRejectedValue(new Error('insert failed'));
+
+      const req = {
+        method: 'GET',
+        url: '/api/auth/guilds',
+        originalUrl: '/api/auth/guilds',
+        get: jest.fn(),
+        body: {},
+        query: {},
+        params: {},
+        ip: '127.0.0.1',
+        socket: { remoteAddress: '127.0.0.1' },
+        headers: {},
+      } as unknown as Request;
+
+      await expect(logErrorFromRequest(new Error('controller error'), req, 500)).resolves.toBeNull();
+
+      consoleError.mockRestore();
+    });
+  });
+
   describe('logErrorFromRequest', () => {
     test('should log error from Express request', async () => {
       const error = new Error('Test error');

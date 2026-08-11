@@ -63,23 +63,43 @@ export const extractRequestData = (req: Request): ErrorLogData['request'] => ({
 });
 
 /**
- * @desc 에러를 데이터베이스에 로깅하고 추적 코드 반환
+ * @desc 에러를 데이터베이스에 로깅하고 추적 코드 반환 (실패 시 null)
+ * 여기서 reject하면 안 된다 — 컨트롤러의 catch 블록 안에서 호출되는 자리가 있어
+ * (discordAuth.controller의 getGmokGuilds·getSelfProfile) 감싸는 try가 없고,
+ * unhandledRejection 핸들러도 없어 응답을 못 내보낸 채 프로세스가 죽는다.
+ * DB 기록이 깨져도 원본 에러는 stderr로 남겨 집계에서 누락되지 않게 한다.
  */
-export const logError = async (errorData: ErrorLogData): Promise<string> => {
+export const logError = async (errorData: ErrorLogData): Promise<string | null> => {
   const errorCode = generateErrorCode();
 
-  await db.insert(errorLog).values({
-    errorCode,
-    error: errorData.error,
-    request: errorData.request,
-    userAgent: errorData.userAgent,
-    ipAddress: errorData.ipAddress,
-    userId: errorData.userId,
-    severity: errorData.severity || 'error',
-    status: errorData.status || 500,
-  });
+  try {
+    await db.insert(errorLog).values({
+      errorCode,
+      error: errorData.error,
+      request: errorData.request,
+      userAgent: errorData.userAgent,
+      ipAddress: errorData.ipAddress,
+      userId: errorData.userId,
+      severity: errorData.severity || 'error',
+      status: errorData.status || 500,
+    });
 
-  return errorCode;
+    return errorCode;
+  } catch (dbError) {
+    // DrizzleQueryError는 SQL만 노출하므로 원인 특정은 cause의 SQLSTATE로만 가능하다.
+    const pgCode = (dbError as any)?.cause?.code ?? (dbError as any)?.code;
+    console.error(
+      `[error_log FALLBACK] code=${errorCode} pgCode=${pgCode}`,
+      '\n  original:',
+      JSON.stringify(errorData.error),
+      '\n  request :',
+      JSON.stringify(errorData.request),
+      '\n  cause   :',
+      dbError,
+    );
+
+    return null;
+  }
 };
 
 /**
@@ -89,7 +109,7 @@ export const logErrorFromRequest = async (
   error: Error,
   req: Request,
   status?: number,
-): Promise<string> => {
+): Promise<string | null> => {
   const requestData = extractRequestData(req);
 
   // 에러 타입 판별
