@@ -81,11 +81,14 @@ export class TournamentService {
     const callbackUrl = this.callbackUrl;
 
     // 1. Riot provider 등록 → provider id.
-    const providerId = await registerProvider({ region, url: callbackUrl });
+    const providerId = await registerProvider({ region, url: callbackUrl }, 'service.tournament');
     await db.insert(tournamentProvider).values({ providerId, region, callbackUrl });
 
     // 2. Riot tournament 등록 → tournament id.
-    const tournamentId = await registerTournament({ name: this.tournamentName, providerId });
+    const tournamentId = await registerTournament(
+      { name: this.tournamentName, providerId },
+      'service.tournament',
+    );
     await db.insert(tournament).values({ tournamentId, providerId, name: this.tournamentName });
 
     return { providerId, tournamentId };
@@ -124,7 +127,11 @@ export class TournamentService {
       metadata: JSON.stringify(metadata),
     };
 
-    const codes = await createTournamentCodes(tournamentId, codeParams);
+    const codes = await createTournamentCodes(
+      tournamentId,
+      codeParams,
+      `service.tournament.issue.${source}`,
+    );
 
     if (!codes || codes.length === 0) {
       throw new SystemError('Riot가 발급한 코드가 없습니다.', 502);

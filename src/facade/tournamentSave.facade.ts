@@ -35,9 +35,10 @@ export class TournamentSaveFacade {
   public async ingestByMatchId(
     code: TournamentCode,
     matchId: string,
+    caller: string,
   ): Promise<TournamentIngestResult> {
     // Riot에서 match-v5 재조회 (읽기 — 트랜잭션 밖).
-    const matchV5 = await getMatch(matchId);
+    const matchV5 = await getMatch(matchId, caller);
 
     // 재검증: tournamentCode 대조. 불일치 시 적재하지 않는다.
     if (matchV5.info?.tournamentCode !== code.code) {
@@ -48,7 +49,7 @@ export class TournamentSaveFacade {
     // match_v5_raw.timeline_json NULL로 남고 추후 backfill 가능.
     let timeline: MatchTimelineDto | null = null;
     try {
-      timeline = await getMatchTimeline(matchId);
+      timeline = await getMatchTimeline(matchId, caller);
     } catch (error) {
       console.warn(`[tournamentSave] timeline 조회 실패(원본은 NULL로 적재) matchId=${matchId}`, error);
     }
