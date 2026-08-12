@@ -22,7 +22,7 @@ const MatchparticipantSchema = z.object({
   PUUID: z.string().max(64),
   SKIN: z.string().max(16),
   TEAM: z.string().max(8),
-  WIN: z.string().max(8),
+  WIN: z.string().max(32),
   TEAM_POSITION: z.string().max(16),
   CHAMPIONS_KILLED: z.string(),
   NUM_DEATHS: z.string(),
