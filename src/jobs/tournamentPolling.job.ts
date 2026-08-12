@@ -23,6 +23,7 @@ import { systemConfigService } from '../services/systemConfig.service.js';
 const DEFAULT_CRON = '*/5 * * * *';
 const DEFAULT_MIN_AGE_HOURS = 1;
 const DEFAULT_EXPIRE_HOURS = 3;
+const POLLING_CALLER = 'job.tournamentPolling';
 
 let task: ScheduledTask | null = null;
 
@@ -69,7 +70,7 @@ export async function runTournamentPollingOnce(): Promise<void> {
 
   for (const codeRow of dueCodes) {
     try {
-      const games = await getGamesByCode(codeRow.code);
+      const games = await getGamesByCode(codeRow.code, POLLING_CALLER);
       const game = (games ?? []).find((g) => g.gameId !== undefined && g.gameId !== null);
       if (!game || game.gameId === undefined || game.gameId === null) {
         // 아직 경기가 잡히지 않음 — 다음 주기에 재시도.
@@ -79,7 +80,7 @@ export async function runTournamentPollingOnce(): Promise<void> {
       const region = game.region || fallbackRegion;
       const matchId = `${region}_${game.gameId}`;
 
-      const result = await tournamentSaveFacade.ingestByMatchId(codeRow, matchId);
+      const result = await tournamentSaveFacade.ingestByMatchId(codeRow, matchId, POLLING_CALLER);
       if (result.status === 'ok') {
         console.log(
           `[tournamentPolling] 회수 완료 code=${codeRow.code} matchId=${matchId} loaded=${result.loaded}`,
