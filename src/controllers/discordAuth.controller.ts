@@ -6,7 +6,7 @@ import { AuthRequest } from '../middlewares/authHandler.js';
 import { DiscordGuildAccessService } from '../services/discordGuildAccess.service.js';
 import { DiscordGuildAPIResponse } from '../types/discordAuth.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
-import { getCookieOptions } from '../utils/cookieOptions.js';
+import { getCookieOptions, getClearCookieOptions } from '../utils/cookieOptions.js';
 import { logErrorFromRequest } from '../services/errorLog.service.js';
 
 const discordAuthService = new DiscordAuthService();
@@ -77,7 +77,10 @@ export const callback = async (
 export const logout = async (req: Request, res: Response<void>) => {
   try {
     const sessionUid = req.cookies.session_uid;
-    const [frontendUrl, cookieOptions] = await Promise.all([getFrontendUrl(), getCookieOptions()]);
+    const [frontendUrl, cookieOptions] = await Promise.all([
+      getFrontendUrl(),
+      getClearCookieOptions(),
+    ]);
     res.clearCookie('session_uid', cookieOptions);
 
     if (sessionUid) {
@@ -87,7 +90,10 @@ export const logout = async (req: Request, res: Response<void>) => {
     return res.redirect(frontendUrl);
   } catch (error) {
     console.error('error during logout process', error);
-    const [frontendUrl, cookieOptions] = await Promise.all([getFrontendUrl(), getCookieOptions()]);
+    const [frontendUrl, cookieOptions] = await Promise.all([
+      getFrontendUrl(),
+      getClearCookieOptions(),
+    ]);
     res.clearCookie('session_uid', cookieOptions);
     return res.redirect(frontendUrl);
   }
