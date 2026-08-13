@@ -60,7 +60,7 @@ export const handleRiotCallback = async (
     //    match-v5 재조회 → info.tournamentCode 대조 → 단일 트랜잭션 적재 + COMPLETED 전이까지
     //    파사드가 담당한다(상태 전이가 적재 트랜잭션 안에 있어 적재 실패 시 PENDING 유지).
     const matchId = `${region}_${gameId}`;
-    const result = await tournamentSaveFacade.ingestByMatchId(pending, matchId);
+    const result = await tournamentSaveFacade.ingestByMatchId(pending, matchId, 'callback.riot');
 
     if (result.status === 'ignored') {
       return res.status(200).json({ status: 'ignored', reason: result.reason });

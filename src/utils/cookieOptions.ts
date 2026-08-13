@@ -17,3 +17,9 @@ export async function getCookieOptions() {
     maxAge,
   };
 }
+
+// maxAge를 남기면 express가 삭제용 expires를 그 값으로 덮어써서 쿠키가 안 지워진다.
+export async function getClearCookieOptions() {
+  const { maxAge, ...rest } = await getCookieOptions();
+  return rest;
+}

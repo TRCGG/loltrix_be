@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { DiscordAuthService } from '../services/discordAuth.service.js';
 import { BusinessError } from '../types/error.js';
-import { getCookieOptions } from '../utils/cookieOptions.js';
+import { getClearCookieOptions } from '../utils/cookieOptions.js';
 
 const discordAuthService = new DiscordAuthService();
 const botSecret = process.env.DISCORD_BOT_SECRET;
@@ -78,7 +78,7 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
     return next();
   } catch (error) {
     if (error instanceof BusinessError && error.status === 401) {
-      const cookieOptions = await getCookieOptions();
+      const cookieOptions = await getClearCookieOptions();
       res.clearCookie('session_uid', cookieOptions);
     }
     return next(error);
