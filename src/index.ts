@@ -6,7 +6,6 @@ import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import swaggerUi from 'swagger-ui-express';
 import { createRequire } from 'module';
@@ -50,18 +49,6 @@ app.use(express.static(path.join(currentDirname, '../loltrix'))); // set static 
 app.use(express.json()); // Parse JSON request body
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded request body
 app.use(cookieParser(process.env.COOKIE_SECRET)); // Parse Cookie info
-app.use(
-  session({
-    secret: process.env.COOKIE_SECRET || 'secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 3600,
-    },
-  }),
-);
 app.use(compression()); // Compress all routes
 // Enable CORS
 app.use(

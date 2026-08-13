@@ -136,7 +136,7 @@ pnpm dev
 | `DB_MAX_CONNECTIONS` | X | `20` | 최대 커넥션 수 |
 | `DB_IDLE_TIMEOUT` | X | `30000` | 유휴 타임아웃 (ms) |
 | `DB_CONNECTION_TIMEOUT` | X | `2000` | 연결 타임아웃 (ms) |
-| `COOKIE_SECRET` | O | - | 세션 쿠키 암호화 키 |
+| `COOKIE_SECRET` | O | - | cookie-parser 쿠키 서명 키 |
 | `DISCORD_CLIENT_ID` | O | - | Discord OAuth 앱 ID |
 | `DISCORD_CLIENT_SECRET` | O | - | Discord OAuth 시크릿 |
 | `DISCORD_REDIRECT_URI` | O | - | Discord OAuth 콜백 URI |
