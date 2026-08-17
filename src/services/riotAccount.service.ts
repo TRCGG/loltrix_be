@@ -53,7 +53,14 @@ export class RiotAccountService {
           }
 
           // 3. Insert: 계정이 없을 때만 수행 (시퀀스 증가)
-          const [inserted] = await tx.insert(riotAccount).values(data).returning();
+          // 동시 업로드가 같은 신규 계정을 두고 경쟁하면 unique(puuid) 위반으로
+          // 트랜잭션째 롤백되므로 DO NOTHING으로 무해화한다. 이때 못 넣은 행은
+          // 상대 커밋 후 파사드의 puuid 재조회가 회수한다.
+          const [inserted] = await tx
+            .insert(riotAccount)
+            .values(data)
+            .onConflictDoNothing({ target: riotAccount.puuid })
+            .returning();
           return inserted;
         }),
       );

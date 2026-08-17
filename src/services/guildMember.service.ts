@@ -22,9 +22,7 @@ export class GuildMemberService {
 
   /**
    * @desc 리플레이 참여 계정들을 길드 멤버로 등록
-   * 'UNIQUE(guild_id, account)' 제약 조건에 따라
-   * 이미 길드에 등록된 계정은 무시
-   *
+   * 이미 길드에 등록된 계정은 select로 걸러 무시
    */
   public async insertGuildMember(
     riotAccounts: RiotAccount[],
@@ -56,10 +54,13 @@ export class GuildMemberService {
         }));
 
       // 4. Insert: 필터링된 멤버가 있을 때만 저장
+      // 동시 업로드가 같은 (길드, 계정)을 두고 경쟁하면 select가 서로를 못 보므로
+      // uq_guild_member_guild_account(마이그레이션 014) 충돌을 DO NOTHING으로 무해화한다.
       if (finalMembersToInsert.length > 0) {
         const insertedMembers = await tx
           .insert(guildMember)
           .values(finalMembersToInsert)
+          .onConflictDoNothing({ target: [guildMember.guildId, guildMember.account] })
           .returning();
         return insertedMembers;
       }

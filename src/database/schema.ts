@@ -271,7 +271,11 @@ export const guildMember = pgTable('guild_member', {
     .defaultNow()
     .$onUpdate(() => new Date()),
   isDeleted: boolean('is_deleted').notNull().default(false),
-});
+}, (t) => [
+  // 리플 저장의 select-then-insert가 동시 업로드에서 서로를 못 보므로,
+  // 중복 등록의 최종 방어선은 이 제약이다 (insertGuildMember의 ON CONFLICT target).
+  unique('uq_guild_member_guild_account').on(t.guildId, t.account),
+]);
 
 export type GuildMember = typeof guildMember.$inferSelect;
 export type InsertGuildMember = typeof guildMember.$inferInsert;
