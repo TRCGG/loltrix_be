@@ -20,13 +20,11 @@ const DOWNLOAD_IDLE_TIMEOUT_MS = 10000;
 // 마지막 4바이트(uint32 LE)가 메타데이터 길이, 그 앞 length 바이트가 메타데이터 본문.
 // 우리는 메타데이터만 쓰므로 전체(수십 MB)를 받을 이유가 없다.
 // 주의: 구형(~14.10)의 헤더 오프셋 필드(262-287)는 신형 파일에서 무의미한 값이 들어
-// 있으므로 위치 계산에는 절대 쓰지 않는다 (26.x 리플 실측으로 확인). 단 구형 파일
-// 판별(isLegacyLayout)의 비교값으로만 읽는다 — 구형은 미지원 안내 대상이다 (TRC-269).
+// 있으므로 위치 계산에는 절대 쓰지 않는다 (26.x 리플 실측으로 확인). 구형 파일
+// 판별(isLegacyLayout)의 비교값으로만 읽는다.
 // 레이아웃 근거: gzordrai/rofl-parser.js NewROFLParser + 로컬 리플 실측.
 const ROFL_HEADER_LENGTH = 288;
 const ROFL_TAIL_SIZE_BYTES = 4;
-// 구형 헤더 오프셋 블록(262-287) 중 판별에 쓰는 두 필드 (13.6 리플 실측):
-// @262 uint16 = 헤더 길이(288), @264 uint32 = 파일 전체 길이
 const ROFL_LEGACY_HEADER_LENGTH_OFFSET = 262;
 const ROFL_LEGACY_FILE_LENGTH_OFFSET = 264;
 // 메타데이터 길이 sanity 상한 — 실측 ~120KB. 꼬리 4바이트가 우연히 큰 수를 가리키면
@@ -291,9 +289,9 @@ export class ReplayService {
   }
 
   /**
-   * @desc 구형(~14.10) 레이아웃 판별. 구형은 메타데이터가 파일 앞에 있어 파일 끝을
-   * 전제한 파싱이 암호화 페이로드를 물고 들어가 깨진다 — 미지원으로 안내한다.
-   * 신형 파일의 262-287 자리는 무의미한 값이라 두 필드가 동시에 들어맞을 일이 없다.
+   * @desc 구형은 메타데이터가 파일 앞에 있어 파일 끝을 전제한 파싱이 암호화 페이로드를
+   * 물고 들어가 깨지므로 미지원으로 거른다. 신형 파일의 262-287 자리는 무의미한
+   * 값이라 두 필드가 동시에 들어맞을 일이 없다.
    */
   private isLegacyLayout(byte: Buffer): boolean {
     if (byte.length <= ROFL_HEADER_LENGTH) return false;
