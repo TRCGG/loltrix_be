@@ -221,14 +221,14 @@ export class DiscordAuthService {
     const token = await this.findDiscordTokenById(discordMemberId);
 
     if (!token) {
-      throw new BusinessError('Token not found or revoked', 401);
+      throw new BusinessError('Token not found or revoked', 401, { isLoggable: false });
     }
 
     const now = new Date();
 
     if (now.getTime() > token.reExpiresDate.getTime()) {
       console.warn(`Refresh token expired for member ${discordMemberId}`);
-      throw new BusinessError('Session expired. Please log in again.', 401);
+      throw new BusinessError('Session expired. Please log in again.', 401, { isLoggable: false });
     }
 
     if (now.getTime() < token.acExpiresDate.getTime()) {
@@ -283,7 +283,7 @@ export class DiscordAuthService {
       });
 
       if (!result.ok) {
-        throw new BusinessError('Failed to refresh session. Please log in again.', 401);
+        throw new BusinessError('Failed to refresh session. Please log in again.', 401, { isLoggable: false });
       }
 
       const tokenData: DiscordTokenAPI = await result.json();
