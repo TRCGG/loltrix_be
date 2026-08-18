@@ -25,8 +25,14 @@ const DOWNLOAD_IDLE_TIMEOUT_MS = 10000;
 // 레이아웃 근거: gzordrai/rofl-parser.js NewROFLParser + 로컬 리플 실측.
 const ROFL_HEADER_LENGTH = 288;
 const ROFL_TAIL_SIZE_BYTES = 4;
-const ROFL_LEGACY_HEADER_LENGTH_OFFSET = 262;
-const ROFL_LEGACY_FILE_LENGTH_OFFSET = 264;
+// 구형(~14.10) 헤더 오프셋 블록(262-287)의 필드 위치 (gzordrai/rofl-parser.js LegacyROFLParser)
+const ROFL_LEGACY_FIELDS = {
+  headerLength: 262, // uint16, 이하 uint32
+  fileLength: 264,
+  metadataOffset: 268,
+  metadataLength: 272,
+  payloadHeaderOffset: 276,
+} as const;
 // 메타데이터 길이 sanity 상한 — 실측 ~120KB. 꼬리 4바이트가 우연히 큰 수를 가리키면
 // 구조 불일치로 보고 전체 다운로드로 폴백하기 위한 방어값.
 const ROFL_METADATA_MAX_BYTES = 8 * 1024 * 1024;
@@ -296,9 +302,35 @@ export class ReplayService {
   private isLegacyLayout(byte: Buffer): boolean {
     if (byte.length <= ROFL_HEADER_LENGTH) return false;
     return (
-      byte.readUInt16LE(ROFL_LEGACY_HEADER_LENGTH_OFFSET) === ROFL_HEADER_LENGTH &&
-      byte.readUInt32LE(ROFL_LEGACY_FILE_LENGTH_OFFSET) === byte.length
+      byte.readUInt16LE(ROFL_LEGACY_FIELDS.headerLength) === ROFL_HEADER_LENGTH &&
+      byte.readUInt32LE(ROFL_LEGACY_FIELDS.fileLength) === byte.length
     );
+  }
+
+  /**
+   * @desc 헤더 288바이트만으로 구형 여부 판별 — 파일 길이를 몰라도 되도록 구조적
+   * 불변식을 쓴다: 구형은 메타데이터가 헤더 바로 뒤, 페이로드 헤더가 메타데이터 바로
+   * 뒤라 metadataOffset==288, payloadHeaderOffset==metadataOffset+metadataLength가
+   * 성립한다 (rofl-parser LegacyROFLParser가 이 필드로 메타데이터를 자른다).
+   */
+  private isLegacyHeader(header: Buffer): boolean {
+    if (header.length < ROFL_HEADER_LENGTH) return false;
+    const metadataOffset = header.readUInt32LE(ROFL_LEGACY_FIELDS.metadataOffset);
+    const metadataLength = header.readUInt32LE(ROFL_LEGACY_FIELDS.metadataLength);
+    return (
+      header.readUInt16LE(ROFL_LEGACY_FIELDS.headerLength) === ROFL_HEADER_LENGTH &&
+      metadataOffset === ROFL_HEADER_LENGTH &&
+      metadataLength > 0 &&
+      header.readUInt32LE(ROFL_LEGACY_FIELDS.payloadHeaderOffset) === metadataOffset + metadataLength
+    );
+  }
+
+  private legacyReplayError(): BusinessError {
+    return new BusinessError('구형 리플 파일(패치 14.11 이전)이라 등록할 수 없습니다.', 400, {
+      type: 'unsupported-replay-version',
+      title: 'Unsupported Replay Version',
+      isLoggable: false,
+    });
   }
 
   /**
@@ -346,11 +378,7 @@ export class ReplayService {
    */
   public async parseReplayData(byte: Buffer): Promise<{ patchVersion: string; stats: any[] }> {
     if (this.isLegacyLayout(byte)) {
-      throw new BusinessError('구형 리플 파일(패치 14.11 이전)이라 등록할 수 없습니다.', 400, {
-        type: 'unsupported-replay-version',
-        title: 'Unsupported Replay Version',
-        isLoggable: false,
-      });
+      throw this.legacyReplayError();
     }
 
     const patchVersion = this.parsePatchVersion(byte);
@@ -411,6 +439,12 @@ export class ReplayService {
     if (header.statusCode !== 206) fullBuffer = header.buffer;
 
     if (!fullBuffer && this.validateMagicBytes(header.buffer)) {
+      // 구형은 여기서 바로 끊는다 — 전체 다운로드 폴백까지 가면 큰 파일은 예산 초과
+      // 504("다시 올려주세요")가 나가서 미지원 안내가 사용자에게 영영 닿지 않는다.
+      if (this.isLegacyHeader(header.buffer)) {
+        throw this.legacyReplayError();
+      }
+
       // 2. 꼬리 4바이트 = 메타데이터 길이 (suffix라 전체 크기를 몰라도 된다)
       const tail = await download({ suffix: ROFL_TAIL_SIZE_BYTES });
       if (tail.statusCode !== 206) {
