@@ -7,9 +7,9 @@ import { ReplayFileRequest } from '../types/replay.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { systemConfigService } from './systemConfig.service.js';
 
-// 다운로드 데드라인 기본값(ms). 봇이 45초에 요청을 끊으므로 파싱·DB 저장 시간을 남겨야 한다.
-// 데드라인은 요청별로 걸린다. Range 경로는 요청이 최대 3번이지만 각각 수백 KB 이하라
-// 데드라인 근처까지 가는 경우는 전체 다운로드도 어차피 실패하는 상황뿐이다.
+// 다운로드 예산 기본값(ms). 봇이 45초에 요청을 끊으므로 파싱·DB 저장 시간을 남겨야 한다.
+// 이 예산은 getRawData의 다운로드 전체(Range 최대 3번 + 전체 폴백)가 나눠 쓴다 —
+// 요청별로 걸면 직렬 최대 4번이라 최악 상한이 예산×4가 되어 봇 45초 보장이 깨진다.
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 20000;
 // 소켓 무응답 판정(ms). 데드라인과 별개로 둔다 — 헤더가 안 오거나 스트리밍이 멈춘 경우를
 // 데드라인까지 기다리지 않고 끊기 위함이다.
@@ -77,19 +77,10 @@ export class ReplayService {
    */
   private async downloadDiscordFile(
     fileUrl: string,
+    limits: { maxFileSize: number; timeoutMs: number },
     range?: { start: number; end: number } | { suffix: number },
   ): Promise<{ buffer: Buffer; statusCode: number }> {
-    const maxFileSize = await systemConfigService.getNumberConfig('MAX_REPLAY_FILE_SIZE', 52428800);
-    const configuredTimeout = await systemConfigService.getNumberConfig(
-      'REPLAY_DOWNLOAD_TIMEOUT_MS',
-      DEFAULT_DOWNLOAD_TIMEOUT_MS,
-    );
-    // getNumberConfig는 값이 숫자가 아니면 NaN을 그대로 돌려준다. setTimeout(NaN)은 1ms로
-    // 취급되어 모든 업로드가 즉시 504가 되므로 기본값으로 되돌린다.
-    const downloadTimeout =
-      Number.isFinite(configuredTimeout) && configuredTimeout > 0
-        ? configuredTimeout
-        : DEFAULT_DOWNLOAD_TIMEOUT_MS;
+    const { maxFileSize, timeoutMs } = limits;
 
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -191,12 +182,12 @@ export class ReplayService {
       deadlineId = setTimeout(() => {
         fail(
           new SystemError(
-            `Discord CDN 다운로드가 ${downloadTimeout}ms 안에 끝나지 않았습니다.`,
+            `Discord CDN 다운로드가 ${timeoutMs}ms 안에 끝나지 않았습니다.`,
             504,
             { type: 'discord-download-timeout', title: 'Gateway Timeout' },
           ),
         );
-      }, downloadTimeout);
+      }, timeoutMs);
 
       // 소켓 무응답은 connect 완료 후에만 무장된다. DNS·TCP·TLS가 매달리는 구간은
       // 데드라인만 잡을 수 있어 두 타이머 중 어느 쪽도 뺄 수 없다.
@@ -222,6 +213,22 @@ export class ReplayService {
         );
       });
     });
+  }
+
+  private async loadDownloadLimits(): Promise<{ maxFileSize: number; timeoutMs: number }> {
+    const maxFileSize = await systemConfigService.getNumberConfig('MAX_REPLAY_FILE_SIZE', 52428800);
+    const configuredTimeout = await systemConfigService.getNumberConfig(
+      'REPLAY_DOWNLOAD_TIMEOUT_MS',
+      DEFAULT_DOWNLOAD_TIMEOUT_MS,
+    );
+    // getNumberConfig는 값이 숫자가 아니면 NaN을 그대로 돌려준다. setTimeout(NaN)은 1ms로
+    // 취급되어 모든 업로드가 즉시 504가 되므로 기본값으로 되돌린다.
+    const timeoutMs =
+      Number.isFinite(configuredTimeout) && configuredTimeout > 0
+        ? configuredTimeout
+        : DEFAULT_DOWNLOAD_TIMEOUT_MS;
+
+    return { maxFileSize, timeoutMs };
   }
 
   /**
@@ -349,31 +356,52 @@ export class ReplayService {
   public async getRawData(fileData: ReplayFileRequest) {
     const { fileUrl } = fileData;
 
+    const limits = await this.loadDownloadLimits();
+    // 다운로드 예산은 아래 요청 전체가 공유한다. 요청마다 남은 예산으로 데드라인을 걸고,
+    // 소진됐으면 요청 없이 바로 504 — 어떤 경로를 타든 다운로드 합계가 예산을 넘지 않는다.
+    const deadlineAt = Date.now() + limits.timeoutMs;
+    const download = (range?: { start: number; end: number } | { suffix: number }) => {
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs <= 0) {
+        throw new SystemError(
+          `Discord CDN 다운로드가 ${limits.timeoutMs}ms 안에 끝나지 않았습니다.`,
+          504,
+          { type: 'discord-download-timeout', title: 'Gateway Timeout' },
+        );
+      }
+      return this.downloadDiscordFile(
+        fileUrl,
+        { maxFileSize: limits.maxFileSize, timeoutMs: remainingMs },
+        range,
+      );
+    };
+
     // 200 응답은 이미 전체 파일을 받은 것 — 폴백 때 재다운로드하지 않도록 들고 있는다.
     // (>=300은 downloadDiscordFile이 502로 던지므로 여기 오는 건 200 아니면 206뿐)
+    // suffix 요청이 파일보다 길 때도 마찬가지다 — RFC 9110상 전체 표현이 오므로(206이어도
+    // 요청보다 짧으면 그것) 그대로 전체 파일로 쓴다.
     let fullBuffer: Buffer | null = null;
 
     // 1. 헤더 288바이트 — 매직·패치버전. 만료 URL 등 CDN 에러는 여기서 502로 끊긴다.
-    const header = await this.downloadDiscordFile(fileUrl, {
-      start: 0,
-      end: ROFL_HEADER_LENGTH - 1,
-    });
+    const header = await download({ start: 0, end: ROFL_HEADER_LENGTH - 1 });
     if (header.statusCode !== 206) fullBuffer = header.buffer;
 
     if (!fullBuffer && this.validateMagicBytes(header.buffer)) {
       // 2. 꼬리 4바이트 = 메타데이터 길이 (suffix라 전체 크기를 몰라도 된다)
-      const tail = await this.downloadDiscordFile(fileUrl, { suffix: ROFL_TAIL_SIZE_BYTES });
+      const tail = await download({ suffix: ROFL_TAIL_SIZE_BYTES });
       if (tail.statusCode !== 206) {
+        fullBuffer = tail.buffer;
+      } else if (tail.buffer.length < ROFL_TAIL_SIZE_BYTES) {
         fullBuffer = tail.buffer;
       } else if (tail.buffer.length === ROFL_TAIL_SIZE_BYTES) {
         const metaLength = tail.buffer.readUInt32LE(0);
 
         if (metaLength > 0 && metaLength <= ROFL_METADATA_MAX_BYTES) {
           // 3. 끝에서 metaLength+4 바이트를 받아 길이 필드 4바이트를 떼면 메타데이터 본문
-          const metaRes = await this.downloadDiscordFile(fileUrl, {
-            suffix: metaLength + ROFL_TAIL_SIZE_BYTES,
-          });
+          const metaRes = await download({ suffix: metaLength + ROFL_TAIL_SIZE_BYTES });
           if (metaRes.statusCode !== 206) {
+            fullBuffer = metaRes.buffer;
+          } else if (metaRes.buffer.length < metaLength + ROFL_TAIL_SIZE_BYTES) {
             fullBuffer = metaRes.buffer;
           } else if (metaRes.buffer.length === metaLength + ROFL_TAIL_SIZE_BYTES) {
             try {
@@ -391,8 +419,8 @@ export class ReplayService {
       }
     }
 
-    // 폴백: 전체 파일 기준 기존 파싱 (200으로 이미 받았으면 그 버퍼를 재사용)
-    const buffer = fullBuffer ?? (await this.downloadDiscordFile(fileUrl)).buffer;
+    // 폴백: 전체 파일 기준 기존 파싱 (전체를 이미 받았으면 그 버퍼를 재사용)
+    const buffer = fullBuffer ?? (await download()).buffer;
     const parsed = await this.parseReplayData(buffer);
     return { rawData: parsed.stats, patchVersion: parsed.patchVersion };
   }
