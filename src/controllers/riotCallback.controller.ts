@@ -36,7 +36,7 @@ export const handleRiotCallback = async (
   //    라우터 스택의 다음 미들웨어(restrictBotToLocalhost, verifyAuth)로 흘러 401이 나간다.
   const expected = process.env.RIOT_CALLBACK_SECRET;
   if (!expected || !secretEquals(req.params.secret, expected)) {
-    return notFoundHandler(req, res, next);
+    return notFoundHandler(req, res);
   }
 
   try {
