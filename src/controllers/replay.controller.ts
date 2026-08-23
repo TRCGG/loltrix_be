@@ -17,7 +17,7 @@ export const createReplay = async (
   const fileData = req.body;
 
   try {
-    const savedReplay = await replaySaveFacade.allSave(fileData);
+    const savedReplay = await replaySaveFacade.allSave(fileData, 'bot.replayUpload');
     return res.status(201).json({
       status: 'success',
       message: 'Replay created successfully',
