@@ -37,6 +37,74 @@ const ROFL_LEGACY_FIELDS = {
 // 구조 불일치로 보고 전체 다운로드로 폴백하기 위한 방어값.
 const ROFL_METADATA_MAX_BYTES = 8 * 1024 * 1024;
 
+// 스노플레이크에 담긴 타임스탬프의 기준시각(2015-01-01 UTC).
+const DISCORD_EPOCH_MS = 1420070400000n;
+
+type CdnRoute = 'header' | 'tail' | 'meta' | 'full';
+
+interface DownloadProgress {
+  connectedAt: number | null;
+  respondedAt: number | null;
+}
+
+export type StallStage = 'stall:connect' | 'stall:ttfb' | 'stall:body';
+
+export function stallStage(progress: DownloadProgress): StallStage {
+  if (progress.respondedAt !== null) return 'stall:body';
+  if (progress.connectedAt !== null) return 'stall:ttfb';
+  return 'stall:connect';
+}
+
+/**
+ * @desc 첨부 URL(`/attachments/{channelId}/{attachmentId}/{fileName}`)의 스노플레이크에서
+ * 업로드 후 경과 초를 계산한다.
+ * 스노플레이크는 64비트라 Number로 다루면 상위 비트가 잘린다 — BigInt 필수.
+ */
+export function attachmentAgeSeconds(fileUrl: string, now: number = Date.now()): number | null {
+  try {
+    const segments = new URL(fileUrl).pathname.split('/');
+    const attachmentId = segments[segments.length - 2];
+    if (!attachmentId || !/^\d{17,20}$/.test(attachmentId)) return null;
+
+    // eslint-disable-next-line no-bitwise
+    const uploadedAtMs = Number((BigInt(attachmentId) >> 22n) + DISCORD_EPOCH_MS);
+    return Math.floor((now - uploadedAtMs) / 1000);
+  } catch {
+    return null;
+  }
+}
+
+interface CdnDownloadEvent {
+  route: CdnRoute;
+  caller: string;
+  status: number;
+  ttfbMs: number | null;
+  durationMs: number;
+  bytes: number;
+  attachmentAgeS: number | null;
+}
+
+/**
+ * @desc CDN 요청 1건을 stdout에 한 줄로 남긴다(집계용).
+ * status 0은 응답 헤더를 받지 못한 경우(연결 실패·타임아웃)를 뜻한다.
+ * fileUrl 자체는 남기지 않는다 — 서명 파라미터(ex/is/hm)가 그대로 노출된다.
+ */
+function logCdnDownload(event: CdnDownloadEvent): void {
+  console.log(
+    JSON.stringify({
+      event: 'cdn.download',
+      route: event.route,
+      caller: event.caller,
+      status: event.status,
+      ttfb_ms: event.ttfbMs,
+      duration_ms: event.durationMs,
+      bytes: event.bytes,
+      attachment_age_s: event.attachmentAgeS,
+      ts: new Date().toISOString(),
+    }),
+  );
+}
+
 /**
  * @desc 리플레이 파일 서비스
  */
@@ -87,6 +155,7 @@ export class ReplayService {
   private async downloadDiscordFile(
     fileUrl: string,
     limits: { maxFileSize: number; timeoutMs: number },
+    logContext: { route: CdnRoute; caller: string },
     range?: { start: number; end: number } | { suffix: number },
   ): Promise<{ buffer: Buffer; statusCode: number }> {
     const { maxFileSize, timeoutMs } = limits;
@@ -96,6 +165,25 @@ export class ReplayService {
       let deadlineId: NodeJS.Timeout | undefined;
       let req: ReturnType<typeof get> | undefined;
 
+      const startedAt = Date.now();
+      const progress: DownloadProgress = { connectedAt: null, respondedAt: null };
+      let responseStatus = 0;
+      let currentSize = 0;
+
+      // 콜백 구조라 try/finally로는 요청 1건당 1줄을 보장할 수 없다.
+      // 이중 settle을 막는 settled 가드 안쪽에서만 부른다.
+      const logEvent = (): void => {
+        logCdnDownload({
+          route: logContext.route,
+          caller: logContext.caller,
+          status: responseStatus,
+          ttfbMs: progress.respondedAt === null ? null : progress.respondedAt - startedAt,
+          durationMs: Date.now() - startedAt,
+          bytes: currentSize,
+          attachmentAgeS: attachmentAgeSeconds(fileUrl),
+        });
+      };
+
       // settled를 destroy보다 먼저 세워야 한다. res에 error 리스너가 붙은 뒤로는 destroy가
       // 매번 ECONNRESET을 올려보내는데, 순서가 뒤집히면 413·504마다 그게 로그로 샌다.
       const fail = (error: Error): void => {
@@ -103,6 +191,7 @@ export class ReplayService {
         settled = true;
         clearTimeout(deadlineId);
         req?.destroy();
+        logEvent();
         reject(error);
       };
 
@@ -110,6 +199,7 @@ export class ReplayService {
         if (settled) return;
         settled = true;
         clearTimeout(deadlineId);
+        logEvent();
         resolve({ buffer, statusCode });
       };
 
@@ -125,6 +215,9 @@ export class ReplayService {
         : {};
 
       req = get(fileUrl, requestOptions, (res) => {
+        progress.respondedAt = Date.now();
+        responseStatus = res.statusCode ?? 0;
+
         // CDN이 에러 본문을 200이 아닌 상태로 내려주면 그 본문이 리플 파일로 취급되어
         // 파싱 실패(500)로 뭉개진다. 만료된 첨부 URL이 이 경로로 들어온다.
         // 3xx도 여기서 끊는다 — https.get은 리다이렉트를 따라가지 않아 빈 본문이 된다.
@@ -162,7 +255,6 @@ export class ReplayService {
         }
 
         const data: Uint8Array[] = [];
-        let currentSize = 0; // 현재 다운로드 된 크기 누적
 
         res.on('data', (chunk) => {
           currentSize += chunk.length;
@@ -188,24 +280,42 @@ export class ReplayService {
         });
       });
 
+      // TLS 완료까지를 연결 수립으로 본다 — 여기(https.get)의 소켓은 항상 TLSSocket이라
+      // TCP만 붙고 핸드셰이크가 매달리는 구간을 connect로 세면 단계 판정이 어긋난다.
+      // 커넥션 풀에서 재사용된 소켓은 이벤트가 다시 오지 않으므로 connecting으로 가른다.
+      req.on('socket', (socket) => {
+        if (!socket.connecting) {
+          progress.connectedAt = Date.now();
+          return;
+        }
+        socket.once('secureConnect', () => {
+          progress.connectedAt = Date.now();
+        });
+      });
+
       deadlineId = setTimeout(() => {
         fail(
-          new SystemError(
-            `Discord CDN 다운로드가 ${timeoutMs}ms 안에 끝나지 않았습니다.`,
-            504,
-            { type: 'discord-download-timeout', title: 'Gateway Timeout' },
-          ),
+          new SystemError(`Discord CDN 다운로드가 ${timeoutMs}ms 안에 끝나지 않았습니다.`, 504, {
+            type: 'discord-download-timeout',
+            title: 'Gateway Timeout',
+            code: stallStage(progress),
+          }),
         );
       }, timeoutMs);
 
-      // 소켓 무응답은 connect 완료 후에만 무장된다. DNS·TCP·TLS가 매달리는 구간은
-      // 데드라인만 잡을 수 있어 두 타이머 중 어느 쪽도 뺄 수 없다.
+      // 소켓 무응답 타이머는 연결 수립 전에도 돌지만, 소켓 활동(연결 재시도 등)이 있을
+      // 때마다 리셋되어 설정값에 맞춰 터진다는 보장이 없다. 전체 소요의 상한은 데드라인만
+      // 잡으므로 두 타이머 중 어느 쪽도 뺄 수 없다.
       req.setTimeout(DOWNLOAD_IDLE_TIMEOUT_MS, () => {
         fail(
           new SystemError(
             `Discord CDN이 ${DOWNLOAD_IDLE_TIMEOUT_MS}ms 동안 응답하지 않았습니다.`,
             504,
-            { type: 'discord-download-timeout', title: 'Gateway Timeout' },
+            {
+              type: 'discord-download-timeout',
+              title: 'Gateway Timeout',
+              code: stallStage(progress),
+            },
           ),
         );
       });
@@ -405,14 +515,17 @@ export class ReplayService {
    * 줄여 없앤다 (~120KB 수준). Range 미지원(200)·구조 불일치·구간 파싱 실패는 모두
    * 전체 다운로드 + 기존 파싱으로 폴백해 에러 의미(502/504/파싱 500)를 그대로 유지한다.
    */
-  public async getRawData(fileData: ReplayFileRequest) {
+  public async getRawData(fileData: ReplayFileRequest, caller: string) {
     const { fileUrl } = fileData;
 
     const limits = await this.loadDownloadLimits();
     // 다운로드 예산은 아래 요청 전체가 공유한다. 요청마다 남은 예산으로 데드라인을 걸고,
     // 소진됐으면 요청 없이 바로 504 — 어떤 경로를 타든 다운로드 합계가 예산을 넘지 않는다.
     const deadlineAt = Date.now() + limits.timeoutMs;
-    const download = (range?: { start: number; end: number } | { suffix: number }) => {
+    const download = (
+      route: CdnRoute,
+      range?: { start: number; end: number } | { suffix: number },
+    ) => {
       const remainingMs = deadlineAt - Date.now();
       if (remainingMs <= 0) {
         throw new SystemError(
@@ -424,6 +537,7 @@ export class ReplayService {
       return this.downloadDiscordFile(
         fileUrl,
         { maxFileSize: limits.maxFileSize, timeoutMs: remainingMs },
+        { route, caller },
         range,
       );
     };
@@ -435,7 +549,7 @@ export class ReplayService {
     let fullBuffer: Buffer | null = null;
 
     // 1. 헤더 288바이트 — 매직·패치버전. 만료 URL 등 CDN 에러는 여기서 502로 끊긴다.
-    const header = await download({ start: 0, end: ROFL_HEADER_LENGTH - 1 });
+    const header = await download('header', { start: 0, end: ROFL_HEADER_LENGTH - 1 });
     if (header.statusCode !== 206) fullBuffer = header.buffer;
 
     if (!fullBuffer && this.validateMagicBytes(header.buffer)) {
@@ -446,7 +560,7 @@ export class ReplayService {
       }
 
       // 2. 꼬리 4바이트 = 메타데이터 길이 (suffix라 전체 크기를 몰라도 된다)
-      const tail = await download({ suffix: ROFL_TAIL_SIZE_BYTES });
+      const tail = await download('tail', { suffix: ROFL_TAIL_SIZE_BYTES });
       if (tail.statusCode !== 206) {
         fullBuffer = tail.buffer;
       } else if (tail.buffer.length < ROFL_TAIL_SIZE_BYTES) {
@@ -456,7 +570,7 @@ export class ReplayService {
 
         if (metaLength > 0 && metaLength <= ROFL_METADATA_MAX_BYTES) {
           // 3. 끝에서 metaLength+4 바이트를 받아 길이 필드 4바이트를 떼면 메타데이터 본문
-          const metaRes = await download({ suffix: metaLength + ROFL_TAIL_SIZE_BYTES });
+          const metaRes = await download('meta', { suffix: metaLength + ROFL_TAIL_SIZE_BYTES });
           if (metaRes.statusCode !== 206) {
             fullBuffer = metaRes.buffer;
           } else if (metaRes.buffer.length < metaLength + ROFL_TAIL_SIZE_BYTES) {
@@ -478,7 +592,7 @@ export class ReplayService {
     }
 
     // 폴백: 전체 파일 기준 기존 파싱 (전체를 이미 받았으면 그 버퍼를 재사용)
-    const buffer = fullBuffer ?? (await download()).buffer;
+    const buffer = fullBuffer ?? (await download('full')).buffer;
     const parsed = await this.parseReplayData(buffer);
     return { rawData: parsed.stats, patchVersion: parsed.patchVersion };
   }

@@ -12,7 +12,9 @@ jest.unstable_mockModule('../services/systemConfig.service.js', () => ({
   },
 }));
 
-const { ReplayService } = await import('../services/replay.service.js');
+const { ReplayService, attachmentAgeSeconds, stallStage } = await import(
+  '../services/replay.service.js'
+);
 const { BusinessError } = await import('../types/error.js');
 
 const service = new ReplayService();
@@ -109,21 +111,26 @@ describe('getRawData — Range 경로의 구형 조기 거절', () => {
         ReplayService.prototype as unknown as { downloadDiscordFile: (...args: any[]) => any },
         'downloadDiscordFile',
       )
-      .mockImplementation(async (_url: unknown, _limits: unknown, range?: any) => {
-        if (range && 'start' in range) {
-          return { buffer: file.subarray(range.start, range.end + 1), statusCode: 206 };
-        }
-        if (range && 'suffix' in range) {
-          return { buffer: file.subarray(Math.max(0, file.length - range.suffix)), statusCode: 206 };
-        }
-        return { buffer: file, statusCode: 200 };
-      });
+      .mockImplementation(
+        async (_url: unknown, _limits: unknown, _logContext: unknown, range?: any) => {
+          if (range && 'start' in range) {
+            return { buffer: file.subarray(range.start, range.end + 1), statusCode: 206 };
+          }
+          if (range && 'suffix' in range) {
+            return {
+              buffer: file.subarray(Math.max(0, file.length - range.suffix)),
+              statusCode: 206,
+            };
+          }
+          return { buffer: file, statusCode: 200 };
+        },
+      );
 
   test('구형은 헤더 요청 한 번만으로 400을 내고 추가 다운로드가 없다', async () => {
     const spy = stubDownload(buildLegacyBuffer());
 
     await expect(
-      service.getRawData({ fileUrl: 'https://cdn.example/legacy.rofl' } as any),
+      service.getRawData({ fileUrl: 'https://cdn.example/legacy.rofl' } as any, 'test'),
     ).rejects.toMatchObject({ status: 400, type: 'unsupported-replay-version' });
 
     expect(spy).toHaveBeenCalledTimes(1);
@@ -132,10 +139,53 @@ describe('getRawData — Range 경로의 구형 조기 거절', () => {
   test('신형은 Range 경로로 정상 파싱한다', async () => {
     stubDownload(buildModernBuffer());
 
-    const { rawData } = await service.getRawData({
-      fileUrl: 'https://cdn.example/modern.rofl',
-    } as any);
+    const { rawData } = await service.getRawData(
+      { fileUrl: 'https://cdn.example/modern.rofl' } as any,
+      'test',
+    );
 
     expect(rawData).toEqual([{ WIN: 'Win' }]);
+  });
+});
+
+describe('attachmentAgeSeconds', () => {
+  // 하위 22비트(워커·시퀀스)는 전부 1로 채운다 — 타임스탬프와 무관한 비트가 섞여도
+  // 결과가 같아야 시프트 누락을 잡을 수 있다.
+  const TIMESTAMP_SCALE = 2n ** 22n;
+  const snowflakeAt = (ms: number): string =>
+    ((BigInt(ms) - 1420070400000n) * TIMESTAMP_SCALE + (TIMESTAMP_SCALE - 1n)).toString();
+
+  test('업로드 후 경과 초를 계산한다', () => {
+    const uploadedAt = Date.parse('2026-08-23T00:00:00.000Z');
+    const url = `https://cdn.discordapp.com/attachments/123456789012345678/${snowflakeAt(
+      uploadedAt,
+    )}/game.rofl?ex=abc&is=def&hm=ghi`;
+
+    expect(attachmentAgeSeconds(url, uploadedAt + 90_000)).toBe(90);
+  });
+
+  test('53비트를 넘는 스노플레이크도 정밀도 손실 없이 계산한다', () => {
+    const uploadedAt = Date.parse('2026-08-23T00:00:00.000Z');
+    const id = snowflakeAt(uploadedAt);
+    expect(Number(id) > Number.MAX_SAFE_INTEGER).toBe(true);
+    expect(
+      attachmentAgeSeconds(`https://cdn.discordapp.com/attachments/1/${id}/a.rofl`, uploadedAt),
+    ).toBe(0);
+  });
+
+  test('첨부 URL이 아니거나 id를 못 뽑으면 null', () => {
+    expect(attachmentAgeSeconds('web')).toBeNull();
+    expect(attachmentAgeSeconds('https://cdn.example/legacy.rofl')).toBeNull();
+    expect(
+      attachmentAgeSeconds('https://cdn.discordapp.com/attachments/1/notanid/a.rofl'),
+    ).toBeNull();
+  });
+});
+
+describe('stallStage', () => {
+  test('연결 전 / 헤더 전 / 본문 중 을 구분한다', () => {
+    expect(stallStage({ connectedAt: null, respondedAt: null })).toBe('stall:connect');
+    expect(stallStage({ connectedAt: 1, respondedAt: null })).toBe('stall:ttfb');
+    expect(stallStage({ connectedAt: 1, respondedAt: 2 })).toBe('stall:body');
   });
 });

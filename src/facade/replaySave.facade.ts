@@ -16,10 +16,10 @@ export class ReplaySaveFacade {
    * 디스코드 봇 리플레이 업로드
    * (파일 다운로드 + 길드 upsert + 저장)
    */
-  public async allSave(fileData: ReplayFileRequest): Promise<ReplaySaveResult> {
+  public async allSave(fileData: ReplayFileRequest, caller: string): Promise<ReplaySaveResult> {
     // 파일 다운로드+파싱은 트랜잭션 밖에서 수행한다.
     // (네트워크 I/O 동안 DB 커넥션을 idle-in-transaction 으로 붙잡지 않도록)
-    const { rawData, patchVersion } = await replayService.getRawData(fileData);
+    const { rawData, patchVersion } = await replayService.getRawData(fileData, caller);
 
     return db.transaction(async (tx: TransactionType) => {
       // 1. 길드 저장
