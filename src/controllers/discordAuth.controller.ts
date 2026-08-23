@@ -159,7 +159,7 @@ export const getSelfProfile = async (req: AuthRequest, res: Response) => {
       throw new SystemError('User ID not found after auth middleware');
     }
 
-    const result = await discordAuthService.fetchUser(accessToken);
+    const result = await discordAuthService.fetchUser(accessToken, req.discordMemberId);
 
     res.status(200).json({
       status: 'success',
