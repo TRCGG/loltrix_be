@@ -60,6 +60,9 @@ export class SystemError extends Error {
 
   public readonly showMessage: boolean;
 
+  /** error_log의 `error->>'code'`로 들어간다 (logErrorFromRequest가 그대로 뽑아 담는다). */
+  public readonly code?: string;
+
   constructor(
     message: string,
     status = 500,
@@ -67,6 +70,7 @@ export class SystemError extends Error {
       type?: string;
       title?: string;
       isLoggable?: boolean;
+      code?: string;
     },
   ) {
     super(message);
@@ -75,6 +79,7 @@ export class SystemError extends Error {
     this.type = options?.type || 'system-error';
     this.title = options?.title || 'Internal Server Error';
     this.isLoggable = options?.isLoggable ?? true;
+    this.code = options?.code;
     this.showMessage = false; // 시스템 에러는 메시지 노출 안 함
 
     Object.setPrototypeOf(this, SystemError.prototype);
