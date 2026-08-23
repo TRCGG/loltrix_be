@@ -6,7 +6,7 @@ import {
   MatchQuery,
   RecentGame,
   DashboardData,
-  MostPick,
+  MostPicksResponse,
   GameDetail,
 } from '../types/matchParticipant.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
@@ -175,11 +175,11 @@ export const getMatchDashboard = async (
 export const getMostPicks = async (
   req: Request<
     { guildId: string; riotName: string },
-    MatchResponse<MostPick[]>,
+    MostPicksResponse,
     Record<string, never>,
     MatchQuery
   >,
-  res: Response<MatchResponse<MostPick[]>>,
+  res: Response<MostPicksResponse>,
 ) => {
   try {
     const { guildId, riotName } = req.params;
@@ -212,14 +212,17 @@ export const getMostPicks = async (
 
     const { playerCode } = members[0];
 
-    const { mostPicks, totalCount } = await matchParticipantService.getMostPicks(
-      playerCode,
-      lolSeason,
-      guildId,
-      Number(page) || 1,
-      Number(limit) || 10,
-      position,
-    );
+    const [{ mostPicks, totalCount }, lines] = await Promise.all([
+      matchParticipantService.getMostPicks(
+        playerCode,
+        lolSeason,
+        guildId,
+        Number(page) || 1,
+        Number(limit) || 10,
+        position,
+      ),
+      matchParticipantService.getLineRecord(playerCode, lolSeason, guildId),
+    ]);
 
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
@@ -230,6 +233,7 @@ export const getMostPicks = async (
       status: 'success',
       message: 'Most picks retrieved successfully',
       data: mostPicks,
+      lines,
     });
   } catch (error) {
     console.error('Error retrieving most picks:', error);
