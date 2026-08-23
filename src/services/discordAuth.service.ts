@@ -19,6 +19,81 @@ const clientSecret = process.env.DISCORD_CLIENT_SECRET;
 const redirectUri = process.env.DISCORD_REDIRECT_URI;
 const DEFAULT_SESSION_MAX_AGE_MS = 29 * 24 * 60 * 60 * 1000;
 
+interface DiscordUserAPI {
+  id: string;
+  username: string;
+  global_name: string | null;
+  avatar: string | null;
+}
+
+/** Discord는 avatar를 해시로 준다. 응답·저장 형식을 완성 URL 하나로 통일한다. */
+function buildAvatarUrl(userId: string, avatarHash: string | null): string | null {
+  return avatarHash ? `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.png` : null;
+}
+
+function toProfile(userData: DiscordUserAPI) {
+  return {
+    id: userData.id,
+    username: userData.username,
+    global_name: userData.global_name,
+    avatar: buildAvatarUrl(userData.id, userData.avatar),
+  };
+}
+
+type DiscordProfile = ReturnType<typeof toProfile>;
+
+// 값이 아니라 in-flight promise를 캐시해 동시 요청이 하나의 외부 호출을 공유하게 한다
+// (캐시 스탬피드 방지).
+// - /users/@me 호출은 액세스 토큰 유효성 확인을 겸한다. 캐시는 그 확인을 TTL만큼 늦출 뿐이지만,
+//   호출을 DB(discord_member) 조회로 대체하면 확인이 영구히 사라진다.
+// - 디스코드에서 프사·닉네임을 바꾸면 최대 TTL만큼 옛 값이 나간다. 로그인 콜백이 캐시를 최신값으로
+//   덮고 로그아웃이 비우므로 재로그인이 즉시 회복 경로다.
+// - TTL을 system_config로 빼지 않는다. systemConfigService에는 캐시가 없어 조회 한 번이 DB 쿼리
+//   한 번이라, 아끼려던 비용을 요청마다 도로 쓴다.
+// - 프로세스 로컬 캐시(공유 아님). 인스턴스가 여러 개면 인스턴스별로 존재한다.
+const PROFILE_TTL_MS = 60 * 60 * 1000;
+const profileCache = new Map<string, { promise: Promise<DiscordProfile>; expiresAt: number }>();
+
+function cacheProfile(discordMemberId: string, promise: Promise<DiscordProfile>): void {
+  // 만료 항목이 쌓이지 않도록 커지면 한 번 훑어 정리 (프로세스 로컬, 경량)
+  if (profileCache.size > 1000) {
+    const now = Date.now();
+    profileCache.forEach((value, key) => {
+      if (value.expiresAt <= now) profileCache.delete(key);
+    });
+  }
+
+  const entry = { promise, expiresAt: Date.now() + PROFILE_TTL_MS };
+  profileCache.set(discordMemberId, entry);
+
+  // 실패는 캐시하지 않는다. 이 catch가 없으면 캐시에만 남고 아무도 await하지 않는 rejected
+  // promise가 unhandled rejection으로 프로세스를 죽인다. 그 사이 새 항목이 들어왔으면 건드리지
+  // 않도록 동일 entry일 때만 삭제.
+  promise.catch(() => {
+    if (profileCache.get(discordMemberId) === entry) profileCache.delete(discordMemberId);
+  });
+}
+
+async function requestDiscordUser(accessToken: string): Promise<DiscordProfile> {
+  try {
+    const userResult = await fetchWithTimeout(`${discordApiBaseUrl}/users/@me`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!userResult.ok) {
+      throw new SystemError('Failed to fetch discord user', 500);
+    }
+
+    return toProfile(await userResult.json());
+  } catch (error) {
+    console.error('fetchUser service error', error);
+    if (error instanceof SystemError) throw error;
+    throw new SystemError('Failed to get user info', 500);
+  }
+}
+
 /**
  * @desc 최초 로그인 시 토큰 포맷
  */
@@ -112,16 +187,14 @@ export class DiscordAuthService {
       if (!userResult.ok) {
         throw new SystemError('Failed to fetch discord user', 500);
       }
-      const userData = await userResult.json();
+      const userData: DiscordUserAPI = await userResult.json();
 
       // 3. DB 저장을 위한 데이터 포맷팅
       const formattedToken = formatNewToken(tokenData);
       const formattedMember: InsertDiscordMember = {
         id: userData.id,
         displayName: userData.global_name || userData.username,
-        avatarUrl: userData.avatar
-          ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
-          : null,
+        avatarUrl: buildAvatarUrl(userData.id, userData.avatar),
       };
       const sessionMaxAge = await systemConfigService.getNumberConfig(
         'COOKIE_MAX_AGE_MS',
@@ -141,6 +214,10 @@ export class DiscordAuthService {
         { ...formattedToken, id: userData.id },
         newAuthData,
       );
+
+      // 콜백은 fetchUser를 지나지 않는다. 여기서 갱신하지 않으면 재로그인해도 옛 프로필이
+      // TTL만큼 그대로 나간다.
+      cacheProfile(userData.id, Promise.resolve(toProfile(userData)));
 
       return sessionUid;
     } catch (error) {
@@ -163,6 +240,9 @@ export class DiscordAuthService {
       }
 
       const { discordMemberId } = sessionData;
+      // 폐기 단계가 실패해 throw되더라도 캐시는 비어 있어야 하므로 먼저 지운다.
+      profileCache.delete(discordMemberId);
+
       const token = await this.findDiscordTokenById(discordMemberId);
 
       if (token) {
@@ -180,36 +260,16 @@ export class DiscordAuthService {
   }
 
   /**
-   * @desc Discord API로 사용자 정보 조회
+   * @desc Discord API로 사용자 정보 조회 (유저별 캐시)
    */
-  public async fetchUser(accessToken: string) {
-    try {
-      const userResult = await fetchWithTimeout(`${discordApiBaseUrl}/users/@me`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+  public async fetchUser(accessToken: string, discordMemberId: string): Promise<DiscordProfile> {
+    const cached = profileCache.get(discordMemberId);
+    if (cached && cached.expiresAt > Date.now()) return cached.promise;
 
-      if (!userResult.ok) {
-        throw new SystemError('Failed to fetch discord user', 500);
-      }
+    const promise = requestDiscordUser(accessToken);
+    cacheProfile(discordMemberId, promise);
 
-      const userData = await userResult.json();
-
-      return {
-        id: userData.id,
-        username: userData.username,
-        global_name: userData.global_name,
-        // 해시 원본 대신 완성 URL로 반환 (로그인 콜백의 avatar_url 저장 형식과 동일)
-        avatar: userData.avatar
-          ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
-          : null,
-      };
-    } catch (error) {
-      console.error('fetchUser service error', error);
-      if (error instanceof SystemError) throw error;
-      throw new SystemError('Failed to get user info', 500);
-    }
+    return promise;
   }
 
   // --- 2. Public Methods (미들웨어에서 호출) ---
