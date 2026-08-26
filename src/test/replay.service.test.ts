@@ -189,3 +189,35 @@ describe('stallStage', () => {
     expect(stallStage({ connectedAt: 1, respondedAt: 2 })).toBe('stall:body');
   });
 });
+
+describe('sanitizeFileName', () => {
+  test('확장자 제거, 경로·쿼리 문자를 _로, 한글·영숫자·_.-는 보존', () => {
+    expect(ReplayService.sanitizeFileName('내전 2024/08/23 #1?.rofl')).toBe('내전_2024_08_23_1');
+    expect(ReplayService.sanitizeFileName('???.rofl')).toBe('replay');
+    expect(ReplayService.sanitizeFileName('___.rofl')).toBe('replay');
+  });
+
+  test('NFD 파일명(macOS)의 결합 문자를 보존한다', () => {
+    expect(ReplayService.sanitizeFileName('café.rofl')).toBe('café');
+    expect(ReplayService.sanitizeFileName('한.rofl')).toBe('한');
+    expect(ReplayService.sanitizeFileName('KR-123_final.v2.rofl')).toBe('KR-123_final.v2');
+  });
+
+  test('100자로 자른다', () => {
+    expect(ReplayService.sanitizeFileName(`${'a'.repeat(150)}.rofl`)).toHaveLength(100);
+  });
+});
+
+describe('generateReplayCode', () => {
+  test('RPY-YYMMDD-파일명-시퀀스 형식이고 번호는 시퀀스에서 받는다', async () => {
+    const execute = jest.fn(async () => ({ rows: [{ seq: '4321' }] }));
+    const gen = (service as unknown as {
+      generateReplayCode(fileName: string, executor: unknown): Promise<string>;
+    }).generateReplayCode.bind(service);
+
+    const code = await gen('game1', { execute });
+
+    expect(code).toMatch(/^RPY-\d{6}-game1-4321$/);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+});

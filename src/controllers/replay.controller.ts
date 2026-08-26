@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ReplayResponse, ReplayFileRequest, WebUploadResponse, ReplayListResponse, GetReplaysQuery } from '../types/replay.js';
 import { replaySaveFacade } from '../facade/replaySave.facade.js';
-import { replayService } from '../services/replay.service.js';
+import { ReplayService, replayService } from '../services/replay.service.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
 
 /**
@@ -87,9 +87,7 @@ export const webCreateReplay = async (
         continue;
       }
 
-      const fileName = originalName
-        .replace(/\.rofl$/i, '')
-        .replace(/\s+/g, '_');
+      const fileName = ReplayService.sanitizeFileName(originalName);
 
       // 2. Magic bytes 검증 ("RIOT")
       if (!replayService.validateMagicBytes(file.buffer)) {
