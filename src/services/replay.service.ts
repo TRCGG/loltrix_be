@@ -14,6 +14,8 @@ const DEFAULT_DOWNLOAD_TIMEOUT_MS = 20000;
 // 소켓 무응답 판정(ms). 데드라인과 별개로 둔다 — 헤더가 안 오거나 스트리밍이 멈춘 경우를
 // 데드라인까지 기다리지 않고 끊기 위함이다.
 const DOWNLOAD_IDLE_TIMEOUT_MS = 10000;
+// replay.file_name varchar(128)보다 짧게 잡아 저장 실패를 막는다.
+const MAX_FILE_NAME_LENGTH = 100;
 
 // .rofl 신형(패치 14.11+) 레이아웃 — 헤더("RIOT" 매직·버전 문자열, 288바이트) 뒤에 재생용
 // 암호화 페이로드가 오고, 메타데이터(statsJson 포함) JSON이 **파일 끝**에 붙는다:
@@ -351,37 +353,34 @@ export class ReplayService {
   }
 
   /**
-   * @desc replay_code 생성 (RPY-YYMMDD-filename-id) 형식
+   * @desc 파일명을 replay_code·URL 경로 파라미터에 안전한 형태로 정제
+   */
+  public static sanitizeFileName(fileName: string): string {
+    // macOS 업로드 파일명은 NFD라 결합 문자가 \p{L}에 안 잡혀 지워진다.
+    const slug = fileName
+      .normalize('NFC')
+      .replace(/\.rofl$/i, '')
+      .replace(/[^\p{L}\p{N}_.-]+/gu, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, MAX_FILE_NAME_LENGTH);
+    return slug || 'replay';
+  }
+
+  /**
+   * @desc replay_code 생성 (RPY-YYMMDD-filename-seq)
    */
   private async generateReplayCode(fileName: string, executor: DbOrTx = db): Promise<string> {
-    const seoulDateStr = new Date().toLocaleString('sv-SE', {
-      timeZone: 'Asia/Seoul',
-    });
+    const yymmdd = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' })
+      .format(new Date())
+      .substring(2)
+      .replace(/-/g, '');
 
-    const datePart = seoulDateStr.split(' ')[0];
-    const YYMMDD = datePart.substring(2).replace(/-/g, '');
+    // 시퀀스는 트랜잭션 롤백에도 되돌아가지 않아 동시 업로드에서 같은 번호가 나오지 않는다.
+    const { rows } = await executor.execute<{ seq: string }>(
+      sql`SELECT nextval('replay_code_seq') AS seq`,
+    );
 
-    const prefix = `RPY-${YYMMDD}-${fileName}-`;
-
-    const lastReplay = await executor
-      .select({ id: replay.id })
-      .from(replay)
-      .orderBy(desc(replay.id))
-      .limit(1);
-
-    let nextSequence = 1;
-
-    if (lastReplay.length > 0) {
-      const lastCode = lastReplay[0].id;
-
-      if (!Number.isNaN(lastCode)) {
-        nextSequence = lastCode + 1;
-      }
-    }
-
-    const sequencePart = nextSequence.toString();
-
-    return `${prefix}${sequencePart}`;
+    return `RPY-${yymmdd}-${fileName}-${rows[0].seq}`;
   }
 
   /**
@@ -615,7 +614,8 @@ export class ReplayService {
     tx: TransactionType,
     patchVersion?: string | null,
   ) {
-    const { fileName, fileUrl, gameType, createUser } = fileData;
+    const { fileUrl, gameType, createUser } = fileData;
+    const fileName = ReplayService.sanitizeFileName(fileData.fileName);
     const guildId = 'guild' in fileData ? fileData.guild.id : fileData.guildId;
 
     const rawDataString = JSON.stringify(rawData);
