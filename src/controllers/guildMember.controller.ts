@@ -11,6 +11,7 @@ import {
   UpdateMemberRoleAPIResponse,
   GuildAuditLogListAPIResponse,
   GuildAuditLogType,
+  GUILD_AUDIT_LOG_TYPES,
 } from '../types/guildMember.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { discordMemberRoleService } from '../services/discordMemberRole.service.js';
@@ -182,8 +183,11 @@ export const getGuildAuditLogs = async (
     // zod 상한 검증과 별개로 방어적 클램프 (validateRequest는 transform 값을 전달하지 않음)
     const pageNum = Math.min(Number(page) || 1, 100000);
     const limitNum = Math.min(Number(limit) || 50, 100);
-    const typeFilter: GuildAuditLogType | 'all' =
-      type === 'roleChange' || type === 'replayDelete' ? type : 'all';
+    const typeFilter: GuildAuditLogType | 'all' = (GUILD_AUDIT_LOG_TYPES as readonly string[]).includes(
+      type ?? '',
+    )
+      ? (type as GuildAuditLogType)
+      : 'all';
 
     const { result, totalCount } = await guildAuditLogService.getGuildAuditLogs(guildId, {
       type: typeFilter,

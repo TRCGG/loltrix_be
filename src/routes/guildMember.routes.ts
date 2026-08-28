@@ -116,7 +116,9 @@ const getAuditLogsSchema = z.object({
     guildId: z.string().min(1, 'Guild ID is required').max(128),
   }),
   query: z.object({
-    type: z.enum(['all', 'roleChange', 'replayDelete']).optional(),
+    type: z
+      .enum(['all', 'roleChange', 'replayDelete', 'competitionOpen', 'competitionClose', 'competitionDelete'])
+      .optional(),
     page: z
       .string()
       .regex(/^\d+$/, 'Page must be a positive number')

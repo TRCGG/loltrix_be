@@ -12,6 +12,7 @@ import statisticsRoutes from './statistics.route.js';
 import h2hRoutes from './h2h.routes.js';
 import riotCallbackRoutes from './riotCallback.routes.js';
 import tournamentRoutes from './tournament.routes.js';
+import competitionRoutes from './competition.routes.js';
 
 const router: Router = Router();
 
@@ -48,6 +49,9 @@ router.use('/matches', matchParticipantRoutes);
 router.use('/statistics', statisticsRoutes);
 
 router.use('/h2h', h2hRoutes);
+
+// 클랜 내 대회 (스크림/본경기 묶음)
+router.use('/competitions', competitionRoutes);
 
 // Test routes for error logging (개발 환경에서만)
 if (process.env.NODE_ENV === 'development') {

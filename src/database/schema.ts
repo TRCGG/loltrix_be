@@ -426,7 +426,9 @@ export type InsertDiscordGuildMember = typeof discordGuildMember.$inferInsert;
 export type GuildAuditLogDetail =
   // eventType 'roleChange' — source 생략 시 웹 수동 부여/회수
   | { fromRole: string; toRole: string; source?: 'discordPermission' }
-  | { gameId: string; source: 'web' | 'bot' }; // eventType 'replayDelete'
+  | { gameId: string; source: 'web' | 'bot' } // eventType 'replayDelete'
+  // eventType 'competitionOpen' | 'competitionClose' | 'competitionDelete' — 하드 삭제 뒤에도 읽히도록 name 포함
+  | { competitionId: number; name: string; source: 'web' | 'bot' };
 
 /**
  * 길드 관리 행위 통합 감사 로그 (append-only)
@@ -441,7 +443,7 @@ export const guildAuditLog = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
-    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete'
+    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete' | 'competitionOpen' | 'competitionClose' | 'competitionDelete'
     actorMemberId: text('actor_member_id').notNull(), // 행위자 Discord id (미상이면 'bot')
     targetMemberId: text('target_member_id'), // 대상 멤버 (roleChange), 없으면 NULL
     detail: jsonb('detail').$type<GuildAuditLogDetail>().notNull(),
