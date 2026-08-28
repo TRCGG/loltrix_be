@@ -69,12 +69,17 @@ export const webCreateReplay = async (
   next: NextFunction,
 ) => {
   try {
-    const { guildId, gameType, competitionId, nick } = req.body as {
+    const { guildId, gameType, nick } = req.body as {
       guildId: string;
       gameType?: string;
-      competitionId?: number;
       nick: string;
     };
+    // validateRequest는 zod 변환값을 넘기지 않아 multipart 문자열이 그대로 온다
+    const rawCompetitionId = (req.body as { competitionId?: unknown }).competitionId;
+    const competitionId =
+      rawCompetitionId === undefined || rawCompetitionId === '' || rawCompetitionId === null
+        ? undefined
+        : Number(rawCompetitionId);
     const files = Array.isArray(req.files) ? req.files : [];
 
     if (files.length === 0) {

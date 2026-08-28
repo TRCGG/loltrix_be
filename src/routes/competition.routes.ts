@@ -19,7 +19,7 @@ const guildParams = z.object({
 });
 
 const competitionParams = guildParams.extend({
-  competitionId: z.string().regex(/^\d+$/, 'competitionId must be a number'),
+  competitionId: z.string().regex(/^\d{1,9}$/, 'competitionId must be a number'),
 });
 
 // 봇(!대회개설 등) 경유 시 body.actorMemberId로 명령 사용자를 전달 (감사 로그용)

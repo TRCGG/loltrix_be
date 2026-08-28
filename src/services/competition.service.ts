@@ -19,6 +19,7 @@ export interface CompetitionRef {
 }
 
 const PG_UNIQUE_VIOLATION = '23505';
+const MAX_CANDIDATES = 10;
 
 /** drizzle이 감싼 pg 에러에서 unique 제약 이름을 꺼낸다. unique 위반이 아니면 null. */
 const violatedConstraint = (error: unknown): string | null => {
@@ -48,7 +49,16 @@ export class CompetitionService {
     executor: DbOrTx = db,
     lock = false,
   ): Promise<CompetitionRef | null> {
-    if (gameType === '1') return null;
+    if (gameType === '1') {
+      // 조용히 버리면 호출자는 대회에 올렸다고 믿는다.
+      if (competitionId != null) {
+        throw new BusinessError('competitionId requires gameType 2 or 3', 400, {
+          type: 'competition-requires-game-type',
+          isLoggable: false,
+        });
+      }
+      return null;
+    }
 
     const condition =
       competitionId != null
@@ -166,11 +176,12 @@ export class CompetitionService {
             .select()
             .from(competition)
             .where(eq(competition.guildId, guildId))
-            .orderBy(desc(competition.closeDate), desc(competition.id))
+            // DESC는 NULL이 먼저 온다 — close_date 없는 행이 "최근"이 되지 않게
+            .orderBy(sql`${competition.closeDate} DESC NULLS LAST`, desc(competition.id))
             .limit(1);
-      if (!latest) return { match: null, candidates: [] };
+      if (!latest) return { match: null, candidates: [], truncated: false };
       const [summary] = await this.attachCounts(guildId, [latest]);
-      return { match: summary, candidates: [] };
+      return { match: summary, candidates: [], truncated: false };
     }
 
     const [exact] = await db
@@ -180,18 +191,20 @@ export class CompetitionService {
       .limit(1);
     if (exact) {
       const [summary] = await this.attachCounts(guildId, [exact]);
-      return { match: summary, candidates: [] };
+      return { match: summary, candidates: [], truncated: false };
     }
 
+    // `%`·`_`는 LIKE 와일드카드라 이스케이프하지 않으면 "%" 입력이 전부와 매칭된다
+    const pattern = `%${name.replace(/[\\%_]/g, '\\$&')}%`;
     const partial = await db
       .select()
       .from(competition)
-      .where(and(eq(competition.guildId, guildId), ilike(competition.name, `%${name}%`)))
+      .where(and(eq(competition.guildId, guildId), ilike(competition.name, pattern)))
       .orderBy(desc(competition.createDate), desc(competition.id))
-      .limit(10);
-    const summaries = await this.attachCounts(guildId, partial);
-    if (summaries.length === 1) return { match: summaries[0], candidates: [] };
-    return { match: null, candidates: summaries };
+      .limit(MAX_CANDIDATES + 1);
+    const summaries = await this.attachCounts(guildId, partial.slice(0, MAX_CANDIDATES));
+    if (summaries.length === 1) return { match: summaries[0], candidates: [], truncated: false };
+    return { match: null, candidates: summaries, truncated: partial.length > MAX_CANDIDATES };
   }
 
   public async getDetail(guildId: string, id: number): Promise<CompetitionDetail | null> {

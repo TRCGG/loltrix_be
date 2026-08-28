@@ -10,7 +10,7 @@
 -- ════════════════════════════════════════════════════════════════════════
 
 INSERT INTO mmr_participant_metric (
-  custom_match_id, puuid, player_code, guild_id, season, champion_id, game_team, position, game_result, played_date,
+  custom_match_id, puuid, player_code, guild_id, season, game_type, champion_id, game_team, position, game_result, played_date,
   kills, deaths, assists, double_kills, triple_kills, quadra_kills, penta_kills,
   killing_sprees, largest_killing_spree, gold_earned, cc_time, game_duration,
   damage_to_champions, damage_taken, damage_self_mitigated, vision_score,
@@ -30,8 +30,8 @@ INSERT INTO mmr_participant_metric (
 WITH base AS (
   SELECT
     r.replay_code                                         AS custom_match_id,
-    -- guild_id·season·played_date는 custom_match 기준(canonical). replay는 guild id 이관 시 stale 가능.
-    cm.guild_id, cm.season,
+    -- guild_id·season·game_type·played_date는 custom_match 기준(canonical). replay는 guild id 이관 시 stale 가능.
+    cm.guild_id, cm.season, cm.game_type,
     cm.create_date                                        AS played_date,
     (p->>'PUUID')                                         AS puuid,
     (p->>'SKIN')                                          AS skin,
@@ -109,7 +109,7 @@ SELECT
   c.custom_match_id, c.puuid,
   -- 실제 계정 player_code (병합 없음 — TRC-243 A안. 본계정 합산은 조회 시점에 해석)
   ra.player_code AS player_code,
-  c.guild_id, c.season, ch.id AS champion_id,
+  c.guild_id, c.season, c.game_type, ch.id AS champion_id,
   c.game_team, c.position, c.game_result, c.played_date,
   c.kills, c.deaths, c.assists, c.double_kills, c.triple_kills, c.quadra_kills, c.penta_kills,
   c.killing_sprees, c.largest_killing_spree, c.gold_earned, c.cc_time, c.game_duration,

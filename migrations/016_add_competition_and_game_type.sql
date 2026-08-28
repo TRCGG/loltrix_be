@@ -1,8 +1,18 @@
 -- 대회(competition): 클랜 안에서 여는 이벤트 단위 (예: 멸망전 1회, 멸망전 2회).
 -- 스크림(game_type 2)·본경기(game_type 3) 경기가 어느 대회 것인지 잇는다. 일반내전(1)은 NULL.
 --
--- 적용 전 확인: SELECT game_type, count(*) FROM custom_match GROUP BY 1;
--- 2/3 행이 있으면 아래 backfill로 mmr에도 유형이 복제되어 그 즉시 일반내전 전적·H2H에서 빠진다.
+-- 가드: 이미 2/3으로 저장된 경기가 있으면 멈춘다. 이 마이그레이션 뒤에는 그 경기가 일반내전 조회에서 빠지는데
+-- competition_id가 NULL이라 어떤 대회 조회에도 안 잡히는 "유령 경기"가 되기 때문이다.
+-- 확인 후 의도적으로 진행하려면 해당 경기를 수동 배정할 대회를 먼저 정하고 이 블록을 지운 뒤 실행한다.
+DO $$
+DECLARE tagged integer;
+BEGIN
+  SELECT count(*) INTO tagged FROM custom_match WHERE game_type <> '1';
+  IF tagged > 0 THEN
+    RAISE EXCEPTION 'custom_match에 game_type 2/3 경기 %건이 있습니다. 대회 수동 배정 계획을 세운 뒤 이 가드를 지우고 다시 실행하세요.', tagged;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS competition (
   id          SERIAL       PRIMARY KEY,
   guild_id    VARCHAR(128) NOT NULL,
