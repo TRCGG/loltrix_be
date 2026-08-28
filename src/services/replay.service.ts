@@ -3,9 +3,10 @@ import { get } from 'https';
 import { createHash } from 'crypto';
 import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import { replay } from '../database/schema.js';
-import { ReplayFileRequest } from '../types/replay.js';
+import { ReplayFileRequest, ReplaySaveResult } from '../types/replay.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { systemConfigService } from './systemConfig.service.js';
+import { competitionService } from './competition.service.js';
 
 // 다운로드 예산 기본값(ms). 봇이 45초에 요청을 끊으므로 파싱·DB 저장 시간을 남겨야 한다.
 // 이 예산은 getRawData의 다운로드 전체(Range 최대 3번 + 전체 폴백)가 나눠 쓴다 —
@@ -609,12 +610,22 @@ export class ReplayService {
   }
 
   public async replaySave(
-    fileData: ReplayFileRequest | { fileName: string; fileUrl: string; gameType?: string; createUser: string; guildId: string },
+    fileData:
+      | ReplayFileRequest
+      | {
+          fileName: string;
+          fileUrl: string;
+          gameType?: string;
+          competitionId?: number;
+          createUser: string;
+          guildId: string;
+        },
     rawData: any,
     tx: TransactionType,
     patchVersion?: string | null,
-  ) {
-    const { fileUrl, gameType, createUser } = fileData;
+  ): Promise<ReplaySaveResult> {
+    const { fileUrl, createUser } = fileData;
+    const gameType = fileData.gameType ?? '1';
     const fileName = ReplayService.sanitizeFileName(fileData.fileName);
     const guildId = 'guild' in fileData ? fileData.guild.id : fileData.guildId;
 
@@ -628,6 +639,7 @@ export class ReplayService {
 
     const replayCode = await this.generateReplayCode(fileName, tx);
     const season = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season', tx);
+    const comp = await competitionService.resolveForSave(guildId, gameType, fileData.competitionId, tx, true);
 
     const newReplay = await tx
       .insert(replay)
@@ -637,7 +649,8 @@ export class ReplayService {
         fileUrl,
         rawData,
         hashData,
-        gameType: gameType ?? '1',
+        gameType,
+        competitionId: comp?.id ?? null,
         season,
         patchVersion: patchVersion ?? undefined,
         createUser,
@@ -650,6 +663,7 @@ export class ReplayService {
         fileUrl: replay.fileUrl,
         hashData: replay.hashData,
         gameType: replay.gameType,
+        competitionId: replay.competitionId,
         season: replay.season,
         patchVersion: replay.patchVersion,
         createUser: replay.createUser,
@@ -659,7 +673,7 @@ export class ReplayService {
         isDeleted: replay.isDeleted,
       });
 
-    return newReplay[0];
+    return { ...newReplay[0], competitionName: comp?.name ?? null };
   }
 
   /**

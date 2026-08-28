@@ -22,9 +22,10 @@ const webCreateReplaySchema = z.object({
       .max(128, 'guildId must be less than 128 characters'),
     gameType: z
       .enum(['1', '2', '3'], {
-        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(대회) 중 하나여야 합니다.' }),
+        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(본경기) 중 하나여야 합니다.' }),
       })
       .default('1'),
+    competitionId: z.coerce.number().int().positive().optional(),
     nick: z
       .string()
       .min(1, 'nick is required')
@@ -53,9 +54,10 @@ const createReplaySchema = z.object({
     fileUrl: z.string().max(255, '파일 URL은 255자 이하여야 합니다.'),
     gameType: z
       .enum(['1', '2', '3'], {
-        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(대회) 중 하나여야 합니다.' }),
+        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(본경기) 중 하나여야 합니다.' }),
       })
       .default('1'),
+    competitionId: z.coerce.number().int().positive().optional(),
     createUser: z
       .string()
       .min(1, '생성 유저는 필수 입력 사항입니다.')

@@ -105,6 +105,8 @@ export interface BuildMetricRowsInput {
   customMatchId: string;
   guildId: string;
   season: string;
+  /** 1=일반내전/2=스크림/3=본경기 (custom_match.game_type과 동일 값) */
+  gameType: string;
   playedDate: Date;
   /** puuid → 실제 계정 playerCode (병합 없음, match_participant와 동일 — TRC-243 A안).
    *  본계정 합산은 조회 시점에 subAccountLink 헬퍼로 해석한다. */
@@ -120,7 +122,8 @@ export class MmrMetricService {
     input: BuildMetricRowsInput,
     executor: DbOrTx = db,
   ): Promise<InsertMmrParticipantMetric[]> {
-    const { rawData, customMatchId, guildId, season, playedDate, puuidToPlayerCodeMap } = input;
+    const { rawData, customMatchId, guildId, season, gameType, playedDate, puuidToPlayerCodeMap } =
+      input;
 
     // championId: SKIN(영문 챔프명) → champion.id, 실패 시 NULL (backfill LEFT JOIN과 동일)
     const championMap = await this.buildChampionMap(rawData, executor);
@@ -141,6 +144,7 @@ export class MmrMetricService {
         playerCode: puuidToPlayerCodeMap.get(p.PUUID) ?? null,
         guildId,
         season,
+        gameType,
         championId: championMap.get(p.SKIN ?? '') ?? null,
         gameTeam: mapTeam(p.TEAM),
         position: mapPosition(p.TEAM_POSITION),

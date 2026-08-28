@@ -43,12 +43,13 @@ export class ReplaySaveFacade {
     fileName: string,
     guildId: string,
     gameType: string | undefined,
+    competitionId: number | undefined,
     nick: string,
     patchVersion: string,
   ): Promise<ReplaySaveResult> {
     return db.transaction(async (tx: TransactionType) => {
       const savedReplay = await replayService.replaySave(
-        { fileName, fileUrl: 'web', gameType, createUser: nick, guildId },
+        { fileName, fileUrl: 'web', gameType, competitionId, createUser: nick, guildId },
         rawData,
         tx,
         patchVersion,
@@ -90,6 +91,7 @@ export class ReplaySaveFacade {
     const customMatchData = {
       id: savedReplay.replayCode,
       gameType: savedReplay.gameType,
+      competitionId: savedReplay.competitionId,
       guildId: savedReplay.guildId,
       season: savedReplay.season,
     };
@@ -113,6 +115,7 @@ export class ReplaySaveFacade {
         customMatchId: customMatchData.id,
         guildId: savedReplay.guildId,
         season: savedReplay.season,
+        gameType: savedReplay.gameType,
         playedDate: savedCustomMatch.createDate,
         puuidToPlayerCodeMap,
       },
