@@ -39,6 +39,17 @@ export class StatisticsService {
             2
           )
         END`,
+      kills: sql<number>`COALESCE(SUM(${matchParticipant.kill}), 0)::integer`,
+      // 분당 챔피언 피해량 = 총 피해 / 총 플레이 분. time_played는 초.
+      avgDpm: sql<number>`
+        CASE
+          WHEN COALESCE(SUM(${matchParticipant.timePlayed}), 0) = 0 THEN 0
+          ELSE ROUND(
+            COALESCE(SUM(${matchParticipant.totalDamageChampions}), 0)::numeric
+            / (SUM(${matchParticipant.timePlayed})::numeric / 60),
+            0
+          )
+        END`,
     };
   }
 

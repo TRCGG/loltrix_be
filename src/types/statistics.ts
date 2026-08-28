@@ -6,15 +6,21 @@ import { MatchScope } from './matchScope.js';
 // 통계 조회 방식
 export type StatisticsDatePreset = 'recent' | 'season' | 'range';
 
+/** 통계 랭킹 공통 집계 — MatchStats + 킬 합계·평균 DPM */
+export interface RankingStats extends MatchStats {
+  kills: number;
+  avgDpm: number;
+}
+
 // 유저별 게임 통계 결과 타입
-export interface UserGameStatistic extends MatchStats {
+export interface UserGameStatistic extends RankingStats {
   riotName: string;
   riotNameTag: string;
   position?: string;
 }
 
 // 챔피언별 게임 통계 결과 타입
-export interface ChampionStatistic extends MatchStats {
+export interface ChampionStatistic extends RankingStats {
   champName: string;
   champNameEng: string;
   position?: string;
