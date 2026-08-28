@@ -15,6 +15,15 @@ const router: Router = Router();
 
 // --- Zod Schemas ---
 
+// 전적 조회 범위. 생략 시 일반내전. competitionId가 있으면 season은 무시된다.
+const scopeQuery = {
+  gameType: z
+    .string()
+    .regex(/^[123](,[123])*$/, 'gameType must be 1|2|3 (comma separated)')
+    .optional(),
+  competitionId: z.string().regex(/^\d+$/).transform(Number).optional(),
+};
+
 // 최근 게임 목록 및 모스트 픽 조회용 스키마
 const matchListSchema = z.object({
   params: z.object({
@@ -41,6 +50,7 @@ const matchListSchema = z.object({
       .regex(/^\d+$/, 'Limit must be a positive number')
       .transform(Number)
       .optional(),
+    ...scopeQuery,
   }),
 });
 
@@ -64,6 +74,7 @@ const matchDashboardSchema = z.object({
   query: z.object({
     riotNameTag: z.string().max(128, 'Search term must be less than 128 characters').optional(),
     season: z.string().max(32, 'season must be less than 32 characters').optional(),
+    ...scopeQuery,
   }),
 });
 

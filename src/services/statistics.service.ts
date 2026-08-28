@@ -8,8 +8,10 @@ import {
   guildMember,
 } from '../database/schema.js';
 import { subAccountLink } from '../database/subAccountLink.js';
+import { scopeConditions } from '../database/matchScope.js';
 import { systemConfigService } from './systemConfig.service.js';
 import { StatisticsDatePreset, StatisticsServiceOptions } from '../types/statistics.js';
+import { NORMAL_MATCH_SCOPE, isCompetitionScope } from '../types/matchScope.js';
 
 export class StatisticsService {
   /**
@@ -98,19 +100,24 @@ export class StatisticsService {
       sortBy = 'totalCount',
       page = 1,
       limit = 50,
+      scope = NORMAL_MATCH_SCOPE,
     } = options;
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
+    const competitionScope = isCompetitionScope(scope);
 
-    const dateCondition = this.buildDateCondition(datePreset, fromMonth, toMonth);
+    const dateCondition = competitionScope
+      ? undefined
+      : this.buildDateCondition(datePreset, fromMonth, toMonth);
     const shouldGroupByPosition = !!position;
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
-    const seasonCondition = await this.buildSeasonCondition(season);
+    const seasonCondition = competitionScope ? undefined : await this.buildSeasonCondition(season);
 
+    // 대회는 판수가 적어 최소 판수 조건을 두지 않는다.
     const statsMinGameCount = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
-    const minGameCount = sortBy === 'winRate' ? statsMinGameCount : 0;
+    const minGameCount = sortBy === 'winRate' && !competitionScope ? statsMinGameCount : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;
     const orderCriteria =
       sortBy === 'winRate' ? desc(statColumns.winRate) : desc(statColumns.totalCount);
@@ -123,9 +130,11 @@ export class StatisticsService {
       eq(customMatch.guildId, guildId),
       eq(guildMember.isDeleted, false),
       eq(guildMember.isMain, true),
-      eq(guildMember.status, '1'),
+      // 대회 랭킹은 당시 참가자 전원 — 종료 후 탈퇴한 사람이 빠지면 순위가 바뀐다.
+      competitionScope ? undefined : eq(guildMember.status, '1'),
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
+      ...scopeConditions(customMatch, scope),
       dateCondition,
       champCondition,
       positionCondition,
@@ -193,18 +202,22 @@ export class StatisticsService {
       sortBy = 'totalCount',
       page = 1,
       limit = 50,
+      scope = NORMAL_MATCH_SCOPE,
     } = options;
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
+    const competitionScope = isCompetitionScope(scope);
 
-    const dateCondition = this.buildDateCondition(datePreset, fromMonth, toMonth);
+    const dateCondition = competitionScope
+      ? undefined
+      : this.buildDateCondition(datePreset, fromMonth, toMonth);
     const shouldGroupByPosition = !!position;
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
-    const seasonCondition = await this.buildSeasonCondition(season);
+    const seasonCondition = competitionScope ? undefined : await this.buildSeasonCondition(season);
 
     const statsMinGameCount = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
-    const minGameCount = sortBy === 'winRate' ? statsMinGameCount : 0;
+    const minGameCount = sortBy === 'winRate' && !competitionScope ? statsMinGameCount : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;
     const orderCriteria =
       sortBy === 'winRate' ? desc(statColumns.winRate) : desc(statColumns.totalCount);
@@ -217,9 +230,10 @@ export class StatisticsService {
       eq(customMatch.isDeleted, false),
       eq(guildMember.isMain, true),
       eq(guildMember.isDeleted, false),
-      eq(guildMember.status, '1'),
+      competitionScope ? undefined : eq(guildMember.status, '1'),
       eq(guildMember.guildId, guildId),
       eq(customMatch.guildId, guildId),
+      ...scopeConditions(customMatch, scope),
       dateCondition,
       positionCondition,
       seasonCondition,

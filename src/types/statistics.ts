@@ -1,6 +1,7 @@
 // types/statistics.ts
 
 import { MatchStats } from './matchParticipant.js';
+import { MatchScope } from './matchScope.js';
 
 // 통계 조회 방식
 export type StatisticsDatePreset = 'recent' | 'season' | 'range';
@@ -38,6 +39,9 @@ export interface StatisticsRequestQuery {
   season?: string;
   limit?: string;
   sortBy?: 'totalCount' | 'winRate';
+  /** '1' | '2' | '3' 또는 콤마 구분(예: '2,3'). 생략 시 일반내전(competitionId 있으면 2,3). */
+  gameType?: string;
+  competitionId?: number;
 }
 
 // 서비스 계층으로 전달하는 가공된 조회 옵션 타입
@@ -50,4 +54,5 @@ export interface StatisticsServiceOptions
   sortBy?: 'totalCount' | 'winRate';
   page?: number;
   limit?: number;
+  scope?: MatchScope;
 }

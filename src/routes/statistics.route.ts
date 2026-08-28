@@ -32,6 +32,8 @@ const filterSchema = z.object({
       page: z.string().regex(/^\d+$/).transform(Number).optional(),
       limit: z.string().regex(/^\d+$/).transform(Number).optional(),
       sortBy: z.enum(['totalCount', 'winRate']).optional(),
+      gameType: z.string().regex(/^[123](,[123])*$/, 'gameType must be 1|2|3 (comma separated)').optional(),
+      competitionId: z.string().regex(/^\d+$/).transform(Number).optional(),
     })
     .superRefine((query, ctx) => {
       if (query.datePreset !== 'range') {

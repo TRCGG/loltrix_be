@@ -8,6 +8,11 @@ const router: Router = Router();
 
 // --- Schemas ---
 
+// 경기 유형 필터. 생략 시 일반내전. 상대전적은 대회 단위 필터(competitionId)를 받지 않는다.
+const scopeQuery = {
+  gameType: z.string().regex(/^[123](,[123])*$/).optional(),
+};
+
 const frequentSchema = z.object({
   params: z.object({
     guildId: z.string().min(1).max(128),
@@ -17,6 +22,7 @@ const frequentSchema = z.object({
     riotNameTag: z.string().max(128).optional(),
     q: z.string().max(128).optional(),
     season: z.string().max(32).optional(),
+    ...scopeQuery,
     limit: z
       .string()
       .regex(/^\d+$/)
@@ -38,6 +44,7 @@ const detailSchema = z.object({
     season: z.string().max(32).optional(),
     recentLimit: z.string().regex(/^\d+$/).optional(),
     recentOffset: z.string().regex(/^\d+$/).optional(),
+    ...scopeQuery,
   }),
 });
 
