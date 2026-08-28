@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ReplayResponse, ReplayFileRequest, WebUploadResponse, ReplayListResponse, GetReplaysQuery } from '../types/replay.js';
 import { replaySaveFacade } from '../facade/replaySave.facade.js';
 import { ReplayService, replayService } from '../services/replay.service.js';
+import { competitionService } from '../services/competition.service.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
 
 /**
@@ -68,12 +69,25 @@ export const webCreateReplay = async (
   next: NextFunction,
 ) => {
   try {
-    const { guildId, gameType, nick } = req.body as { guildId: string; gameType?: string; nick: string; };
+    const { guildId, gameType, nick } = req.body as {
+      guildId: string;
+      gameType?: string;
+      nick: string;
+    };
+    // validateRequest는 zod 변환값을 넘기지 않아 multipart 문자열이 그대로 온다
+    const rawCompetitionId = (req.body as { competitionId?: unknown }).competitionId;
+    const competitionId =
+      rawCompetitionId === undefined || rawCompetitionId === '' || rawCompetitionId === null
+        ? undefined
+        : Number(rawCompetitionId);
     const files = Array.isArray(req.files) ? req.files : [];
 
     if (files.length === 0) {
       return res.status(400).json({ status: 'error', message: 'No files uploaded' });
     }
+
+    // 대회 검증은 파일 루프 밖에서 한 번. 실패하면 파일별 save_failed가 아니라 요청 전체가 400.
+    await competitionService.resolveForSave(guildId, gameType ?? '1', competitionId);
 
     const succeeded: Array<{ fileName: string; replayCode: string }> = [];
     const failed: Array<{ fileName: string; reason: string }> = [];
@@ -117,7 +131,15 @@ export const webCreateReplay = async (
 
       // 5. 저장
       try {
-        const savedReplay = await replaySaveFacade.webSave(rawData, fileName, guildId, gameType, nick, patchVersion);
+        const savedReplay = await replaySaveFacade.webSave(
+          rawData,
+          fileName,
+          guildId,
+          gameType,
+          competitionId,
+          nick,
+          patchVersion,
+        );
         succeeded.push({ fileName, replayCode: savedReplay.replayCode });
       } catch (error) {
         console.error('web replay save failed:', { guildId, fileName }, error);

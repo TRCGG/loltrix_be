@@ -14,6 +14,12 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
 });
 
+// multipart 폼은 값을 안 고르면 ''로 오고, 그걸 coerce하면 0 → positive 실패로 업로드 전체가 400이 된다.
+const optionalCompetitionId = z.preprocess(
+  (v) => (v === '' || v == null ? undefined : v),
+  z.coerce.number().int().positive().max(2147483647).optional(),
+);
+
 const webCreateReplaySchema = z.object({
   body: z.object({
     guildId: z
@@ -22,9 +28,10 @@ const webCreateReplaySchema = z.object({
       .max(128, 'guildId must be less than 128 characters'),
     gameType: z
       .enum(['1', '2', '3'], {
-        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(대회) 중 하나여야 합니다.' }),
+        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(본경기) 중 하나여야 합니다.' }),
       })
       .default('1'),
+    competitionId: optionalCompetitionId,
     nick: z
       .string()
       .min(1, 'nick is required')
@@ -53,9 +60,10 @@ const createReplaySchema = z.object({
     fileUrl: z.string().max(255, '파일 URL은 255자 이하여야 합니다.'),
     gameType: z
       .enum(['1', '2', '3'], {
-        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(대회) 중 하나여야 합니다.' }),
+        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(본경기) 중 하나여야 합니다.' }),
       })
       .default('1'),
+    competitionId: optionalCompetitionId,
     createUser: z
       .string()
       .min(1, '생성 유저는 필수 입력 사항입니다.')

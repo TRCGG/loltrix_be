@@ -13,6 +13,8 @@ import {
   smallint,
   numeric,
   index,
+  uniqueIndex,
+  serial,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 
@@ -42,6 +44,32 @@ export const message = pgTable('message', {
   isDeleted: boolean('is_deleted').notNull().default(false),
 });
 
+/**
+ * 대회: 클랜 안에서 여는 이벤트 단위(멸망전 1회 등). 스크림(2)·본경기(3) 경기가 어느 대회 것인지 잇는다.
+ * 길드당 OPEN은 하나 — 리플 태깅 시 대회명 없이 OPEN 한 건으로 자동 해석하기 위한 전제.
+ */
+export const competition = pgTable(
+  'competition',
+  {
+    id: serial('id').primaryKey(),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    name: varchar('name', { length: 64 }).notNull(),
+    season: varchar('season', { length: 32 }).notNull(),
+    status: varchar('status', { length: 16 }).notNull().default('OPEN'), // OPEN / CLOSED
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    closeDate: timestamp('close_date', { withTimezone: true }),
+  },
+  (t) => [
+    unique('uq_competition_guild_name').on(t.guildId, t.name),
+    uniqueIndex('uq_competition_guild_open')
+      .on(t.guildId)
+      .where(sql`${t.status} = 'OPEN'`),
+  ],
+);
+
+export type Competition = typeof competition.$inferSelect;
+export type InsertCompetition = typeof competition.$inferInsert;
+
 export const replay = pgTable('replay', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   replayCode: varchar('replay_code', { length: 255 }).notNull().unique(),
@@ -49,7 +77,9 @@ export const replay = pgTable('replay', {
   fileUrl: varchar('file_url', { length: 255 }).notNull(),
   rawData: jsonb('raw_data').notNull(),
   hashData: varchar('hash_data', { length: 128 }).notNull(),
-  gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
+  gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=본경기
+  // 원천 값. custom_match·mmr_participant_metric의 competition_id는 저장 시 여기서 복제된다.
+  competitionId: integer('competition_id').references(() => competition.id),
   season: varchar('season', { length: 32 }).notNull(),
   patchVersion: varchar('patch_version', { length: 32 }),
   createUser: varchar('create_user', { length: 255 }).notNull(),
@@ -62,6 +92,9 @@ export const replay = pgTable('replay', {
 }, (t) => [
   // 중복검사(checkDuplicateByHash: hash_data = ? AND guild_id = ?) 풀스캔 방지
   index('idx_replay_hash_guild').on(t.hashData, t.guildId),
+  index('idx_replay_competition')
+    .on(t.competitionId)
+    .where(sql`${t.competitionId} IS NOT NULL`),
 ]);
 
 export type Guild = typeof guild.$inferSelect;
@@ -168,18 +201,27 @@ export const authSession = pgTable(
 
 export type AuthSession = typeof authSession.$inferSelect;
 export type InsertAuthSession = typeof authSession.$inferInsert;
-export const customMatch = pgTable('custom_match', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
-  guildId: varchar('guild_id', { length: 128 }).notNull(),
-  season: varchar('season', { length: 32 }).notNull(),
-  createDate: timestamp('create_date').notNull().defaultNow(),
-  updateDate: timestamp('update_date')
-    .defaultNow()
-    .notNull()
-    .$onUpdate(() => new Date()),
-  isDeleted: boolean('is_deleted').notNull().default(false),
-});
+export const customMatch = pgTable(
+  'custom_match',
+  {
+    id: varchar('id', { length: 255 }).primaryKey(),
+    gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=본경기
+    competitionId: integer('competition_id').references(() => competition.id),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    season: varchar('season', { length: 32 }).notNull(),
+    createDate: timestamp('create_date').notNull().defaultNow(),
+    updateDate: timestamp('update_date')
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+  },
+  (t) => [
+    index('idx_custom_match_competition')
+      .on(t.competitionId)
+      .where(sql`${t.competitionId} IS NOT NULL`),
+  ],
+);
 
 export type CustomMatch = typeof customMatch.$inferSelect;
 export type InsertCustomMatch = typeof customMatch.$inferInsert;
@@ -384,7 +426,9 @@ export type InsertDiscordGuildMember = typeof discordGuildMember.$inferInsert;
 export type GuildAuditLogDetail =
   // eventType 'roleChange' — source 생략 시 웹 수동 부여/회수
   | { fromRole: string; toRole: string; source?: 'discordPermission' }
-  | { gameId: string; source: 'web' | 'bot' }; // eventType 'replayDelete'
+  | { gameId: string; source: 'web' | 'bot' } // eventType 'replayDelete'
+  // eventType 'competitionOpen' | 'competitionClose' | 'competitionDelete' — 하드 삭제 뒤에도 읽히도록 name 포함
+  | { competitionId: number; name: string; source: 'web' | 'bot' };
 
 /**
  * 길드 관리 행위 통합 감사 로그 (append-only)
@@ -399,7 +443,7 @@ export const guildAuditLog = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
-    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete'
+    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete' | 'competitionOpen' | 'competitionClose' | 'competitionDelete'
     actorMemberId: text('actor_member_id').notNull(), // 행위자 Discord id (미상이면 'bot')
     targetMemberId: text('target_member_id'), // 대상 멤버 (roleChange), 없으면 NULL
     detail: jsonb('detail').$type<GuildAuditLogDetail>().notNull(),
@@ -445,6 +489,8 @@ export const mmrParticipantMetric = pgTable(
     playerCode: varchar('player_code', { length: 64 }),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
     season: varchar('season', { length: 32 }).notNull(),
+    // 1=일반내전/2=스크림/3=본경기. custom_match 값 복제 — H2H·MMR 조회가 custom_match 조인 없이 유형을 거르기 위함
+    gameType: char('game_type', { length: 1 }).notNull().default('1'),
     championId: varchar('champion_id', { length: 16 }), // SKIN→champion.id (실패 시 NULL)
     gameTeam: varchar('game_team', { length: 8 }).notNull(), // blue/red
     position: varchar('position', { length: 8 }).notNull(), // TOP/JUG/MID/ADC/SUP

@@ -110,13 +110,27 @@ export interface DiscordMemberRoleListAPIResponse {
 
 // --- 클랜관리 통합 관리 로그 (역할 변경 + 리플 삭제) ---
 
-export type GuildAuditLogType = 'roleChange' | 'replayDelete';
+export type GuildAuditLogType =
+  | 'roleChange'
+  | 'replayDelete'
+  | 'competitionOpen'
+  | 'competitionClose'
+  | 'competitionDelete';
+
+export const GUILD_AUDIT_LOG_TYPES: readonly GuildAuditLogType[] = [
+  'roleChange',
+  'replayDelete',
+  'competitionOpen',
+  'competitionClose',
+  'competitionDelete',
+];
 
 /**
- * @desc 관리 로그 단일 항목 — 역할 부여/회수(roleChange) 또는 리플 삭제(replayDelete)
- * - roleChange: targetMemberId/fromRole/toRole 채워짐, gameId/source는 null
- * - replayDelete: gameId/source 채워짐, targetMemberId/fromRole/toRole은 null
- * - displayName = guild 별명 ?? global 별명 ?? discord_id ('bot'은 그대로 'bot')
+ * @desc 관리 로그 단일 항목
+ * - roleChange: targetMemberId/fromRole/toRole 채워짐
+ * - replayDelete: gameId/source 채워짐
+ * - competitionOpen/Close/Delete: competitionId/competitionName/source 채워짐
+ * - 나머지 필드는 null. displayName = guild 별명 ?? global 별명 ?? discord_id ('bot'은 그대로 'bot')
  */
 export interface GuildAuditLogItem {
   type: GuildAuditLogType;
@@ -129,6 +143,8 @@ export interface GuildAuditLogItem {
   toRole: string | null;
   gameId: string | null;
   source: string | null;
+  competitionId: number | null;
+  competitionName: string | null;
 }
 
 export interface GuildAuditLogListAPIResponse {

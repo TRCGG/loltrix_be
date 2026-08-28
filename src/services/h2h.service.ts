@@ -3,6 +3,8 @@ import { alias } from 'drizzle-orm/pg-core';
 import { db } from '../database/connectionPool.js';
 import { mmrParticipantMetric, riotAccount, guildMember, champion } from '../database/schema.js';
 import { subAccountLink } from '../database/subAccountLink.js';
+import { metricScopeConditions } from '../database/matchScope.js';
+import { GameType, NORMAL_MATCH_SCOPE } from '../types/matchScope.js';
 import {
   FrequentH2hItem,
   H2hProfile,
@@ -51,9 +53,9 @@ export class H2hService {
   public async getFrequentOpponents(
     guildId: string,
     mePlayerCode: string,
-    options: { q?: string; limit?: string; season: string | null },
+    options: { q?: string; limit?: string; season: string | null; gameTypes?: GameType[] },
   ): Promise<FrequentH2hItem[]> {
-    const { q, limit = '10', season } = options;
+    const { q, limit = '10', season, gameTypes = NORMAL_MATCH_SCOPE.gameTypes } = options;
     const limitNum = Number(limit);
 
     const mpmMe = alias(mmrParticipantMetric, 'mpm_me');
@@ -61,7 +63,6 @@ export class H2hService {
     // 나·상대 각각 effective player_code(링크된 부캐 → 본캐)로 해석 (TRC-243 A안)
     const linkMe = subAccountLink('link_me', guildId, mpmMe.playerCode);
     const linkOp = subAccountLink('link_op', guildId, mpmOp.playerCode);
-    const seasonFilter = season === null ? undefined : eq(mpmMe.season, season);
 
     const matchupsExpr = sql<number>`COUNT(DISTINCT ${mpmMe.customMatchId})::integer`;
     const winsExpr = sql<number>`COUNT(DISTINCT CASE WHEN ${mpmMe.gameResult} = 1 THEN ${mpmMe.customMatchId} END)::integer`;
@@ -100,7 +101,8 @@ export class H2hService {
           ne(mpmMe.gameTeam, mpmOp.gameTeam), // 맞붙은(다른 팀)
           eq(mpmMe.isDeleted, false),
           eq(mpmOp.isDeleted, false),
-          seasonFilter,
+          // 유형은 경기 단위 값이라 셀프조인 한쪽에만 건다
+          ...metricScopeConditions(mpmMe, gameTypes, season),
         ),
       )
       .groupBy(riotAccount.puuid, riotAccount.riotName, riotAccount.riotNameTag);
@@ -143,16 +145,21 @@ export class H2hService {
     guildId: string,
     mePlayerCode: string,
     oppoPlayerCode: string,
-    opts: { season: string | null; recentLimit: number; recentOffset: number },
+    opts: {
+      season: string | null;
+      recentLimit: number;
+      recentOffset: number;
+      gameTypes?: GameType[];
+    },
   ): Promise<H2hDetail> {
-    const { season, recentLimit, recentOffset } = opts;
+    const { season, recentLimit, recentOffset, gameTypes = NORMAL_MATCH_SCOPE.gameTypes } = opts;
 
     const [me, oppo, meta, againstRows, togetherRows] = await Promise.all([
-      this.getProfile(guildId, mePlayerCode, season),
-      this.getProfile(guildId, oppoPlayerCode, season),
-      this.getMeta(guildId, mePlayerCode, oppoPlayerCode, season),
-      this.queryAgainstRawRows(guildId, mePlayerCode, oppoPlayerCode, season),
-      this.queryTogetherRawRows(guildId, mePlayerCode, oppoPlayerCode, season),
+      this.getProfile(guildId, mePlayerCode, season, gameTypes),
+      this.getProfile(guildId, oppoPlayerCode, season, gameTypes),
+      this.getMeta(guildId, mePlayerCode, oppoPlayerCode, season, gameTypes),
+      this.queryAgainstRawRows(guildId, mePlayerCode, oppoPlayerCode, season, gameTypes),
+      this.queryTogetherRawRows(guildId, mePlayerCode, oppoPlayerCode, season, gameTypes),
     ]);
 
     const against = this.buildAgainst(againstRows, me.seasonAvgKda, recentLimit, recentOffset);
@@ -169,11 +176,6 @@ export class H2hService {
     };
   }
 
-  /** @desc 시즌 조건 (null이면 전체) */
-  private seasonCond(season: string | null): SQL | undefined {
-    return season === null ? undefined : eq(mmrParticipantMetric.season, season);
-  }
-
   /**
    * @desc 프로필 (puuid·riotName·tag + 시즌 mostLane·seasonWR) + 시즌 평균 KDA.
    * seasonAvgKda는 matchups kdaDiff 기준값으로 재사용 (시즌 게임 1회 스캔). mmr은 항상 null.
@@ -182,6 +184,7 @@ export class H2hService {
     guildId: string,
     playerCode: string,
     season: string | null,
+    gameTypes: GameType[],
   ): Promise<{ profile: H2hProfile; seasonAvgKda: number | null }> {
     const [ra] = await db
       .select({
@@ -212,7 +215,7 @@ export class H2hService {
           eq(link.effectivePlayerCode, playerCode),
           eq(mmrParticipantMetric.guildId, guildId),
           eq(mmrParticipantMetric.isDeleted, false),
-          this.seasonCond(season),
+          ...metricScopeConditions(mmrParticipantMetric, gameTypes, season),
         ),
       );
 
@@ -236,13 +239,13 @@ export class H2hService {
     mePlayerCode: string,
     oppoPlayerCode: string,
     season: string | null,
+    gameTypes: GameType[],
   ): Promise<{ totalMet: number; firstMet: Date | null; lastMet: Date | null }> {
     const mp = alias(mmrParticipantMetric, 'mp_meta');
     const op = alias(mmrParticipantMetric, 'op_meta');
     // 나·상대 각각 effective player_code 로 해석 (TRC-243 A안)
     const linkMe = subAccountLink('link_me', guildId, mp.playerCode);
     const linkOp = subAccountLink('link_op', guildId, op.playerCode);
-    const seasonFilter = season === null ? undefined : eq(mp.season, season);
 
     const [r] = await db
       .select({
@@ -261,7 +264,7 @@ export class H2hService {
           eq(mp.guildId, guildId),
           eq(mp.isDeleted, false),
           eq(op.isDeleted, false),
-          seasonFilter,
+          ...metricScopeConditions(mp, gameTypes, season),
         ),
       );
 
@@ -279,6 +282,7 @@ export class H2hService {
     mePlayerCode: string,
     oppoPlayerCode: string,
     season: string | null,
+    gameTypes: GameType[],
   ) {
     const mp = alias(mmrParticipantMetric, 'mp_ag');
     const op = alias(mmrParticipantMetric, 'op_ag');
@@ -287,7 +291,6 @@ export class H2hService {
     // 나·상대 각각 effective player_code 로 해석 (TRC-243 A안)
     const linkMe = subAccountLink('link_me', guildId, mp.playerCode);
     const linkOp = subAccountLink('link_op', guildId, op.playerCode);
-    const seasonFilter = season === null ? undefined : eq(mp.season, season);
 
     return db
       .select({
@@ -381,7 +384,7 @@ export class H2hService {
           ne(mp.gameTeam, op.gameTeam), // 맞붙은(다른 팀)
           eq(mp.isDeleted, false),
           eq(op.isDeleted, false),
-          seasonFilter,
+          ...metricScopeConditions(mp, gameTypes, season),
         ),
       )
       .orderBy(mp.playedDate);
@@ -574,6 +577,7 @@ export class H2hService {
     mePlayerCode: string,
     oppoPlayerCode: string,
     season: string | null,
+    gameTypes: GameType[],
   ) {
     const mp = alias(mmrParticipantMetric, 'mp_wg');
     const op = alias(mmrParticipantMetric, 'op_wg');
@@ -582,7 +586,6 @@ export class H2hService {
     // 나·상대 각각 effective player_code 로 해석 (TRC-243 A안)
     const linkMe = subAccountLink('link_me', guildId, mp.playerCode);
     const linkOp = subAccountLink('link_op', guildId, op.playerCode);
-    const seasonFilter = season === null ? undefined : eq(mp.season, season);
 
     return db
       .select({
@@ -617,7 +620,7 @@ export class H2hService {
           eq(mp.gameTeam, op.gameTeam), // 함께한(같은 팀)
           eq(mp.isDeleted, false),
           eq(op.isDeleted, false),
-          seasonFilter,
+          ...metricScopeConditions(mp, gameTypes, season),
         ),
       )
       .orderBy(mp.playedDate);
