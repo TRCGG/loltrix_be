@@ -232,8 +232,7 @@ export const getMostPicks = async (
     return res.status(200).json({
       status: 'success',
       message: 'Most picks retrieved successfully',
-      data: mostPicks,
-      lines,
+      data: { mostPicks, lines },
     });
   } catch (error) {
     console.error('Error retrieving most picks:', error);

@@ -48,7 +48,7 @@ const lines = [
   { position: 'TOP', totalCount: 4, win: 1, lose: 3, winRate: 25, kda: 1.2 },
 ];
 
-describe('getMostPicks - 응답에 포지션별 집계 lines 동봉', () => {
+describe('getMostPicks - 응답 data에 포지션별 집계 lines 동봉', () => {
   beforeEach(() => {
     getConfigOrDefault.mockResolvedValue('2026');
     searchGuildMemberByRiotId.mockResolvedValue([{ playerCode: 'p1' }]);
@@ -56,7 +56,7 @@ describe('getMostPicks - 응답에 포지션별 집계 lines 동봉', () => {
     getLineRecordSvc.mockResolvedValue(lines);
   });
 
-  test('data는 getMostPicks 결과 그대로, lines는 getLineRecord 결과를 싣는다', async () => {
+  test('data에 getMostPicks 결과와 getLineRecord 결과를 함께 싣는다', async () => {
     const res = makeRes();
 
     await getMostPicks(makeReq({ position: 'MID' }), res as any);
@@ -65,8 +65,7 @@ describe('getMostPicks - 응답에 포지션별 집계 lines 동봉', () => {
     expect(res.json).toHaveBeenCalledWith({
       status: 'success',
       message: 'Most picks retrieved successfully',
-      data: mostPicks,
-      lines,
+      data: { mostPicks, lines },
     });
   });
 

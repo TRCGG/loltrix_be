@@ -128,9 +128,12 @@ export interface MatchResponse<T> {
   data: T | MultipleMember[] | null;
 }
 
-/** lines는 data 목록과 같은 시즌·모집단으로 집계돼야 한다 (프론트가 라인 비중 % 분모로 쓴다) */
-export interface MostPicksResponse extends MatchResponse<MostPick[]> {
-  lines?: LineStat[];
+/** lines는 mostPicks와 같은 시즌·모집단으로 집계돼야 한다 (프론트가 라인 비중 % 분모로 쓴다) */
+export interface MostPicksData {
+  mostPicks: MostPick[];
+  lines: LineStat[];
 }
+
+export type MostPicksResponse = MatchResponse<MostPicksData>;
 
 export type { CustomMatch };
