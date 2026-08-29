@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
+import { monthSchema, rangeRequiresMonths } from './monthQuery.js';
 import {
   getRecentGames,
   getMatchDashboard,
@@ -55,9 +56,14 @@ const matchListSchema = z.object({
 });
 
 const mostPickSchema = matchListSchema.extend({
-  query: matchListSchema.shape.query.extend({
-    position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
-  }),
+  query: matchListSchema.shape.query
+    .extend({
+      position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
+      datePreset: z.enum(['recent', 'season', 'range']).optional(),
+      fromMonth: monthSchema.optional(),
+      toMonth: monthSchema.optional(),
+    })
+    .superRefine(rangeRequiresMonths),
 });
 
 const matchDashboardSchema = z.object({
@@ -192,6 +198,14 @@ router.get(
       type: 'string',
       enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']
     }
+    #swagger.parameters['datePreset'] = {
+      in: 'query',
+      description: '조회 기간. recent=최근 1개월, range=월 범위(fromMonth·toMonth·season 필수), season 또는 생략=시즌 전체',
+      type: 'string',
+      enum: ['recent', 'season', 'range']
+    }
+    #swagger.parameters['fromMonth'] = { in: 'query', description: '시작 월 (datePreset=range일 때 필수)', type: 'string' }
+    #swagger.parameters['toMonth'] = { in: 'query', description: '종료 월 (datePreset=range일 때 필수)', type: 'string' }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
   */

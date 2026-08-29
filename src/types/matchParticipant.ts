@@ -1,5 +1,6 @@
 // types/matchParticipant.ts
 import { CustomMatch } from '../database/schema.js';
+import { DatePreset } from '../database/datePeriod.js';
 
 /** 승률 및 KDA 기본 통계 */
 export interface MatchStats {
@@ -121,6 +122,9 @@ export interface MatchQuery {
   riotNameTag?: string;
   season?: string;
   position?: string;
+  datePreset?: DatePreset;
+  fromMonth?: string;
+  toMonth?: string;
   page?: string;
   limit?: string;
   /** '1' | '2' | '3' 또는 콤마 구분(예: '2,3'). 생략 시 일반내전(competitionId 있으면 2,3). */

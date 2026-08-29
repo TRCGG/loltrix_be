@@ -186,7 +186,8 @@ export const getMostPicks = async (
 ) => {
   try {
     const { guildId, riotName } = req.params;
-    const { riotNameTag, season, page, limit, position } = req.query;
+    const { riotNameTag, season, page, limit, position, datePreset, fromMonth, toMonth } =
+      req.query;
 
     const defaultSeason = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
     const lolSeason = season || defaultSeason;
@@ -214,7 +215,7 @@ export const getMostPicks = async (
     }
 
     const { playerCode } = members[0];
-    const scope = scopeFromQuery(req.query);
+    const scope = { ...scopeFromQuery(req.query), datePreset, fromMonth, toMonth };
 
     const [{ mostPicks, totalCount }, lines] = await Promise.all([
       matchParticipantService.getMostPicks(
