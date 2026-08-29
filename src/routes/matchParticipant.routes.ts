@@ -47,6 +47,7 @@ const matchListSchema = z.object({
 const mostPickSchema = matchListSchema.extend({
   query: matchListSchema.shape.query.extend({
     position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
+    datePreset: z.enum(['recent', 'season']).optional(),
   }),
 });
 
@@ -180,6 +181,12 @@ router.get(
       description: '라인 필터',
       type: 'string',
       enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']
+    }
+    #swagger.parameters['datePreset'] = {
+      in: 'query',
+      description: '조회 기간. recent=최근 1개월, season 또는 생략=시즌 전체',
+      type: 'string',
+      enum: ['recent', 'season']
     }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }

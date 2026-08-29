@@ -183,7 +183,7 @@ export const getMostPicks = async (
 ) => {
   try {
     const { guildId, riotName } = req.params;
-    const { riotNameTag, season, page, limit, position } = req.query;
+    const { riotNameTag, season, page, limit, position, datePreset } = req.query;
 
     const defaultSeason = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
     const lolSeason = season || defaultSeason;
@@ -220,8 +220,9 @@ export const getMostPicks = async (
         Number(page) || 1,
         Number(limit) || 10,
         position,
+        datePreset,
       ),
-      matchParticipantService.getLineRecord(playerCode, lolSeason, guildId),
+      matchParticipantService.getLineRecord(playerCode, lolSeason, guildId, datePreset),
     ]);
 
     res.setHeader('X-Total-Count', totalCount.toString());

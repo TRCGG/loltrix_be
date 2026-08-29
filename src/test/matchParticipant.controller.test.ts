@@ -72,8 +72,19 @@ describe('getMostPicks - 응답 data에 포지션별 집계 lines 동봉', () =>
   test('lines는 position 파라미터와 무관하게 같은 시즌·길드·플레이어로 조회한다', async () => {
     await getMostPicks(makeReq({ position: 'TOP', season: '2025' }), makeRes() as any);
 
-    expect(getLineRecordSvc).toHaveBeenCalledWith('p1', '2025', 'g1');
-    expect(getMostPicksSvc).toHaveBeenCalledWith('p1', '2025', 'g1', 1, 10, 'TOP');
+    // datePreset 미지정 → 기간 조건 없이 시즌 전체 (기존 동작)
+    expect(getLineRecordSvc).toHaveBeenCalledWith('p1', '2025', 'g1', undefined);
+    expect(getMostPicksSvc).toHaveBeenCalledWith('p1', '2025', 'g1', 1, 10, 'TOP', undefined);
+  });
+
+  test('datePreset=recent면 목록과 lines에 같은 기간 조건을 넘긴다', async () => {
+    await getMostPicks(
+      makeReq({ position: 'ALL', season: '2025', datePreset: 'recent' }),
+      makeRes() as any,
+    );
+
+    expect(getMostPicksSvc).toHaveBeenCalledWith('p1', '2025', 'g1', 1, 10, 'ALL', 'recent');
+    expect(getLineRecordSvc).toHaveBeenCalledWith('p1', '2025', 'g1', 'recent');
   });
 
   test('페이지네이션 헤더는 기존과 동일하게 세팅된다', async () => {

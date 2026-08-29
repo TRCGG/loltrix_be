@@ -15,6 +15,7 @@ import {
   guildAuditLog,
 } from '../database/schema.js'; // 스키마 import 추가
 import { subAccountLink } from '../database/subAccountLink.js';
+import { DatePreset, recentPeriodCondition } from '../database/recentPeriod.js';
 import { SystemError } from '../types/error.js';
 import { replayService } from './replay.service.js';
 
@@ -298,7 +299,12 @@ export class MatchParticipantService {
    * @desc 전체 라인별(포지션별) 전적 조회
    * 정렬 순서: TOP -> JUG -> MID -> ADC -> SUP
    */
-  public async getLineRecord(playerCode: string, season: string, guildId: string) {
+  public async getLineRecord(
+    playerCode: string,
+    season: string,
+    guildId: string,
+    datePreset?: DatePreset,
+  ) {
     // 포지션별 통계 집계
     const statColumns = this.getStatSqlChunks();
     // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
@@ -319,6 +325,7 @@ export class MatchParticipantService {
           eq(customMatch.isDeleted, false),
           eq(customMatch.guildId, guildId),
           eq(customMatch.season, season),
+          datePreset === 'recent' ? recentPeriodCondition(customMatch.createDate) : undefined,
         ),
       )
       .groupBy(matchParticipant.position).orderBy(sql`
@@ -347,6 +354,7 @@ export class MatchParticipantService {
     page = 1,
     limit = 10,
     position?: string,
+    datePreset?: DatePreset,
   ) {
     const offset = (page - 1) * limit;
     // 통계 쿼리 실행
@@ -363,6 +371,7 @@ export class MatchParticipantService {
       eq(customMatch.guildId, guildId),
       eq(customMatch.season, season),
       positionCondition,
+      datePreset === 'recent' ? recentPeriodCondition(customMatch.createDate) : undefined,
     );
 
     const picksQuery = db

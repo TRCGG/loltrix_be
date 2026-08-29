@@ -8,6 +8,7 @@ import {
   guildMember,
 } from '../database/schema.js';
 import { subAccountLink } from '../database/subAccountLink.js';
+import { recentPeriodCondition } from '../database/recentPeriod.js';
 import { systemConfigService } from './systemConfig.service.js';
 import { StatisticsDatePreset, StatisticsServiceOptions } from '../types/statistics.js';
 
@@ -54,7 +55,7 @@ export class StatisticsService {
 
     if (datePreset === 'range') {
       if (!fromMonth || !toMonth) {
-        return sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
+        return recentPeriodCondition(customMatch.createDate);
       }
 
       const fromMonthNumber = Number(fromMonth);
@@ -68,7 +69,7 @@ export class StatisticsService {
       return or(gte(monthExpr, fromMonthNumber), sql`${monthExpr} <= ${toMonthNumber}`);
     }
 
-    return sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
+    return recentPeriodCondition(customMatch.createDate);
   }
 
   /**
