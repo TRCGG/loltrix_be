@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
 import {
   matchParticipant,
@@ -9,6 +9,7 @@ import {
 } from '../database/schema.js';
 import { subAccountLink } from '../database/subAccountLink.js';
 import { scopeConditions } from '../database/matchScope.js';
+import { periodCondition } from '../database/datePeriod.js';
 import { systemConfigService } from './systemConfig.service.js';
 import { StatisticsDatePreset, StatisticsServiceOptions } from '../types/statistics.js';
 import { NORMAL_MATCH_SCOPE, isCompetitionScope } from '../types/matchScope.js';
@@ -53,35 +54,12 @@ export class StatisticsService {
     };
   }
 
-  /**
-   * @desc 조회 방식에 따라 최근 1개월, 시즌 전체, 월 범위용 날짜 조건을 생성
-   */
   private buildDateCondition(
     datePreset: StatisticsDatePreset | undefined,
     fromMonth: string | undefined,
     toMonth: string | undefined,
   ) {
-    if (datePreset === 'season') {
-      return undefined;
-    }
-
-    if (datePreset === 'range') {
-      if (!fromMonth || !toMonth) {
-        return sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
-      }
-
-      const fromMonthNumber = Number(fromMonth);
-      const toMonthNumber = Number(toMonth);
-      const monthExpr = sql<number>`EXTRACT(MONTH FROM ${customMatch.createDate})::integer`;
-
-      if (fromMonthNumber <= toMonthNumber) {
-        return and(gte(monthExpr, fromMonthNumber), sql`${monthExpr} <= ${toMonthNumber}`);
-      }
-
-      return or(gte(monthExpr, fromMonthNumber), sql`${monthExpr} <= ${toMonthNumber}`);
-    }
-
-    return sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
+    return periodCondition(customMatch.createDate, datePreset ?? 'recent', fromMonth, toMonth);
   }
 
   /**

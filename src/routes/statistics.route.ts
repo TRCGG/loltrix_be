@@ -3,16 +3,9 @@ import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { getUserGameStats, getChampionStats } from '../controllers/statistics.controller.js';
 import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
+import { monthSchema, rangeRequiresMonths } from './monthQuery.js';
 
 const router: Router = Router();
-
-const monthSchema = z
-  .string()
-  .regex(/^\d{1,2}$/, 'Month must be 1 or 2 digits')
-  .refine((value) => {
-    const month = Number(value);
-    return month >= 1 && month <= 12;
-  }, 'Month must be between 1 and 12');
 
 const filterSchema = z.object({
   params: z.object({
@@ -35,35 +28,7 @@ const filterSchema = z.object({
       gameType: z.string().regex(/^[123](,[123])*$/, 'gameType must be 1|2|3 (comma separated)').optional(),
       competitionId: z.string().regex(/^\d+$/).transform(Number).optional(),
     })
-    .superRefine((query, ctx) => {
-      if (query.datePreset !== 'range') {
-        return;
-      }
-
-      if (!query.fromMonth) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'fromMonth is required when datePreset=range',
-          path: ['fromMonth'],
-        });
-      }
-
-      if (!query.toMonth) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'toMonth is required when datePreset=range',
-          path: ['toMonth'],
-        });
-      }
-
-      if (!query.season) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'season is required when datePreset=range',
-          path: ['season'],
-        });
-      }
-    }),
+    .superRefine(rangeRequiresMonths),
 });
 
 /**

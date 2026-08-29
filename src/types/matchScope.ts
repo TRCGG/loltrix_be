@@ -1,3 +1,5 @@
+import { DatePreset } from '../database/datePeriod.js';
+
 /** 1=일반내전 / 2=스크림 / 3=본경기. replay·custom_match·mmr_participant_metric.game_type 공통. */
 export type GameType = '1' | '2' | '3';
 
@@ -8,6 +10,9 @@ export type GameType = '1' | '2' | '3';
 export interface MatchScope {
   gameTypes: GameType[];
   competitionId?: number;
+  datePreset?: DatePreset;
+  fromMonth?: string;
+  toMonth?: string;
 }
 
 /** 기존 호출의 기본값. 이 값만으로 스크림·본경기가 일반내전 전적에서 빠진다. */

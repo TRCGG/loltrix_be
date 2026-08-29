@@ -1,12 +1,14 @@
 import { eq, inArray, SQL } from 'drizzle-orm';
 import { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { GameType, MatchScope } from '../types/matchScope.js';
+import { periodCondition } from './datePeriod.js';
 
 /** alias는 tableName 리터럴이 달라져 구체 컬럼 타입으로는 못 받는다. */
 type ScopeColumns = {
   gameType: AnyPgColumn;
   competitionId: AnyPgColumn;
   season: AnyPgColumn;
+  createDate: AnyPgColumn;
 };
 
 const gameTypeCondition = (column: AnyPgColumn, gameTypes: GameType[]): SQL =>
@@ -25,7 +27,18 @@ export function scopeConditions(
   if (scope.competitionId != null) {
     return [typeCondition, eq(t.competitionId, scope.competitionId)];
   }
-  return [typeCondition, season ? eq(t.season, season) : undefined];
+
+  const conditions: (SQL | undefined)[] = [
+    typeCondition,
+    season ? eq(t.season, season) : undefined,
+  ];
+  const period = scope.datePreset
+    ? periodCondition(t.createDate, scope.datePreset, scope.fromMonth, scope.toMonth)
+    : undefined;
+  if (period) {
+    conditions.push(period);
+  }
+  return conditions;
 }
 
 /**

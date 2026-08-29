@@ -46,6 +46,38 @@ describe('scopeConditions — custom_match용 WHERE 조각', () => {
     expect(type).toBeDefined();
     expect(competition).toBeDefined();
   });
+
+  test('datePreset이 recent면 기간 조건이 하나 더 붙는다', () => {
+    const conds = scopeConditions(customMatch, { gameTypes: ['1'], datePreset: 'recent' }, 'S13');
+    expect(conds).toHaveLength(3);
+    expect(conds.every(Boolean)).toBe(true);
+  });
+
+  test('datePreset이 season이거나 없으면 기간 조건이 없다', () => {
+    expect(
+      scopeConditions(customMatch, { gameTypes: ['1'], datePreset: 'season' }, 'S13'),
+    ).toHaveLength(2);
+    expect(scopeConditions(customMatch, NORMAL_MATCH_SCOPE, 'S13')).toHaveLength(2);
+  });
+
+  test('datePreset이 range면 월 범위 조건이 붙는다', () => {
+    const conds = scopeConditions(
+      customMatch,
+      { gameTypes: ['1'], datePreset: 'range', fromMonth: '1', toMonth: '4' },
+      'S13',
+    );
+    expect(conds).toHaveLength(3);
+    expect(conds.every(Boolean)).toBe(true);
+  });
+
+  test('competitionId가 있으면 datePreset을 무시한다', () => {
+    const conds = scopeConditions(
+      customMatch,
+      { gameTypes: ['2', '3'], competitionId: 5, datePreset: 'recent' },
+      'S13',
+    );
+    expect(conds).toHaveLength(2);
+  });
 });
 
 describe('metricScopeConditions — mmr_participant_metric용 (대회 필터 없음)', () => {

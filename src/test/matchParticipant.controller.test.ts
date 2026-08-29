@@ -78,6 +78,28 @@ describe('getMostPicks - 응답 data에 포지션별 집계 lines 동봉', () =>
     expect(getMostPicksSvc).toHaveBeenCalledWith('p1', '2025', 'g1', 1, 10, 'TOP', normalScope);
   });
 
+  test('datePreset=recent면 목록과 lines에 같은 기간 조건을 넘긴다', async () => {
+    await getMostPicks(
+      makeReq({ position: 'ALL', season: '2025', datePreset: 'recent' }),
+      makeRes() as any,
+    );
+
+    const recentScope = { gameTypes: ['1'], datePreset: 'recent' };
+    expect(getMostPicksSvc).toHaveBeenCalledWith('p1', '2025', 'g1', 1, 10, 'ALL', recentScope);
+    expect(getLineRecordSvc).toHaveBeenCalledWith('p1', '2025', 'g1', recentScope);
+  });
+
+  test('datePreset=range면 월 범위도 같은 scope로 함께 넘어간다', async () => {
+    await getMostPicks(
+      makeReq({ season: '2025', datePreset: 'range', fromMonth: '1', toMonth: '4' }),
+      makeRes() as any,
+    );
+
+    const rangeScope = { gameTypes: ['1'], datePreset: 'range', fromMonth: '1', toMonth: '4' };
+    expect(getMostPicksSvc).toHaveBeenCalledWith('p1', '2025', 'g1', 1, 10, undefined, rangeScope);
+    expect(getLineRecordSvc).toHaveBeenCalledWith('p1', '2025', 'g1', rangeScope);
+  });
+
   test('페이지네이션 헤더는 기존과 동일하게 세팅된다', async () => {
     const res = makeRes();
 
