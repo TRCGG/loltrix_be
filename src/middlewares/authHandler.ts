@@ -5,6 +5,7 @@ import { getClearCookieOptions } from '../utils/cookieOptions.js';
 
 const discordAuthService = new DiscordAuthService();
 const LOCALHOST_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface AuthRequest extends Request {
   discordMemberId?: string;
@@ -59,6 +60,11 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
     const sessionUid = req.cookies.session_uid;
     if (!sessionUid) {
       throw new BusinessError('Session cookie not found', 401, { isLoggable: false });
+    }
+
+    // session_uid는 uuid 컬럼이라 형식이 어긋난 값을 그대로 조회하면 DB가 22P02를 던져 500이 된다.
+    if (!UUID_PATTERN.test(sessionUid)) {
+      throw new BusinessError('Malformed session cookie', 401, { isLoggable: false });
     }
 
     // 1a. 세션 조회 (DB)

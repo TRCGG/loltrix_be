@@ -1,11 +1,14 @@
 import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import type { Request, Response, NextFunction } from 'express';
 
+const findAuthSessionByUid = jest.fn<(uid: string) => Promise<unknown>>();
+const getValidAccessToken = jest.fn<(memberId: string) => Promise<unknown>>();
+
 jest.unstable_mockModule('../services/discordAuth.service.js', () => ({
   DiscordAuthService: class {
-    findAuthSessionByUid = jest.fn();
+    findAuthSessionByUid = findAuthSessionByUid;
 
-    getValidAccessToken = jest.fn();
+    getValidAccessToken = getValidAccessToken;
   },
 }));
 
@@ -158,6 +161,43 @@ describe('verifyAuth 봇 검증', () => {
     >;
     expect(error.status).toBe(403);
     expect((req as { isBot?: boolean }).isBot).toBeUndefined();
+  });
+});
+
+describe('verifyAuth 세션 쿠키 형식 검증', () => {
+  beforeEach(() => {
+    findAuthSessionByUid.mockReset();
+    getValidAccessToken.mockReset();
+  });
+
+  test('형식이 어긋난 쿠키는 DB 조회 없이 401로 막고 쿠키를 지운다', async () => {
+    const res = makeRes();
+    const next = jest.fn() as unknown as NextFunction;
+
+    await verifyAuth(makeReq({ cookies: { session_uid: 'abc' } }), res, next);
+
+    const error = (next as unknown as jest.Mock).mock.calls[0][0] as InstanceType<
+      typeof BusinessError
+    >;
+    expect(error).toBeInstanceOf(BusinessError);
+    expect(error.status).toBe(401);
+    expect(res.clearCookie).toHaveBeenCalledWith('session_uid', expect.anything());
+    expect(findAuthSessionByUid).not.toHaveBeenCalled();
+  });
+
+  test('uuid 형식 쿠키는 그대로 세션 조회에 넘어간다', async () => {
+    const sessionUid = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+    findAuthSessionByUid.mockResolvedValue({ discordMemberId: '1234567890' });
+    getValidAccessToken.mockResolvedValue('access-token');
+
+    const req = makeReq({ cookies: { session_uid: sessionUid } });
+    const next = jest.fn() as unknown as NextFunction;
+
+    await verifyAuth(req, makeRes(), next);
+
+    expect(findAuthSessionByUid).toHaveBeenCalledWith(sessionUid);
+    expect(next).toHaveBeenCalledWith();
+    expect((req as { discordMemberId?: string }).discordMemberId).toBe('1234567890');
   });
 });
 
