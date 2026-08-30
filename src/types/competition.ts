@@ -1,4 +1,9 @@
-import { Competition } from '../database/schema.js';
+import {
+  Competition,
+  CompetitionApplication,
+  CompetitionTeam,
+} from '../database/schema.js';
+import { TeamRecordSplit } from '../services/competitionRecord.js';
 
 export type CompetitionStatus = 'OPEN' | 'CLOSED';
 
@@ -40,4 +45,62 @@ export interface CompetitionResponse<T> {
   status: 'success' | 'error';
   message: string;
   data: T | null;
+}
+
+export type CompetitionApplicationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+/** 신청 목록 항목 — 화면이 PLR 코드 대신 소환사명을 보여줄 수 있게 riot 계정을 붙인다. */
+export interface CompetitionApplicationItem extends CompetitionApplication {
+  riotName: string;
+  riotNameTag: string;
+}
+
+export interface CompetitionApplyInput {
+  playerCode: string;
+  title: string;
+  availableTime?: string;
+  captainAvailable?: string;
+  position?: string;
+  subPosition?: string;
+  comment?: string;
+}
+
+export interface CompetitionRosterMember {
+  playerCode: string;
+  riotName: string;
+  riotNameTag: string;
+}
+
+export interface CompetitionTeamWithRoster extends CompetitionTeam {
+  roster: CompetitionRosterMember[];
+}
+
+export interface CompetitionTeamUpdateInput {
+  name?: string;
+  captainPlayerCode?: string | null;
+}
+
+/** 팀 귀속 관점의 경기 항목. blueTeamId/redTeamId가 모두 null이면 아직 귀속되지 않은 경기다. */
+export interface CompetitionMatchTeamItem {
+  customMatchId: string;
+  gameType: string;
+  date: Date;
+  blueTeamId: number | null;
+  redTeamId: number | null;
+  blue: CompetitionRosterMember[];
+  red: CompetitionRosterMember[];
+}
+
+export interface CompetitionTeamRecordItem extends TeamRecordSplit {
+  teamId: number;
+  name: string;
+}
+
+export interface CompetitionHeadToHeadResult extends TeamRecordSplit {
+  matches: {
+    customMatchId: string;
+    gameType: string;
+    date: Date;
+    winnerTeamId: number | null;
+  }[];
 }

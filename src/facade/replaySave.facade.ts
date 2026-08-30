@@ -4,6 +4,7 @@ import { replayService } from '../services/replay.service.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
 import { customMatchService } from '../services/customMatch.service.js';
 import { matchParticipantService } from '../services/matchParticipant.service.js';
+import { competitionTeamService } from '../services/competitionTeam.service.js';
 import { mmrMetricService } from '../services/mmrMetric.service.js';
 import { ReplaySaveResult, ReplayFileRequest } from '../types/replay.js';
 import { guildMemberService } from '../services/guildMember.service.js';
@@ -98,11 +99,21 @@ export class ReplaySaveFacade {
 
     const savedCustomMatch = await customMatchService.insertCustomMatch(customMatchData, tx);
 
-    await matchParticipantService.insertMatchParticipants(
+    const participants = await matchParticipantService.insertMatchParticipants(
       rawData,
       customMatchData.id,
       tx,
       puuidToPlayerCodeMap,
+    );
+
+    await competitionTeamService.tryAutoAssignMatchTeams(
+      {
+        guildId: savedReplay.guildId,
+        competitionId: savedReplay.competitionId,
+        customMatchId: customMatchData.id,
+      },
+      participants,
+      tx,
     );
 
     await guildMemberService.insertGuildMember(riotAccounts, savedReplay.guildId, tx);

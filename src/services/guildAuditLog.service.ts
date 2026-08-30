@@ -6,7 +6,8 @@ import { GuildAuditLogItem, GuildAuditLogType } from '../types/guildMember.js';
 /**
  * @desc 클랜관리 화면용 관리 로그 조회 서비스
  * - guild_audit_log 단일 테이블에서 역할 부여/회수(roleChange) + 리플 삭제(replayDelete) +
- *   대회 개설/종료/삭제(competition*)를 시간순(최신순) 피드로 반환한다.
+ *   대회 개설/종료/삭제(competition*) + 대회 신청 승인·거절(applicationDecide) +
+ *   경기 팀 귀속(matchTeamAssign)을 시간순(최신순) 피드로 반환한다.
  * - 표시명 = discord_guild_member.nickname ?? discord_member.display_name ?? member_id
  *   (봇 !drop 사용자는 웹 로그인 이력이 없을 수 있어 id fallback이 정상 경로).
  */
@@ -77,6 +78,11 @@ export class GuildAuditLogService {
         source?: string;
         competitionId?: number;
         name?: string;
+        playerCode?: string;
+        status?: string;
+        customMatchId?: string;
+        blueTeamId?: number | null;
+        redTeamId?: number | null;
       };
       return {
         type: r.eventType as GuildAuditLogType,
@@ -89,10 +95,14 @@ export class GuildAuditLogService {
           : null,
         fromRole: detail.fromRole ?? null,
         toRole: detail.toRole ?? null,
-        gameId: detail.gameId ?? null,
+        gameId: detail.gameId ?? detail.customMatchId ?? null,
         source: detail.source ?? null,
         competitionId: detail.competitionId ?? null,
         competitionName: detail.name ?? null,
+        playerCode: detail.playerCode ?? null,
+        applicationStatus: detail.status ?? null,
+        blueTeamId: detail.blueTeamId ?? null,
+        redTeamId: detail.redTeamId ?? null,
       };
     });
 

@@ -1,6 +1,13 @@
 import { and, desc, eq, ilike, inArray, sql } from 'drizzle-orm';
 import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
-import { competition, customMatch, guildAuditLog, replay, Competition } from '../database/schema.js';
+import {
+  competition,
+  competitionMatchTeam,
+  customMatch,
+  guildAuditLog,
+  replay,
+  Competition,
+} from '../database/schema.js';
 import { BusinessError } from '../types/error.js';
 import {
   CompetitionActor,
@@ -277,6 +284,15 @@ export class CompetitionService {
           isLoggable: false,
         });
       }
+
+      // 팀·로스터·신청은 FK cascade로 지워지지만, 용병전(team_id NULL) 귀속 행은 지워지지 않는다.
+      // 아래에서 custom_match의 대회 참조를 끊으면 어느 대회 것인지도 사라지므로 여기서 함께 지운다.
+      await tx.delete(competitionMatchTeam).where(
+        inArray(
+          competitionMatchTeam.customMatchId,
+          tx.select({ id: customMatch.id }).from(customMatch).where(eq(customMatch.competitionId, id)),
+        ),
+      );
 
       await tx.update(customMatch).set({ competitionId: null }).where(eq(customMatch.competitionId, id));
       await tx.update(replay).set({ competitionId: null }).where(eq(replay.competitionId, id));

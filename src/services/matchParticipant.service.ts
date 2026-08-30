@@ -14,6 +14,7 @@ import {
   perks,
   guildAuditLog,
   competition,
+  competitionMatchTeam,
 } from '../database/schema.js'; // 스키마 import 추가
 import { subAccountLink } from '../database/subAccountLink.js';
 import { scopeConditions } from '../database/matchScope.js';
@@ -762,6 +763,9 @@ export class MatchParticipantService {
             eq(mmrParticipantMetric.isDeleted, false),
           ),
         );
+
+      // 2-2. 대회 경기의 팀 귀속 제거 — soft-delete 컬럼이 없고, 지운 경기가 팀 전적에 남을 이유가 없다
+      await tx.delete(competitionMatchTeam).where(eq(competitionMatchTeam.customMatchId, gameId));
 
       // 3. 연관된 replays 삭제
       await replayService.softDeleteReplayByCode(gameId, tx);

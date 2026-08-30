@@ -115,7 +115,9 @@ export type GuildAuditLogType =
   | 'replayDelete'
   | 'competitionOpen'
   | 'competitionClose'
-  | 'competitionDelete';
+  | 'competitionDelete'
+  | 'applicationDecide'
+  | 'matchTeamAssign';
 
 export const GUILD_AUDIT_LOG_TYPES: readonly GuildAuditLogType[] = [
   'roleChange',
@@ -123,6 +125,8 @@ export const GUILD_AUDIT_LOG_TYPES: readonly GuildAuditLogType[] = [
   'competitionOpen',
   'competitionClose',
   'competitionDelete',
+  'applicationDecide',
+  'matchTeamAssign',
 ];
 
 /**
@@ -130,6 +134,8 @@ export const GUILD_AUDIT_LOG_TYPES: readonly GuildAuditLogType[] = [
  * - roleChange: targetMemberId/fromRole/toRole 채워짐
  * - replayDelete: gameId/source 채워짐
  * - competitionOpen/Close/Delete: competitionId/competitionName/source 채워짐
+ * - applicationDecide: competitionId/playerCode/applicationStatus/source 채워짐
+ * - matchTeamAssign: competitionId/gameId/blueTeamId/redTeamId/source 채워짐
  * - 나머지 필드는 null. displayName = guild 별명 ?? global 별명 ?? discord_id ('bot'은 그대로 'bot')
  */
 export interface GuildAuditLogItem {
@@ -141,10 +147,15 @@ export interface GuildAuditLogItem {
   targetDisplayName: string | null;
   fromRole: string | null;
   toRole: string | null;
+  /** replayDelete는 detail.gameId, matchTeamAssign은 detail.customMatchId — 둘 다 custom_match.id다. */
   gameId: string | null;
   source: string | null;
   competitionId: number | null;
   competitionName: string | null;
+  playerCode: string | null;
+  applicationStatus: string | null;
+  blueTeamId: number | null;
+  redTeamId: number | null;
 }
 
 export interface GuildAuditLogListAPIResponse {
