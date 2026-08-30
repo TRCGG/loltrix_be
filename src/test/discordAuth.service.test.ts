@@ -1,12 +1,15 @@
 import { jest, describe, test, expect, afterEach } from '@jest/globals';
 
-type FetchResult = { ok: boolean; json: () => Promise<unknown> };
+type FetchResult = { ok: boolean; status?: number; json: () => Promise<unknown> };
 
 const fetchWithTimeout = jest.fn<(...args: unknown[]) => Promise<FetchResult>>();
+const updateTokenRow = jest.fn(async () => undefined);
 
 // 소스가 ESM 이라 jest.mock 호이스팅이 동작하지 않는다.
 // unstable_mockModule 로 등록한 뒤 대상 모듈을 동적 import 해야 목이 적용된다.
-jest.unstable_mockModule('../database/connectionPool.js', () => ({ db: {} }));
+jest.unstable_mockModule('../database/connectionPool.js', () => ({
+  db: { update: () => ({ set: () => ({ where: updateTokenRow }) }) },
+}));
 jest.unstable_mockModule('../services/systemConfig.service.js', () => ({
   systemConfigService: {
     getNumberConfig: jest.fn(async (_key: unknown, defaultValue: unknown) => defaultValue),
@@ -17,7 +20,7 @@ jest.unstable_mockModule('../services/systemConfig.service.js', () => ({
 jest.unstable_mockModule('../utils/fetchWithTimeout.js', () => ({ fetchWithTimeout }));
 
 const { DiscordAuthService } = await import('../services/discordAuth.service.js');
-const { SystemError } = await import('../types/error.js');
+const { BusinessError, SystemError } = await import('../types/error.js');
 
 const service = new DiscordAuthService();
 
@@ -150,6 +153,64 @@ describe('로그인·로그아웃 시 캐시 무효화', () => {
 
     expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
     consoleWarn.mockRestore();
+  });
+});
+
+describe('getValidAccessToken 액세스 토큰 재발급', () => {
+  const expiredToken = (memberId: string) => ({
+    id: memberId,
+    accessToken: 'expired-access',
+    acExpiresDate: new Date(Date.now() - 1000),
+    refreshToken: 'old-refresh',
+    reExpiresDate: new Date(Date.now() + 60 * 60 * 1000),
+  });
+
+  const mockExpiredToken = (memberId: string) => {
+    jest.spyOn(service, 'findDiscordTokenById').mockResolvedValue(expiredToken(memberId) as never);
+  };
+
+  test('동시 요청은 재발급을 한 번만 호출한다', async () => {
+    mockExpiredToken('600');
+    let release!: (value: FetchResult) => void;
+    fetchWithTimeout.mockReturnValue(
+      new Promise<FetchResult>((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    const first = service.getValidAccessToken('600');
+    const second = service.getValidAccessToken('600');
+    release(tokenResponse());
+
+    expect(await first).toBe('access-token');
+    expect(await second).toBe('access-token');
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+  });
+
+  test('디스코드 503은 401이 아니라 SystemError로 올린다', async () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockExpiredToken('601');
+    fetchWithTimeout.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) });
+
+    const error = await service.getValidAccessToken('601').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(SystemError);
+    expect((error as InstanceType<typeof SystemError>).status).toBe(502);
+    consoleError.mockRestore();
+  });
+
+  test('invalid_grant는 401로 올린다', async () => {
+    mockExpiredToken('602');
+    fetchWithTimeout.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: 'invalid_grant' }),
+    });
+
+    const error = await service.getValidAccessToken('602').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(BusinessError);
+    expect((error as InstanceType<typeof BusinessError>).status).toBe(401);
   });
 });
 

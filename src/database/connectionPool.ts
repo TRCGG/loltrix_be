@@ -37,9 +37,10 @@ class DatabaseConnectionPool {
       connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000', 10),
     });
 
+    // pg의 error 이벤트는 유휴 클라이언트가 서버측에서 끊길 때도 발생한다.
+    // 풀이 해당 클라이언트를 폐기하므로 프로세스를 종료하지 않는다.
     this.pool.on('error', (err: Error) => {
       console.error('Unexpected error on idle client', err);
-      process.exit(-1);
     });
 
     this.db = drizzle(this.pool, { schema });

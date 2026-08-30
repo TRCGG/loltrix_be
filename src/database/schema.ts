@@ -92,6 +92,10 @@ export const replay = pgTable('replay', {
 }, (t) => [
   // 중복검사(checkDuplicateByHash: hash_data = ? AND guild_id = ?) 풀스캔 방지
   index('idx_replay_hash_guild').on(t.hashData, t.guildId),
+  // 동시 업로드가 사전 중복검사를 나란히 통과하는 것을 DB에서 막는다
+  uniqueIndex('uq_replay_hash_guild_active')
+    .on(t.hashData, t.guildId)
+    .where(sql`${t.isDeleted} = false`),
   index('idx_replay_competition')
     .on(t.competitionId)
     .where(sql`${t.competitionId} IS NOT NULL`),
