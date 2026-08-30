@@ -12,6 +12,12 @@ jest.unstable_mockModule('../services/systemConfig.service.js', () => ({
   },
 }));
 
+jest.unstable_mockModule('../services/competition.service.js', () => ({
+  competitionService: {
+    resolveForSave: jest.fn(async () => null),
+  },
+}));
+
 const { ReplayService, attachmentAgeSeconds, stallStage } = await import(
   '../services/replay.service.js'
 );
@@ -219,5 +225,54 @@ describe('generateReplayCode', () => {
 
     expect(code).toMatch(/^RPY-\d{6}-game1-4321$/);
     expect(execute).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('replaySave — 동시 업로드 중복', () => {
+  const buildTx = (insertError: unknown) => ({
+    select: () => ({
+      from: () => ({ where: () => ({ limit: async () => [] }) }),
+    }),
+    execute: async () => ({ rows: [{ seq: '1' }] }),
+    insert: () => ({
+      values: () => ({
+        returning: async () => {
+          throw insertError;
+        },
+      }),
+    }),
+  });
+
+  const fileData = {
+    fileName: 'game1.rofl',
+    fileUrl: 'https://cdn/game1.rofl',
+    createUser: 'user1',
+    guildId: 'guild1',
+  };
+
+  const save = (tx: unknown) => service.replaySave(fileData, { any: 'raw' }, tx as never);
+
+  test('유니크 인덱스 위반(23505)을 사전 검사와 같은 400으로 바꾼다', async () => {
+    const tx = buildTx({ code: '23505', constraint: 'uq_replay_hash_guild_active' });
+
+    await expect(save(tx)).rejects.toMatchObject({
+      message: 'duplicated replay data',
+      status: 400,
+    });
+    await expect(save(tx)).rejects.toBeInstanceOf(BusinessError);
+  });
+
+  test('drizzle이 cause로 감싼 경우도 동일하게 처리한다', async () => {
+    const wrapped = Object.assign(new Error('insert failed'), {
+      cause: { code: '23505', constraint: 'uq_replay_hash_guild_active' },
+    });
+
+    await expect(save(buildTx(wrapped))).rejects.toBeInstanceOf(BusinessError);
+  });
+
+  test('다른 에러는 그대로 던진다', async () => {
+    const other = Object.assign(new Error('connection lost'), { code: '08006' });
+
+    await expect(save(buildTx(other))).rejects.toBe(other);
   });
 });
