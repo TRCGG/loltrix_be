@@ -84,8 +84,7 @@ const getDiscordMembersSchema = z.object({
   }),
   query: z.object({
     search: z.string().max(128, 'Search term must be less than 128 characters').optional(),
-    // validateRequest는 transform 결과를 컨트롤러로 전달하지 않으므로(원본 req 유지),
-    // 상한 검증을 여기서 걸고 컨트롤러에서도 클램프한다. 무제한 값은 bigint 파싱 500/테이블 덤프 유발.
+    // 무제한 page/limit은 bigint 파싱 500·테이블 덤프를 유발하므로 상한을 여기서 막는다.
     page: z
       .string()
       .regex(/^\d+$/, 'Page must be a positive number')
