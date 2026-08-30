@@ -74,7 +74,7 @@ export const webCreateReplay = async (
       gameType?: string;
       nick: string;
     };
-    // validateRequest는 zod 변환값을 넘기지 않아 multipart 문자열이 그대로 온다
+    // 스키마가 ''/null을 undefined로 접지만, 0으로 떨어지면 안 되는 값이라 한 번 더 방어한다
     const rawCompetitionId = (req.body as { competitionId?: unknown }).competitionId;
     const competitionId =
       rawCompetitionId === undefined || rawCompetitionId === '' || rawCompetitionId === null
