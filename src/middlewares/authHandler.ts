@@ -4,7 +4,6 @@ import { BusinessError } from '../types/error.js';
 import { getClearCookieOptions } from '../utils/cookieOptions.js';
 
 const discordAuthService = new DiscordAuthService();
-const botSecret = process.env.DISCORD_BOT_SECRET;
 const LOCALHOST_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
 export interface AuthRequest extends Request {
@@ -15,23 +14,24 @@ export interface AuthRequest extends Request {
 
 /**
  * @desc 봇 접근 제한 (Localhost Only)
- * 봇과 서버가 같으므로, 외부 IP에서의 접근은 무조건 차단하고
- * 오직 내부(Localhost)에서 온 요청만 허용합니다.
+ * 봇과 서버가 같은 호스트에 있으므로, 봇 헤더가 붙은 요청은 로컬 연결에서만 허용한다.
+ * 판정 기준은 요청에 붙은 쿠키가 아니라 봇 헤더 — 쿠키는 외부에서 임의로 붙일 수 있어
+ * 쿠키로 검사를 건너뛰면 헤더만 얹어 봇 권한을 얻을 수 있다.
+ * 주소는 req.ip가 아니라 소켓 주소로 본다 — trust proxy 미설정 상태에서 req.ip는
+ * 프록시 주소이고, 홉 수를 알 수 없어 trust proxy를 켤 수도 없다.
+ * 헤더가 없는 요청은 여기서 통과시키고 verifyAuth의 세션 검증에 맡긴다.
  */
 export const restrictBotToLocalhost = (req: Request, res: Response, next: NextFunction) => {
-  // 1. 유저 세션이 있으면(브라우저 접근) IP 검사 스킵 -> 통과
-  if (req.cookies?.session_uid) {
+  if (!req.headers['x-discord-bot']) {
     return next();
   }
 
-  // 2. 세션이 없다면 봇 요청으로 간주 -> IP 검사
-  // req.ip가 로컬호스트 주소인지 확인
-  const clientIp = req.ip || '';
+  const remoteAddress = req.socket?.remoteAddress || '';
 
-  if (!LOCALHOST_IPS.includes(clientIp)) {
-    // 외부에서 봇 API를 찌르려고 하면 차단
-    throw new BusinessError(`Access denied: External access not allowed (${clientIp})`, 403, {
-      isLoggable: true,
+  if (!LOCALHOST_IPS.includes(remoteAddress)) {
+    console.warn(`[auth] external bot request blocked: ${remoteAddress || 'unknown'}`);
+    throw new BusinessError(`Access denied: External access not allowed (${remoteAddress})`, 403, {
+      isLoggable: false,
     });
   }
 
@@ -46,7 +46,9 @@ export const verifyAuth = async (req: AuthRequest, res: Response, next: NextFunc
     // --- 봇 검증 ---
     const botHeader = req.headers['x-discord-bot'];
     if (botHeader) {
-      if (botHeader !== botSecret) {
+      // 모듈 로드 시점에 캡처하면 dotenv 로드 순서에 따라 undefined가 박힌다.
+      const botSecret = process.env.DISCORD_BOT_SECRET;
+      if (!botSecret || botHeader !== botSecret) {
         throw new BusinessError('Invalid bot secret', 403, { isLoggable: true });
       }
       req.isBot = true;
