@@ -13,9 +13,12 @@ import {
   summonerSpell,
   perks,
   guildAuditLog,
+  competition,
 } from '../database/schema.js'; // 스키마 import 추가
 import { subAccountLink } from '../database/subAccountLink.js';
+import { scopeConditions } from '../database/matchScope.js';
 import { SystemError } from '../types/error.js';
+import { MatchScope, NORMAL_MATCH_SCOPE, isCompetitionScope } from '../types/matchScope.js';
 import { replayService } from './replay.service.js';
 
 const MatchparticipantSchema = z.object({
@@ -262,7 +265,11 @@ export class MatchParticipantService {
   /**
    * @desc 최근 한 달 전적 요약 조회
    */
-  public async getRecentMonthRecord(playerCode: string, guildId: string) {
+  public async getRecentMonthRecord(
+    playerCode: string,
+    guildId: string,
+    scope: MatchScope = NORMAL_MATCH_SCOPE,
+  ) {
     // 통계 쿼리 실행
     const statColumns = this.getStatSqlChunks();
     // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
@@ -279,7 +286,11 @@ export class MatchParticipantService {
           eq(customMatch.guildId, guildId),
           eq(matchParticipant.isDeleted, false),
           eq(customMatch.isDeleted, false),
-          sql`TO_CHAR(${customMatch.createDate}, 'YYYY-MM') = TO_CHAR(NOW(), 'YYYY-MM')`,
+          ...scopeConditions(customMatch, scope),
+          // 대회 요약은 "이번 달"이 아니라 대회 전체
+          isCompetitionScope(scope)
+            ? undefined
+            : sql`TO_CHAR(${customMatch.createDate}, 'YYYY-MM') = TO_CHAR(NOW(), 'YYYY-MM')`,
         ),
       );
 
@@ -298,7 +309,12 @@ export class MatchParticipantService {
    * @desc 전체 라인별(포지션별) 전적 조회
    * 정렬 순서: TOP -> JUG -> MID -> ADC -> SUP
    */
-  public async getLineRecord(playerCode: string, season: string, guildId: string) {
+  public async getLineRecord(
+    playerCode: string,
+    season: string,
+    guildId: string,
+    scope: MatchScope = NORMAL_MATCH_SCOPE,
+  ) {
     // 포지션별 통계 집계
     const statColumns = this.getStatSqlChunks();
     // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
@@ -318,7 +334,7 @@ export class MatchParticipantService {
           eq(matchParticipant.isDeleted, false),
           eq(customMatch.isDeleted, false),
           eq(customMatch.guildId, guildId),
-          eq(customMatch.season, season),
+          ...scopeConditions(customMatch, scope, season),
         ),
       )
       .groupBy(matchParticipant.position).orderBy(sql`
@@ -347,6 +363,7 @@ export class MatchParticipantService {
     page = 1,
     limit = 10,
     position?: string,
+    scope: MatchScope = NORMAL_MATCH_SCOPE,
   ) {
     const offset = (page - 1) * limit;
     // 통계 쿼리 실행
@@ -361,7 +378,7 @@ export class MatchParticipantService {
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       eq(customMatch.guildId, guildId),
-      eq(customMatch.season, season),
+      ...scopeConditions(customMatch, scope, season),
       positionCondition,
     );
 
@@ -405,6 +422,7 @@ export class MatchParticipantService {
     guildId: string,
     page = 1,
     limit = 20,
+    scope: MatchScope = NORMAL_MATCH_SCOPE,
   ) {
     const offset = (page - 1) * limit;
 
@@ -423,7 +441,7 @@ export class MatchParticipantService {
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       eq(customMatch.guildId, guildId),
-      eq(customMatch.season, season),
+      ...scopeConditions(customMatch, scope, season),
     );
 
     const gamesQuery = db
@@ -432,6 +450,9 @@ export class MatchParticipantService {
         gameId: customMatch.id,
         season: customMatch.season,
         createDate: customMatch.createDate,
+        gameType: customMatch.gameType,
+        competitionId: customMatch.competitionId,
+        competitionName: competition.name,
         gameResult: matchParticipant.gameResult,
         gameTeam: matchParticipant.gameTeam,
         timePlayed: matchParticipant.timePlayed,
@@ -482,6 +503,7 @@ export class MatchParticipantService {
       .from(matchParticipant)
       // Standard Joins
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .leftJoin(competition, eq(customMatch.competitionId, competition.id))
       .leftJoin(link.table, link.on)
       .innerJoin(riotAccount, eq(riotAccount.playerCode, link.effectivePlayerCode))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
@@ -527,6 +549,9 @@ export class MatchParticipantService {
         gameId: customMatch.id,
         season: customMatch.season,
         createDate: customMatch.createDate,
+        gameType: customMatch.gameType,
+        competitionId: customMatch.competitionId,
+        competitionName: competition.name,
         gameResult: matchParticipant.gameResult,
         gameTeam: matchParticipant.gameTeam,
         timePlayed: matchParticipant.timePlayed,
@@ -576,6 +601,7 @@ export class MatchParticipantService {
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
+      .leftJoin(competition, eq(customMatch.competitionId, competition.id))
       .leftJoin(link.table, link.on)
       .innerJoin(riotAccount, eq(riotAccount.playerCode, link.effectivePlayerCode))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
@@ -611,7 +637,13 @@ export class MatchParticipantService {
    * 조건: 같은 팀, 5판 이상 같이 함
    * 필터: 시즌 (Season) 기준
    */
-  public async getSynergisticTeammates(playerCode: string, season: string, guildId: string) {
+  public async getSynergisticTeammates(
+    playerCode: string,
+    season: string,
+    guildId: string,
+    scope: MatchScope = NORMAL_MATCH_SCOPE,
+  ) {
+    const competitionScope = isCompetitionScope(scope);
     // 1. Alias 생성 (Self Join을 위해)
     // mpMe: 기준이 되는 내 전적
     // mpTeammate: 나와 같은 팀인 동료들의 전적
@@ -652,22 +684,23 @@ export class MatchParticipantService {
           eq(linkMe.effectivePlayerCode, playerCode),
           // 조건 2: 팀원은 '나'가 아니어야 함 (내 부캐도 제외)
           ne(linkTeammate.effectivePlayerCode, playerCode),
-          // 조건 3: 시즌 필터
-          eq(customMatch.season, season),
+          // 조건 3: 유형·시즌(또는 대회) 필터
+          ...scopeConditions(customMatch, scope, season),
           // 조건 4: 삭제되지 않은 데이터
           eq(mpMe.isDeleted, false),
           eq(mpTeammate.isDeleted, false),
           eq(customMatch.guildId, guildId),
           eq(customMatch.isDeleted, false),
           // 조건 5: 팀원은 현재 길드에 가입(status '1') 상태인 본계정만 (탈퇴·부계정 제외)
+          // 대회는 당시 참가자 전원을 본다.
           eq(guildMember.guildId, guildId),
-          eq(guildMember.status, '1'),
+          competitionScope ? undefined : eq(guildMember.status, '1'),
           eq(guildMember.isMain, true),
           eq(guildMember.isDeleted, false),
         ),
       )
       .groupBy(riotAccount.riotName, riotAccount.riotNameTag)
-      .having(sql`count(*) >= 5`) // 5판 이상
+      .having(competitionScope ? undefined : sql`count(*) >= 5`) // 5판 이상 (대회는 판수가 적어 제외)
       .orderBy(desc(statColumns.winRate), desc(statColumns.totalCount));
 
     return result;

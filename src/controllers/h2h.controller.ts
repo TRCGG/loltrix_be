@@ -3,6 +3,7 @@ import { h2hService } from '../services/h2h.service.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
 import { H2hResponse, FrequentH2hItem, MemberCandidate, H2hDetail } from '../types/h2h.js';
+import { scopeFromQuery } from '../types/matchScope.js';
 
 /**
  * @desc riotName/riotNameTag로 길드 멤버를 조회하고 단일 playerCode 반환
@@ -88,6 +89,7 @@ export const getFrequentOpponents = async (
       q,
       limit,
       season: seasonValue,
+      gameTypes: scopeFromQuery(req.query as { gameType?: string }).gameTypes,
     });
 
     return res.status(200).json({
@@ -163,6 +165,7 @@ export const getH2hDetail = async (
       season: seasonValue,
       recentLimit: Number(recentLimit) || 6,
       recentOffset: Number(recentOffset) || 0,
+      gameTypes: scopeFromQuery(req.query as { gameType?: string }).gameTypes,
     });
 
     return res.status(200).json({

@@ -74,6 +74,20 @@ function cacheProfile(discordMemberId: string, promise: Promise<DiscordProfile>)
   });
 }
 
+// Discord는 refresh_token을 1회용으로 순환시킨다. 만료 시점에 동시 요청이 각자 재발급하면
+// 두 번째부터는 이미 폐기된 refresh_token을 보내 invalid_grant로 떨어지므로, 멤버별로 재발급
+// promise 하나를 공유한다. (프로세스 로컬 — 인스턴스가 여러 개면 인스턴스별로 존재한다.)
+const refreshInFlight = new Map<string, Promise<string>>();
+
+async function readDiscordErrorCode(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body?.error;
+  } catch {
+    return undefined;
+  }
+}
+
 async function requestDiscordUser(accessToken: string): Promise<DiscordProfile> {
   try {
     const userResult = await fetchWithTimeout(`${discordApiBaseUrl}/users/@me`, {
@@ -296,7 +310,15 @@ export class DiscordAuthService {
     }
 
     // ac토큰 만료 시 재발급
-    return this.refreshAndSaveToken(discordMemberId, token);
+    const inFlight = refreshInFlight.get(discordMemberId);
+    if (inFlight) return inFlight;
+
+    const refresh = this.refreshSharedToken(discordMemberId, token).finally(() => {
+      refreshInFlight.delete(discordMemberId);
+    });
+    refreshInFlight.set(discordMemberId, refresh);
+
+    return refresh;
   }
 
   // --- 3. Internal Business Logic (Private) ---
@@ -324,14 +346,29 @@ export class DiscordAuthService {
   }
 
   /**
+   * @desc 재발급 직전 토큰 재조회 후 재발급 (비공개)
+   */
+  private async refreshSharedToken(discordMemberId: string, token: DiscordToken): Promise<string> {
+    // 다른 인스턴스가 먼저 순환시켰으면 이미 유효한 액세스 토큰이 DB에 있다.
+    const latest = await this.findDiscordTokenById(discordMemberId);
+    if (latest && Date.now() < latest.acExpiresDate.getTime()) {
+      return latest.accessToken;
+    }
+
+    return this.refreshAndSaveToken(discordMemberId, latest ?? token);
+  }
+
+  /**
    * @desc Discord 토큰 재발급 및 DB 저장 (비공개)
    */
   private async refreshAndSaveToken(
     discordMemberId: string,
     currentToken: DiscordToken,
   ): Promise<string> {
+    let result: Response;
+
     try {
-      const result = await fetchWithTimeout(`${discordApiBaseUrl}/oauth2/token`, {
+      result = await fetchWithTimeout(`${discordApiBaseUrl}/oauth2/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: querystring.stringify({
@@ -341,19 +378,36 @@ export class DiscordAuthService {
           refresh_token: currentToken.refreshToken,
         }),
       });
+    } catch (error) {
+      if (error instanceof SystemError) throw error;
+      console.error('Discord token refresh request failed', error);
+      throw new SystemError('Discord token refresh request failed', 503);
+    }
 
-      if (!result.ok) {
-        throw new BusinessError('Failed to refresh session. Please log in again.', 401, { isLoggable: false });
+    if (!result.ok) {
+      const discordError = await readDiscordErrorCode(result);
+
+      // 세션이 실제로 끊긴 경우만 401로 올린다. 429·5xx까지 401이면 verifyAuth가 쿠키를 지워
+      // 디스코드 일시 장애가 그대로 로그아웃이 된다.
+      if (discordError === 'invalid_grant' || result.status === 400 || result.status === 401) {
+        throw new BusinessError('Failed to refresh session. Please log in again.', 401, {
+          isLoggable: false,
+        });
       }
 
+      console.error(`Discord token refresh failed (${result.status}) ${discordError ?? ''}`);
+      throw new SystemError('Discord token refresh failed', 502);
+    }
+
+    try {
       const tokenData: DiscordTokenAPI = await result.json();
       const formattedToken = formatRefreshedToken(tokenData, currentToken.refreshToken);
 
       await db.update(discordToken).set(formattedToken).where(eq(discordToken.id, discordMemberId));
 
-      return formattedToken.accessToken; // 새 액세스 토큰 반환
+      return formattedToken.accessToken;
     } catch (error) {
-      if (error instanceof BusinessError) throw error;
+      console.error('Error during token refresh', error);
       throw new SystemError('Error during token refresh', 500);
     }
   }

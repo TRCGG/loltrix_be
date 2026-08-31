@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
 import {
   matchParticipant,
@@ -8,8 +8,11 @@ import {
   guildMember,
 } from '../database/schema.js';
 import { subAccountLink } from '../database/subAccountLink.js';
+import { scopeConditions } from '../database/matchScope.js';
+import { periodCondition } from '../database/datePeriod.js';
 import { systemConfigService } from './systemConfig.service.js';
 import { StatisticsDatePreset, StatisticsServiceOptions } from '../types/statistics.js';
+import { NORMAL_MATCH_SCOPE, isCompetitionScope } from '../types/matchScope.js';
 
 export class StatisticsService {
   /**
@@ -37,38 +40,26 @@ export class StatisticsService {
             2
           )
         END`,
+      kills: sql<number>`COALESCE(SUM(${matchParticipant.kill}), 0)::integer`,
+      // 분당 챔피언 피해량 = 총 피해 / 총 플레이 분. time_played는 초.
+      avgDpm: sql<number>`
+        CASE
+          WHEN COALESCE(SUM(${matchParticipant.timePlayed}), 0) = 0 THEN 0
+          ELSE ROUND(
+            COALESCE(SUM(${matchParticipant.totalDamageChampions}), 0)::numeric
+            / (SUM(${matchParticipant.timePlayed})::numeric / 60),
+            0
+          )
+        END`,
     };
   }
 
-  /**
-   * @desc 조회 방식에 따라 최근 1개월, 시즌 전체, 월 범위용 날짜 조건을 생성
-   */
   private buildDateCondition(
     datePreset: StatisticsDatePreset | undefined,
     fromMonth: string | undefined,
     toMonth: string | undefined,
   ) {
-    if (datePreset === 'season') {
-      return undefined;
-    }
-
-    if (datePreset === 'range') {
-      if (!fromMonth || !toMonth) {
-        return sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
-      }
-
-      const fromMonthNumber = Number(fromMonth);
-      const toMonthNumber = Number(toMonth);
-      const monthExpr = sql<number>`EXTRACT(MONTH FROM ${customMatch.createDate})::integer`;
-
-      if (fromMonthNumber <= toMonthNumber) {
-        return and(gte(monthExpr, fromMonthNumber), sql`${monthExpr} <= ${toMonthNumber}`);
-      }
-
-      return or(gte(monthExpr, fromMonthNumber), sql`${monthExpr} <= ${toMonthNumber}`);
-    }
-
-    return sql`${customMatch.createDate} >= NOW() - INTERVAL '1 month'`;
+    return periodCondition(customMatch.createDate, datePreset ?? 'recent', fromMonth, toMonth);
   }
 
   /**
@@ -98,19 +89,24 @@ export class StatisticsService {
       sortBy = 'totalCount',
       page = 1,
       limit = 50,
+      scope = NORMAL_MATCH_SCOPE,
     } = options;
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
+    const competitionScope = isCompetitionScope(scope);
 
-    const dateCondition = this.buildDateCondition(datePreset, fromMonth, toMonth);
+    const dateCondition = competitionScope
+      ? undefined
+      : this.buildDateCondition(datePreset, fromMonth, toMonth);
     const shouldGroupByPosition = !!position;
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
-    const seasonCondition = await this.buildSeasonCondition(season);
+    const seasonCondition = competitionScope ? undefined : await this.buildSeasonCondition(season);
 
+    // 대회는 판수가 적어 최소 판수 조건을 두지 않는다.
     const statsMinGameCount = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
-    const minGameCount = sortBy === 'winRate' ? statsMinGameCount : 0;
+    const minGameCount = sortBy === 'winRate' && !competitionScope ? statsMinGameCount : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;
     const orderCriteria =
       sortBy === 'winRate' ? desc(statColumns.winRate) : desc(statColumns.totalCount);
@@ -123,9 +119,11 @@ export class StatisticsService {
       eq(customMatch.guildId, guildId),
       eq(guildMember.isDeleted, false),
       eq(guildMember.isMain, true),
-      eq(guildMember.status, '1'),
+      // 대회 랭킹은 당시 참가자 전원 — 종료 후 탈퇴한 사람이 빠지면 순위가 바뀐다.
+      competitionScope ? undefined : eq(guildMember.status, '1'),
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
+      ...scopeConditions(customMatch, scope),
       dateCondition,
       champCondition,
       positionCondition,
@@ -193,18 +191,22 @@ export class StatisticsService {
       sortBy = 'totalCount',
       page = 1,
       limit = 50,
+      scope = NORMAL_MATCH_SCOPE,
     } = options;
     const offset = (page - 1) * limit;
     const statColumns = this.getStatSqlChunks();
+    const competitionScope = isCompetitionScope(scope);
 
-    const dateCondition = this.buildDateCondition(datePreset, fromMonth, toMonth);
+    const dateCondition = competitionScope
+      ? undefined
+      : this.buildDateCondition(datePreset, fromMonth, toMonth);
     const shouldGroupByPosition = !!position;
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
-    const seasonCondition = await this.buildSeasonCondition(season);
+    const seasonCondition = competitionScope ? undefined : await this.buildSeasonCondition(season);
 
     const statsMinGameCount = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
-    const minGameCount = sortBy === 'winRate' ? statsMinGameCount : 0;
+    const minGameCount = sortBy === 'winRate' && !competitionScope ? statsMinGameCount : 0;
     const havingCondition = minGameCount > 0 ? sql`count(*) >= ${minGameCount}` : undefined;
     const orderCriteria =
       sortBy === 'winRate' ? desc(statColumns.winRate) : desc(statColumns.totalCount);
@@ -217,9 +219,10 @@ export class StatisticsService {
       eq(customMatch.isDeleted, false),
       eq(guildMember.isMain, true),
       eq(guildMember.isDeleted, false),
-      eq(guildMember.status, '1'),
+      competitionScope ? undefined : eq(guildMember.status, '1'),
       eq(guildMember.guildId, guildId),
       eq(customMatch.guildId, guildId),
+      ...scopeConditions(customMatch, scope),
       dateCondition,
       positionCondition,
       seasonCondition,

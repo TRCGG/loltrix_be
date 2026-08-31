@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { statisticsService } from '../services/statistics.service.js';
+import { scopeFromQuery } from '../types/matchScope.js';
 import {
   StatisticsResponse,
   UserGameStatistic,
@@ -35,6 +36,7 @@ export const getUserGameStats = async (
       sortBy: (sortBy as 'totalCount' | 'winRate') || 'totalCount',
       page: Number(page) || 1,
       limit: Number(limit) || 50,
+      scope: scopeFromQuery(req.query),
     });
 
     res.setHeader('X-Total-Count', totalCount.toString());
@@ -83,6 +85,7 @@ export const getChampionStats = async (
       sortBy: (sortBy as 'totalCount' | 'winRate') || 'totalCount',
       page: Number(page) || 1,
       limit: Number(limit) || 20,
+      scope: scopeFromQuery(req.query),
     });
 
     res.setHeader('X-Total-Count', totalCount.toString());

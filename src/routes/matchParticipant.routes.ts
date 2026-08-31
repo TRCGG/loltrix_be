@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middlewares/validateRequest.js';
+import { monthSchema, rangeRequiresMonths } from './monthQuery.js';
 import {
   getRecentGames,
   getMatchDashboard,
@@ -14,6 +15,15 @@ import { requireGuildRole } from '../middlewares/requireRole.js';
 const router: Router = Router();
 
 // --- Zod Schemas ---
+
+// 전적 조회 범위. 생략 시 일반내전. competitionId가 있으면 season은 무시된다.
+const scopeQuery = {
+  gameType: z
+    .string()
+    .regex(/^[123](,[123])*$/, 'gameType must be 1|2|3 (comma separated)')
+    .optional(),
+  competitionId: z.string().regex(/^\d+$/).transform(Number).optional(),
+};
 
 // 최근 게임 목록 및 모스트 픽 조회용 스키마
 const matchListSchema = z.object({
@@ -41,13 +51,19 @@ const matchListSchema = z.object({
       .regex(/^\d+$/, 'Limit must be a positive number')
       .transform(Number)
       .optional(),
+    ...scopeQuery,
   }),
 });
 
 const mostPickSchema = matchListSchema.extend({
-  query: matchListSchema.shape.query.extend({
-    position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
-  }),
+  query: matchListSchema.shape.query
+    .extend({
+      position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
+      datePreset: z.enum(['recent', 'season', 'range']).optional(),
+      fromMonth: monthSchema.optional(),
+      toMonth: monthSchema.optional(),
+    })
+    .superRefine(rangeRequiresMonths),
 });
 
 const matchDashboardSchema = z.object({
@@ -64,6 +80,7 @@ const matchDashboardSchema = z.object({
   query: z.object({
     riotNameTag: z.string().max(128, 'Search term must be less than 128 characters').optional(),
     season: z.string().max(32, 'season must be less than 32 characters').optional(),
+    ...scopeQuery,
   }),
 });
 
@@ -181,6 +198,14 @@ router.get(
       type: 'string',
       enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']
     }
+    #swagger.parameters['datePreset'] = {
+      in: 'query',
+      description: '조회 기간. recent=최근 1개월, range=월 범위(fromMonth·toMonth·season 필수), season 또는 생략=시즌 전체',
+      type: 'string',
+      enum: ['recent', 'season', 'range']
+    }
+    #swagger.parameters['fromMonth'] = { in: 'query', description: '시작 월 (datePreset=range일 때 필수)', type: 'string' }
+    #swagger.parameters['toMonth'] = { in: 'query', description: '종료 월 (datePreset=range일 때 필수)', type: 'string' }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
   */

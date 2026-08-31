@@ -3,9 +3,10 @@ import { get } from 'https';
 import { createHash } from 'crypto';
 import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import { replay } from '../database/schema.js';
-import { ReplayFileRequest } from '../types/replay.js';
+import { ReplayFileRequest, ReplaySaveResult } from '../types/replay.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { systemConfigService } from './systemConfig.service.js';
+import { competitionService } from './competition.service.js';
 
 // 다운로드 예산 기본값(ms). 봇이 45초에 요청을 끊으므로 파싱·DB 저장 시간을 남겨야 한다.
 // 이 예산은 getRawData의 다운로드 전체(Range 최대 3번 + 전체 폴백)가 나눠 쓴다 —
@@ -16,6 +17,20 @@ const DEFAULT_DOWNLOAD_TIMEOUT_MS = 20000;
 const DOWNLOAD_IDLE_TIMEOUT_MS = 10000;
 // replay.file_name varchar(128)보다 짧게 잡아 저장 실패를 막는다.
 const MAX_FILE_NAME_LENGTH = 100;
+
+// migrations/017의 부분 유니크 인덱스명. PostgreSQL은 유니크 인덱스 위반에도
+// 이 이름을 constraint 필드로 실어 보낸다.
+const REPLAY_HASH_UNIQUE_INDEX = 'uq_replay_hash_guild_active';
+const PG_UNIQUE_VIOLATION = '23505';
+
+// drizzle이 pg 에러를 감싸 cause에 넣는 경우가 있어 양쪽을 본다.
+const isReplayHashUniqueViolation = (error: unknown): boolean =>
+  [error, (error as { cause?: unknown } | null)?.cause].some((candidate) => {
+    const pgError = candidate as { code?: unknown; constraint?: unknown } | null | undefined;
+    return (
+      pgError?.code === PG_UNIQUE_VIOLATION && pgError?.constraint === REPLAY_HASH_UNIQUE_INDEX
+    );
+  });
 
 // .rofl 신형(패치 14.11+) 레이아웃 — 헤더("RIOT" 매직·버전 문자열, 288바이트) 뒤에 재생용
 // 암호화 페이로드가 오고, 메타데이터(statsJson 포함) JSON이 **파일 끝**에 붙는다:
@@ -434,6 +449,10 @@ export class ReplayService {
     );
   }
 
+  private static duplicateReplayError(): BusinessError {
+    return new BusinessError('duplicated replay data', 400, { isLoggable: false });
+  }
+
   private legacyReplayError(): BusinessError {
     return new BusinessError('구형 리플 파일(패치 14.11 이전)이라 등록할 수 없습니다.', 400, {
       type: 'unsupported-replay-version',
@@ -609,57 +628,79 @@ export class ReplayService {
   }
 
   public async replaySave(
-    fileData: ReplayFileRequest | { fileName: string; fileUrl: string; gameType?: string; createUser: string; guildId: string },
+    fileData:
+      | ReplayFileRequest
+      | {
+          fileName: string;
+          fileUrl: string;
+          gameType?: string;
+          competitionId?: number;
+          createUser: string;
+          guildId: string;
+        },
     rawData: any,
     tx: TransactionType,
     patchVersion?: string | null,
-  ) {
-    const { fileUrl, gameType, createUser } = fileData;
+  ): Promise<ReplaySaveResult> {
+    const { fileUrl, createUser } = fileData;
+    const gameType = fileData.gameType ?? '1';
     const fileName = ReplayService.sanitizeFileName(fileData.fileName);
     const guildId = 'guild' in fileData ? fileData.guild.id : fileData.guildId;
 
     const rawDataString = JSON.stringify(rawData);
     const hashData = this.generateHash(rawDataString);
 
-    // 1. 중복된 데이터 확인
+    // 사전 검사는 빠른 경로일 뿐이다 — READ COMMITTED에서 동시 업로드 두 건이 서로의
+    // 미커밋 insert를 못 봐 둘 다 통과하므로, 실제 차단은 아래 유니크 인덱스 위반 처리가 맡는다.
     if (await this.checkDuplicateByHash(hashData, guildId, tx)) {
-      throw new BusinessError('duplicated replay data', 400, { isLoggable: false });
+      throw ReplayService.duplicateReplayError();
     }
 
     const replayCode = await this.generateReplayCode(fileName, tx);
     const season = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season', tx);
+    const comp = await competitionService.resolveForSave(guildId, gameType, fileData.competitionId, tx, true);
 
-    const newReplay = await tx
-      .insert(replay)
-      .values({
-        replayCode,
-        fileName,
-        fileUrl,
-        rawData,
-        hashData,
-        gameType: gameType ?? '1',
-        season,
-        patchVersion: patchVersion ?? undefined,
-        createUser,
-        guildId,
-      })
-      .returning({
-        id: replay.id,
-        replayCode: replay.replayCode,
-        fileName: replay.fileName,
-        fileUrl: replay.fileUrl,
-        hashData: replay.hashData,
-        gameType: replay.gameType,
-        season: replay.season,
-        patchVersion: replay.patchVersion,
-        createUser: replay.createUser,
-        guildId: replay.guildId,
-        createDate: replay.createDate,
-        updateDate: replay.updateDate,
-        isDeleted: replay.isDeleted,
-      });
+    let newReplay;
+    try {
+      newReplay = await tx
+        .insert(replay)
+        .values({
+          replayCode,
+          fileName,
+          fileUrl,
+          rawData,
+          hashData,
+          gameType,
+          competitionId: comp?.id ?? null,
+          season,
+          patchVersion: patchVersion ?? undefined,
+          createUser,
+          guildId,
+        })
+        .returning({
+          id: replay.id,
+          replayCode: replay.replayCode,
+          fileName: replay.fileName,
+          fileUrl: replay.fileUrl,
+          hashData: replay.hashData,
+          gameType: replay.gameType,
+          competitionId: replay.competitionId,
+          season: replay.season,
+          patchVersion: replay.patchVersion,
+          createUser: replay.createUser,
+          guildId: replay.guildId,
+          createDate: replay.createDate,
+          updateDate: replay.updateDate,
+          isDeleted: replay.isDeleted,
+        });
+    } catch (error) {
+      if (isReplayHashUniqueViolation(error)) {
+        throw ReplayService.duplicateReplayError();
+      }
+      throw error;
+    }
 
-    return newReplay[0];
+    return { ...newReplay[0], competitionName: comp?.name ?? null };
   }
 
   /**

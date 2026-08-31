@@ -13,6 +13,7 @@ import { matchParticipantService } from '../services/matchParticipant.service.js
 import { guildMemberService } from '../services/guildMember.service.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
+import { scopeFromQuery } from '../types/matchScope.js';
 
 const formatMember = (members: any[]) => {
   return members.map((member) => ({
@@ -73,6 +74,7 @@ export const getRecentGames = async (
       guildId,
       Number(page) || 1,
       Number(limit) || 20,
+      scopeFromQuery(req.query),
     );
 
     res.setHeader('X-Total-Count', totalCount.toString());
@@ -138,12 +140,13 @@ export const getMatchDashboard = async (
     }
 
     const { playerCode } = members[0];
+    const scope = scopeFromQuery(req.query);
 
     const [monthRecord, lineRecord, { mostPicks }, synergy] = await Promise.all([
-      matchParticipantService.getRecentMonthRecord(playerCode, guildId),
-      matchParticipantService.getLineRecord(playerCode, lolSeason, guildId),
-      matchParticipantService.getMostPicks(playerCode, lolSeason, guildId, 1, 10),
-      matchParticipantService.getSynergisticTeammates(playerCode, lolSeason, guildId),
+      matchParticipantService.getRecentMonthRecord(playerCode, guildId, scope),
+      matchParticipantService.getLineRecord(playerCode, lolSeason, guildId, scope),
+      matchParticipantService.getMostPicks(playerCode, lolSeason, guildId, 1, 10, undefined, scope),
+      matchParticipantService.getSynergisticTeammates(playerCode, lolSeason, guildId, scope),
     ]);
 
     return res.status(200).json({
@@ -183,7 +186,8 @@ export const getMostPicks = async (
 ) => {
   try {
     const { guildId, riotName } = req.params;
-    const { riotNameTag, season, page, limit, position } = req.query;
+    const { riotNameTag, season, page, limit, position, datePreset, fromMonth, toMonth } =
+      req.query;
 
     const defaultSeason = await systemConfigService.getConfigOrDefault('LOL_SEASON', 'error_season');
     const lolSeason = season || defaultSeason;
@@ -211,6 +215,7 @@ export const getMostPicks = async (
     }
 
     const { playerCode } = members[0];
+    const scope = { ...scopeFromQuery(req.query), datePreset, fromMonth, toMonth };
 
     const [{ mostPicks, totalCount }, lines] = await Promise.all([
       matchParticipantService.getMostPicks(
@@ -220,8 +225,9 @@ export const getMostPicks = async (
         Number(page) || 1,
         Number(limit) || 10,
         position,
+        scope,
       ),
-      matchParticipantService.getLineRecord(playerCode, lolSeason, guildId),
+      matchParticipantService.getLineRecord(playerCode, lolSeason, guildId, scope),
     ]);
 
     res.setHeader('X-Total-Count', totalCount.toString());

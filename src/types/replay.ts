@@ -4,11 +4,13 @@ export interface ReplayFileRequest {
   fileName: string;
   fileUrl: string;
   gameType?: string;
+  /** 스크림·본경기용. 생략 시 길드의 OPEN 대회로 해석된다. */
+  competitionId?: number;
   createUser: string;
   guild: Guild;
 }
 
-export type ReplaySaveResult = Omit<Replay, 'rawData'>;
+export type ReplaySaveResult = Omit<Replay, 'rawData'> & { competitionName: string | null };
 
 export interface ReplayResponse {
   status: 'success' | 'error';
