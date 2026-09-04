@@ -248,12 +248,14 @@ export const competitionApplication = pgTable(
       .notNull()
       .references(() => riotAccount.playerCode),
     appliedByMemberId: varchar('applied_by_member_id', { length: 64 }).notNull(),
-    title: varchar('title', { length: 64 }).notNull(),
+    mainPosition: varchar('main_position', { length: 8 }).notNull(), // TOP/JUG/MID/ADC/SUP
+    subPositions: varchar('sub_positions', { length: 8 }).array().notNull().default([]),
+    /** champion.id 최대 3개 */
+    champions: varchar('champions', { length: 16 }).array().notNull().default([]),
     availableTime: varchar('available_time', { length: 128 }),
-    captainAvailable: varchar('captain_available', { length: 64 }),
-    position: varchar('position', { length: 16 }),
-    subPosition: varchar('sub_position', { length: 16 }),
-    comment: varchar('comment', { length: 256 }),
+    captainAvailable: boolean('captain_available').notNull().default(false),
+    practiceLevel: varchar('practice_level', { length: 16 }).notNull(), // NONE/RARE/MODERATE/OFTEN/ACTIVE
+    comment: varchar('comment', { length: 100 }),
     status: varchar('status', { length: 16 }).notNull().default('PENDING'), // PENDING / APPROVED / REJECTED
     decidedByMemberId: varchar('decided_by_member_id', { length: 64 }),
     decidedDate: timestamp('decided_date', { withTimezone: true }),
@@ -302,10 +304,12 @@ export const competitionTeamMember = pgTable(
     playerCode: varchar('player_code', { length: 64 })
       .notNull()
       .references(() => riotAccount.playerCode),
+    position: varchar('position', { length: 8 }).notNull(), // TOP/JUG/MID/ADC/SUP
     createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     unique('uq_competition_team_member_player').on(t.competitionId, t.playerCode),
+    unique('uq_competition_team_member_position').on(t.teamId, t.position),
     index('idx_competition_team_member_team').on(t.teamId),
   ],
 );
@@ -606,7 +610,7 @@ export type GuildAuditLogDetail =
       competitionId: number;
       applicationId: number;
       playerCode: string;
-      status: 'APPROVED' | 'REJECTED';
+      status: 'APPROVED' | 'REJECTED' | 'PENDING';
       source: 'web' | 'bot';
     }
   // eventType 'matchTeamAssign' — 정정 이력을 읽으려면 바꾸기 전 귀속도 있어야 한다

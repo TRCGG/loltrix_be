@@ -5,30 +5,38 @@ import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 import { requireGuildRole } from '../middlewares/requireRole.js';
 import {
   addTeamMember,
-  approveApplication,
   assignMatchTeams,
   changeCompetitionStatus,
   closeCompetition,
   createApplication,
   createCompetition,
   createTeam,
+  decideApplications,
   deleteCompetition,
+  deleteMyApplication,
   deleteTeam,
   getCompetitionDetail,
+  getMyApplication,
   getTeamHeadToHead,
   getTeamRecords,
   listApplications,
   listCompetitionMatches,
   listCompetitions,
   listTeams,
-  rejectApplication,
   removeTeamMember,
   resolveCompetition,
+  saveRoster,
   updateCompetition,
+  updateMyApplication,
   updateTeam,
 } from '../controllers/competition.controller.js';
 import { COMPETITION_STATUS_VALUES } from '../services/competitionLifecycle.js';
-import { CompetitionStatus } from '../types/competition.js';
+import {
+  COMPETITION_POSITIONS,
+  CompetitionStatus,
+  MAX_APPLICATION_CHAMPIONS,
+  PRACTICE_LEVELS,
+} from '../types/competition.js';
 
 const router: Router = Router();
 
@@ -268,21 +276,33 @@ const teamParams = competitionParams.extend({
   teamId: z.string().regex(/^\d{1,9}$/, 'teamId must be a number'),
 });
 
-const applicationParams = competitionParams.extend({
-  applicationId: z.string().regex(/^\d{1,9}$/, 'applicationId must be a number'),
-});
+const position = z.enum(COMPETITION_POSITIONS);
+const playerCode = z.string().trim().min(1, 'playerCode is required').max(64);
 
-const applySchema = z.object({
+const applicationBody = {
+  playerCode,
+  mainPosition: position,
+  subPositions: z.array(position).max(COMPETITION_POSITIONS.length - 1).optional(),
+  champions: z
+    .array(z.string().trim().min(1).max(16))
+    .max(MAX_APPLICATION_CHAMPIONS, `champions must be ${MAX_APPLICATION_CHAMPIONS} or fewer`)
+    .optional(),
+  availableTime: z.string().trim().max(128).nullable().optional(),
+  captainAvailable: z.boolean(),
+  practiceLevel: z.enum(PRACTICE_LEVELS),
+  comment: z.string().trim().max(100).nullable().optional(),
+};
+
+const applySchema = z.object({ params: competitionParams, body: z.object(applicationBody) });
+
+const applicationMeSchema = z.object({ params: competitionParams });
+
+const updateApplicationSchema = z.object({
   params: competitionParams,
-  body: z.object({
-    playerCode: z.string().trim().min(1, 'playerCode is required').max(64),
-    title: z.string().trim().min(1, 'title is required').max(64),
-    availableTime: z.string().trim().max(128).optional(),
-    captainAvailable: z.string().trim().max(64).optional(),
-    position: z.string().trim().max(16).optional(),
-    subPosition: z.string().trim().max(16).optional(),
-    comment: z.string().trim().max(256).optional(),
-  }),
+  body: z
+    .object(applicationBody)
+    .partial()
+    .refine((body) => Object.keys(body).length > 0, { message: 'at least one field is required' }),
 });
 
 const listApplicationsSchema = z.object({
@@ -290,7 +310,20 @@ const listApplicationsSchema = z.object({
   query: z.object({ status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional() }),
 });
 
-const decideApplicationSchema = z.object({ params: applicationParams, body: actorBody });
+const decideApplicationsSchema = z.object({
+  params: competitionParams,
+  body: z.object({
+    applicationIds: z
+      .array(z.number().int().positive())
+      .min(1, 'applicationIds is required')
+      .max(200, 'applicationIds must be 200 or fewer')
+      .refine((ids) => new Set(ids).size === ids.length, {
+        message: 'applicationIds must be unique',
+      }),
+    status: z.enum(['APPROVED', 'REJECTED', 'PENDING']),
+    actorMemberId: z.string().min(1).max(64).optional(),
+  }),
+});
 
 const createTeamSchema = z.object({
   params: competitionParams,
@@ -313,7 +346,25 @@ const teamSchema = z.object({ params: teamParams });
 
 const addMemberSchema = z.object({
   params: teamParams,
-  body: z.object({ playerCode: z.string().trim().min(1, 'playerCode is required').max(64) }),
+  body: z.object({ playerCode, position }),
+});
+
+const rosterSaveSchema = z.object({
+  params: competitionParams,
+  body: z.object({
+    teams: z.array(
+      z.object({
+        id: z.number().int().positive().optional(),
+        name: z
+          .string()
+          .trim()
+          .min(1, 'name is required')
+          .max(64, 'name must be 64 characters or less'),
+        captainPlayerCode: z.string().trim().min(1).max(64).nullable().optional(),
+        members: z.array(z.object({ playerCode, position })),
+      }),
+    ),
+  }),
 });
 
 const removeMemberSchema = z.object({
@@ -351,15 +402,73 @@ router.post(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청'
-    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 모집중(RECRUITING) 대회만 신청을 받습니다 — 종료된 대회는 409(competition-closed), 진행중 대회는 409(competition-not-recruiting). 대회의 approvalRequired가 false면 신청이 바로 APPROVED로 저장됩니다.'
+    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. mainPosition·practiceLevel·captainAvailable은 필수, subPositions는 mainPosition과 겹치거나 중복되면 400(sub-position-invalid), champions는 champion.id 최대 3개로 등록되지 않은 id가 있으면 400(champion-not-found), 같은 id가 반복되면 400(champion-duplicate). playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 모집중(RECRUITING) 대회만 신청을 받습니다 — 종료된 대회는 409(competition-closed), 진행중 대회는 409(competition-not-recruiting). 대회의 approvalRequired가 false면 신청이 바로 APPROVED로 저장됩니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
-    #swagger.parameters['body'] = { in: 'body', required: true, schema: { playerCode: 'PLR_000123', title: '탑 지원합니다', availableTime: '평일 21시 이후', captainAvailable: '가능', position: 'TOP', subPosition: 'JUNGLE', comment: '잘 부탁드립니다' } }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { playerCode: 'PLR_000123', mainPosition: 'TOP', subPositions: ['JUG'], champions: ['266', '103'], availableTime: '평일 21시 이후', captainAvailable: true, practiceLevel: 'MODERATE', comment: '잘 부탁드립니다' } }
   */
   decodeGuildIdMiddleware,
   validateRequest(applySchema),
   createApplication,
+);
+
+/**
+ * @route GET /api/competitions/:guildId/:competitionId/applications/me
+ * @desc 본인 신청 조회
+ */
+router.get(
+  '/:guildId/:competitionId/applications/me',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '내 대회 신청 조회'
+    #swagger.description = '로그인한 사용자가 이 대회에 넣은 신청 한 건을 반환합니다(riotName·riotNameTag와 champions는 id·한글명·영문명으로 채워집니다). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(applicationMeSchema),
+  getMyApplication,
+);
+
+/**
+ * @route PATCH /api/competitions/:guildId/:competitionId/applications/me
+ * @desc 본인 신청 수정 — 승인 상태는 건드리지 않는다
+ */
+router.patch(
+  '/:guildId/:competitionId/applications/me',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '내 대회 신청 수정'
+    #swagger.description = '신청 필드 중 최소 하나가 필요합니다. playerCode를 바꾸면 본계정으로 다시 정규화되고, 그 계정이 이미 신청돼 있으면 409(application-duplicate). subPositions·champions는 저장된 값과 합친 뒤 검사합니다 — 400(sub-position-invalid / champion-not-found / champion-duplicate). 수정해도 승인 상태(status)는 그대로입니다. 모집중 대회만 수정할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { mainPosition: 'MID', subPositions: ['ADC'], champions: ['103'], captainAvailable: false, practiceLevel: 'OFTEN', comment: '수정합니다' } }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(updateApplicationSchema),
+  updateMyApplication,
+);
+
+/**
+ * @route DELETE /api/competitions/:guildId/:competitionId/applications/me
+ * @desc 본인 신청 취소
+ */
+router.delete(
+  '/:guildId/:competitionId/applications/me',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '내 대회 신청 취소'
+    #swagger.description = '조회·수정과 같은 신청 한 건을 삭제합니다(복구 없음). 모집중 대회만 취소할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(applicationMeSchema),
+  deleteMyApplication,
 );
 
 /**
@@ -371,7 +480,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청 목록'
-    #swagger.description = '최신순. 각 항목에 riotName·riotNameTag가 붙습니다. status로 PENDING/APPROVED/REJECTED 필터.'
+    #swagger.description = '최신순. 각 항목에 riotName·riotNameTag와 champions(id·champName·champNameEng)가 붙습니다. 보이는 범위는 권한에 따라 다릅니다 — guildManager 이상과 봇은 status로 PENDING/APPROVED/REJECTED를 고르거나 생략해 전체를 보고, 그 아래 권한은 승인된 신청만 봅니다(status 생략 시 APPROVED만, PENDING·REJECTED를 지정하면 403 application-status-forbidden).'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
     #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['PENDING', 'APPROVED', 'REJECTED'] }
@@ -382,47 +491,25 @@ router.get(
 );
 
 /**
- * @route PATCH /api/competitions/:guildId/:competitionId/applications/:applicationId/approve
- * @desc 신청 승인 — 승인이 팀 배정을 만들지는 않는다 (편성은 로스터 API로)
+ * @route PATCH /api/competitions/:guildId/:competitionId/applications/decide
+ * @desc 신청 일괄 결정 — 승인이 팀 배정을 만들지는 않는다 (편성은 로스터 API로)
  * @access guildManager 이상
  */
 router.patch(
-  '/:guildId/:competitionId/applications/:applicationId/approve',
+  '/:guildId/:competitionId/applications/decide',
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
-    #swagger.summary = '대회 신청 승인'
-    #swagger.description = 'APPROVED로 바꾸고 guild_audit_log(applicationDecide)에 남깁니다. 이미 REJECTED여도 승인할 수 있습니다. 종료된 대회는 409(competition-closed). 승인은 로스터 등록의 전제가 아닙니다.'
+    #swagger.summary = '대회 신청 일괄 결정'
+    #swagger.description = 'applicationIds(1~200개, 중복 불가)를 APPROVED/REJECTED/PENDING 중 하나로 한 번에 바꿉니다. 하나라도 이 대회 신청이 아니면 404(application-not-found, 메시지에 없는 id 나열)로 전체가 실패하고 아무것도 저장되지 않습니다. PENDING으로 되돌리면 decidedByMemberId·decidedDate가 지워지고, APPROVED/REJECTED면 채워집니다. 신청당 guild_audit_log(applicationDecide) 한 줄이 남습니다. 종료된 대회는 409(competition-closed). 승인은 로스터 등록의 전제가 아닙니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
-    #swagger.parameters['applicationId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { applicationIds: [1, 2, 3], status: 'APPROVED', actorMemberId: '123456789012345678' } }
   */
   decodeGuildIdMiddleware,
   manager,
-  validateRequest(decideApplicationSchema),
-  approveApplication,
-);
-
-/**
- * @route PATCH /api/competitions/:guildId/:competitionId/applications/:applicationId/reject
- * @desc 신청 거절
- * @access guildManager 이상
- */
-router.patch(
-  '/:guildId/:competitionId/applications/:applicationId/reject',
-  /* #swagger.auto = false
-    #swagger.tags = ['Competition']
-    #swagger.summary = '대회 신청 거절'
-    #swagger.description = 'REJECTED로 바꾸고 guild_audit_log(applicationDecide)에 남깁니다. APPROVED였어도 거절로 되돌릴 수 있습니다. 종료된 대회는 409(competition-closed).'
-    #swagger.security = [{ "session": [] }]
-    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
-    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
-    #swagger.parameters['applicationId'] = { in: 'path', required: true, type: 'integer' }
-  */
-  decodeGuildIdMiddleware,
-  manager,
-  validateRequest(decideApplicationSchema),
-  rejectApplication,
+  validateRequest(decideApplicationsSchema),
+  decideApplications,
 );
 
 /**
@@ -456,13 +543,35 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 팀 목록'
-    #swagger.description = '각 팀에 roster(playerCode·riotName·riotNameTag)가 붙습니다.'
+    #swagger.description = '각 팀에 roster(playerCode·position·riotName·riotNameTag)가 붙고, roster는 TOP→JUG→MID→ADC→SUP 순으로 정렬됩니다.'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
   */
   decodeGuildIdMiddleware,
   validateRequest(listTeamsSchema),
   listTeams,
+);
+
+/**
+ * @route PUT /api/competitions/:guildId/:competitionId/roster
+ * @desc 팀 편성 전체 저장 (payload에 없는 팀은 삭제)
+ * @access guildManager 이상
+ */
+router.put(
+  '/:guildId/:competitionId/roster',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '대회 로스터 전체 저장'
+    #swagger.description = '보낸 teams가 이 대회의 편성 전체가 됩니다 — id를 준 팀은 이름·팀장·로스터가 payload대로 맞춰지고, id 없는 팀은 새로 만들어지며, payload에 없는 기존 팀은 삭제됩니다. 삭제 대상 팀에 귀속된 활성 경기가 있으면 409(team-has-matches)로 전체가 실패합니다. 팀은 20개까지(409 team-limit-exceeded), 팀당 5명·포지션 하나씩(같은 팀에 같은 포지션이 둘이면 409 roster-position-taken, 6명 이상이면 409 roster-limit-exceeded), 한 선수는 한 팀에만(409 roster-duplicate), 이름은 중복 불가(409 team-name-exists), captainPlayerCode는 그 팀 members 안에 있어야 합니다(400 captain-not-in-roster). id가 이 대회 팀이 아니면 404(team-not-found), 같은 id가 두 번 오면 400(team-duplicate), 종료된 대회는 409(competition-closed). playerCode는 본계정으로 정규화해 저장하고, 응답은 GET /teams와 같은 모양입니다.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { teams: [{ id: 1, name: '1팀', captainPlayerCode: 'PLR_000123', members: [{ playerCode: 'PLR_000123', position: 'TOP' }, { playerCode: 'PLR_000124', position: 'JUG' }] }] } }
+  */
+  decodeGuildIdMiddleware,
+  manager,
+  validateRequest(rosterSaveSchema),
+  saveRoster,
 );
 
 /**
@@ -531,7 +640,7 @@ router.delete(
 
 /**
  * @route POST /api/competitions/:guildId/:competitionId/teams/:teamId/members
- * @desc 로스터 등록 (팀당 최대 6명)
+ * @desc 로스터 등록 (팀당 최대 5명, 포지션당 한 명)
  * @access guildManager 이상
  */
 router.post(
@@ -539,12 +648,12 @@ router.post(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '로스터 등록'
-    #swagger.description = 'playerCode는 본계정으로 정규화해 저장합니다. 팀당 6명을 넘으면 409(roster-limit-exceeded), 이미 이 대회의 다른 팀에 있으면 409(roster-duplicate), 종료된 대회는 409(competition-closed). 승인(APPROVED)은 전제가 아닙니다.'
+    #swagger.description = 'playerCode는 본계정으로 정규화해 저장합니다. 한 팀은 포지션당 한 명이라 이미 찬 포지션이면 409(roster-position-taken), 5명을 넘으면 409(roster-limit-exceeded), 이미 이 대회의 다른 팀에 있으면 409(roster-duplicate), 종료된 대회는 409(competition-closed). 편성 전체를 한 번에 저장하려면 PUT /roster. 승인(APPROVED)은 전제가 아닙니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
     #swagger.parameters['teamId'] = { in: 'path', required: true, type: 'integer' }
-    #swagger.parameters['body'] = { in: 'body', required: true, schema: { playerCode: 'PLR_000123' } }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { playerCode: 'PLR_000123', position: 'TOP' } }
   */
   decodeGuildIdMiddleware,
   manager,

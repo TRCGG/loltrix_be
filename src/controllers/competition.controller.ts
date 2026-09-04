@@ -2,12 +2,19 @@ import { NextFunction, Response } from 'express';
 import { AuthRequest } from '../middlewares/authHandler.js';
 import { BusinessError } from '../types/error.js';
 import { competitionService } from '../services/competition.service.js';
-import { competitionTeamService } from '../services/competitionTeam.service.js';
+import {
+  competitionTeamService,
+  visibleApplicationStatus,
+} from '../services/competitionTeam.service.js';
+import { hasGuildRole } from '../middlewares/requireRole.js';
 import {
   CompetitionActor,
   CompetitionApplicationItem,
   CompetitionApplicationStatus,
+  CompetitionApplicationUpdateInput,
   CompetitionApplyInput,
+  CompetitionPosition,
+  RosterSaveInput,
   CompetitionCreateInput,
   CompetitionDetail,
   CompetitionHeadToHeadResult,
@@ -38,6 +45,17 @@ const resolveActor = (req: AuthRequest): CompetitionActor => {
   return req.isBot
     ? { memberId: typeof bodyActor === 'string' && bodyActor ? bodyActor : 'bot', source: 'bot' }
     : { memberId: req.discordMemberId ?? 'unknown', source: 'web' };
+};
+
+/** 신청 API는 로그인한 본인 것만 다룬다 — 봇에는 신청자를 특정할 세션이 없다. */
+const botCannotApply = <T>(res: Response<CompetitionResponse<T>>) =>
+  res.status(403).json({ status: 'error', message: 'Bot cannot apply', data: null });
+
+const applicantMemberId = (req: AuthRequest): string => {
+  if (!req.discordMemberId) {
+    throw new BusinessError('Unauthorized', 401, { isLoggable: true });
+  }
+  return req.discordMemberId;
 };
 
 /** @route POST /api/competitions/:guildId */
@@ -207,23 +225,84 @@ export const createApplication = async (
   next: NextFunction,
 ) => {
   try {
-    // 신청자는 로그인한 본인이어야 한다 — 봇에는 신청자를 특정할 세션이 없다.
-    if (req.isBot) {
-      return res.status(403).json({ status: 'error', message: 'Bot cannot apply', data: null });
-    }
-    if (!req.discordMemberId) {
-      throw new BusinessError('Unauthorized', 401, { isLoggable: true });
-    }
+    if (req.isBot) return botCannotApply(res);
     const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
     const created = await competitionTeamService.apply(
       guildId,
       Number(competitionId),
       req.body as CompetitionApplyInput,
-      req.discordMemberId,
+      applicantMemberId(req),
     );
     return res
       .status(201)
       .json({ status: 'success', message: 'Application created successfully', data: created });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** @route GET /api/competitions/:guildId/:competitionId/applications/me */
+export const getMyApplication = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<CompetitionApplicationItem>>,
+  next: NextFunction,
+) => {
+  try {
+    if (req.isBot) return botCannotApply(res);
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const data = await competitionTeamService.getMyApplication(
+      guildId,
+      Number(competitionId),
+      applicantMemberId(req),
+    );
+    return res
+      .status(200)
+      .json({ status: 'success', message: 'Application retrieved successfully', data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** @route PATCH /api/competitions/:guildId/:competitionId/applications/me */
+export const updateMyApplication = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<CompetitionApplication>>,
+  next: NextFunction,
+) => {
+  try {
+    if (req.isBot) return botCannotApply(res);
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const updated = await competitionTeamService.updateMyApplication(
+      guildId,
+      Number(competitionId),
+      applicantMemberId(req),
+      req.body as CompetitionApplicationUpdateInput,
+    );
+    return res
+      .status(200)
+      .json({ status: 'success', message: 'Application updated successfully', data: updated });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** @route DELETE /api/competitions/:guildId/:competitionId/applications/me */
+export const deleteMyApplication = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<CompetitionApplication>>,
+  next: NextFunction,
+) => {
+  try {
+    if (req.isBot) return botCannotApply(res);
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const removed = await competitionTeamService.deleteMyApplication(
+      guildId,
+      Number(competitionId),
+      applicantMemberId(req),
+    );
+    return res
+      .status(200)
+      .json({ status: 'success', message: 'Application deleted successfully', data: removed });
   } catch (error) {
     return next(error);
   }
@@ -238,10 +317,11 @@ export const listApplications = async (
   try {
     const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
     const { status } = req.query as { status?: CompetitionApplicationStatus };
+    const canSeeAll = await hasGuildRole(req, 'guildManager', guildId);
     const data = await competitionTeamService.listApplications(
       guildId,
       Number(competitionId),
-      status,
+      visibleApplicationStatus(status, canSeeAll),
     );
     return res
       .status(200)
@@ -251,40 +331,32 @@ export const listApplications = async (
   }
 };
 
-/** 승인/거절 공통 — 경로 끝이 결정 상태다. */
-const decideApplication =
-  (status: 'APPROVED' | 'REJECTED') =>
-  async (
-    req: AuthRequest,
-    res: Response<CompetitionResponse<CompetitionApplication>>,
-    next: NextFunction,
-  ) => {
-    try {
-      const { guildId, competitionId, applicationId } = req.params as {
-        guildId: string;
-        competitionId: string;
-        applicationId: string;
-      };
-      const decided = await competitionTeamService.decideApplication(
-        guildId,
-        Number(competitionId),
-        Number(applicationId),
-        status,
-        resolveActor(req),
-      );
-      return res
-        .status(200)
-        .json({ status: 'success', message: 'Application decided successfully', data: decided });
-    } catch (error) {
-      return next(error);
-    }
-  };
-
-/** @route PATCH /api/competitions/:guildId/:competitionId/applications/:applicationId/approve */
-export const approveApplication = decideApplication('APPROVED');
-
-/** @route PATCH /api/competitions/:guildId/:competitionId/applications/:applicationId/reject */
-export const rejectApplication = decideApplication('REJECTED');
+/** @route PATCH /api/competitions/:guildId/:competitionId/applications/decide */
+export const decideApplications = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<CompetitionApplication[]>>,
+  next: NextFunction,
+) => {
+  try {
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const { applicationIds, status } = req.body as {
+      applicationIds: number[];
+      status: CompetitionApplicationStatus;
+    };
+    const data = await competitionTeamService.decideApplications(
+      guildId,
+      Number(competitionId),
+      applicationIds,
+      status,
+      resolveActor(req),
+    );
+    return res
+      .status(200)
+      .json({ status: 'success', message: 'Applications decided successfully', data });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 /** @route POST /api/competitions/:guildId/:competitionId/teams */
 export const createTeam = async (
@@ -384,12 +456,11 @@ export const addTeamMember = async (
       competitionId: string;
       teamId: string;
     };
-    const { playerCode } = req.body as { playerCode: string };
     const created = await competitionTeamService.addMember(
       guildId,
       Number(competitionId),
       Number(teamId),
-      playerCode,
+      req.body as { playerCode: string; position: CompetitionPosition },
     );
     return res
       .status(201)
@@ -421,6 +492,27 @@ export const removeTeamMember = async (
     return res
       .status(200)
       .json({ status: 'success', message: 'Roster member removed successfully', data: removed });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** @route PUT /api/competitions/:guildId/:competitionId/roster */
+export const saveRoster = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<CompetitionTeamWithRoster[]>>,
+  next: NextFunction,
+) => {
+  try {
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const data = await competitionTeamService.saveRoster(
+      guildId,
+      Number(competitionId),
+      req.body as RosterSaveInput,
+    );
+    return res
+      .status(200)
+      .json({ status: 'success', message: 'Roster saved successfully', data });
   } catch (error) {
     return next(error);
   }

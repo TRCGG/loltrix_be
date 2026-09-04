@@ -41,9 +41,13 @@ const violatedConstraint = (error: unknown): string | null => {
 };
 
 export class CompetitionService {
-  /** trim + 연속 공백 축약. "멸망전 1회"와 "멸망전  1회"가 다른 대회로 생기지 않게. */
+  /**
+   * trim + 연속 공백 축약. "멸망전 1회"와 "멸망전  1회"가 다른 대회로 생기지 않게.
+   * 제어문자도 공백으로 바꾼다 — 로스터 일괄 저장이 팀 이름을 U+0001 자리표로 잠시 비켜 두므로,
+   * 사용자 이름에 제어문자가 남으면 그 자리표와 부딪힌다.
+   */
   public static normalizeName(name: string): string {
-    return name.trim().replace(/\s+/g, ' ');
+    return name.replace(/\p{Cc}/gu, ' ').trim().replace(/\s+/g, ' ');
   }
 
   /**

@@ -7,6 +7,15 @@ import { TeamRecordSplit } from '../services/competitionRecord.js';
 
 export type CompetitionStatus = 'RECRUITING' | 'IN_PROGRESS' | 'CLOSED';
 
+/** 통계·경기 조회의 포지션 코드와 같은 값 — 신청·로스터가 그 필터에 그대로 걸리게 맞춘다. */
+export const COMPETITION_POSITIONS = ['TOP', 'JUG', 'MID', 'ADC', 'SUP'] as const;
+export type CompetitionPosition = (typeof COMPETITION_POSITIONS)[number];
+
+export const PRACTICE_LEVELS = ['NONE', 'RARE', 'MODERATE', 'OFTEN', 'ACTIVE'] as const;
+export type PracticeLevel = (typeof PRACTICE_LEVELS)[number];
+
+export const MAX_APPLICATION_CHAMPIONS = 3;
+
 /** 개설 시 고를 수 있는 상태 — 종료된 대회를 새로 만들 일은 없다. */
 export type CompetitionInitialStatus = Extract<CompetitionStatus, 'RECRUITING' | 'IN_PROGRESS'>;
 
@@ -67,26 +76,62 @@ export interface CompetitionResponse<T> {
 
 export type CompetitionApplicationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-/** 신청 목록 항목 — 화면이 PLR 코드 대신 소환사명을 보여줄 수 있게 riot 계정을 붙인다. */
-export interface CompetitionApplicationItem extends CompetitionApplication {
+export interface CompetitionApplicationChampion {
+  id: string;
+  champName: string;
+  champNameEng: string;
+}
+
+/** 신청 목록 항목 — 화면이 PLR 코드·챔피언 id 대신 이름을 보여줄 수 있게 붙인다. */
+export interface CompetitionApplicationItem extends Omit<CompetitionApplication, 'champions'> {
   riotName: string;
   riotNameTag: string;
+  champions: CompetitionApplicationChampion[];
 }
 
 export interface CompetitionApplyInput {
   playerCode: string;
-  title: string;
-  availableTime?: string;
-  captainAvailable?: string;
-  position?: string;
-  subPosition?: string;
-  comment?: string;
+  mainPosition: CompetitionPosition;
+  subPositions?: CompetitionPosition[];
+  champions?: string[];
+  availableTime?: string | null;
+  captainAvailable: boolean;
+  practiceLevel: PracticeLevel;
+  comment?: string | null;
 }
 
-export interface CompetitionRosterMember {
+/** 본인 신청 수정 — 전부 선택이지만 최소 하나는 있어야 한다(라우트에서 검사). */
+export interface CompetitionApplicationUpdateInput {
+  playerCode?: string;
+  mainPosition?: CompetitionPosition;
+  subPositions?: CompetitionPosition[];
+  champions?: string[];
+  availableTime?: string | null;
+  captainAvailable?: boolean;
+  practiceLevel?: PracticeLevel;
+  comment?: string | null;
+}
+
+export interface CompetitionPlayerSummary {
   playerCode: string;
   riotName: string;
   riotNameTag: string;
+}
+
+export interface CompetitionRosterMember extends CompetitionPlayerSummary {
+  position: CompetitionPosition;
+}
+
+export interface RosterSaveTeamInput {
+  id?: number;
+  name: string;
+  captainPlayerCode?: string | null;
+  members: { playerCode: string; position: CompetitionPosition }[];
+}
+
+/** 로스터 전체 저장 — payload에 없는 팀은 삭제된다. */
+export interface RosterSaveInput {
+  teams: RosterSaveTeamInput[];
 }
 
 export interface CompetitionTeamWithRoster extends CompetitionTeam {
@@ -105,8 +150,8 @@ export interface CompetitionMatchTeamItem {
   date: Date;
   blueTeamId: number | null;
   redTeamId: number | null;
-  blue: CompetitionRosterMember[];
-  red: CompetitionRosterMember[];
+  blue: CompetitionPlayerSummary[];
+  red: CompetitionPlayerSummary[];
 }
 
 export interface CompetitionTeamRecordItem extends TeamRecordSplit {

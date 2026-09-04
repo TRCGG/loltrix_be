@@ -47,6 +47,32 @@ export const requireAdmin =
   };
 
 /**
+ * Guild 스코프 권한 판정. 미들웨어가 아니라 결과가 필요한 곳에서 쓴다 —
+ * 권한에 따라 막는 대신 보여줄 범위를 좁히는 조회(신청 목록)는 403으로 끊으면 안 된다.
+ * 봇은 미들웨어와 같은 이유로 통과: 권한 검사는 봇이 책임진다.
+ */
+export const hasGuildRole = async (
+  req: AuthRequest,
+  minRole: Role,
+  guildId: string,
+): Promise<boolean> => {
+  if (req.isBot) return true;
+
+  const memberId = req.discordMemberId;
+  if (!memberId) return false;
+
+  const roles = await discordMemberRoleService.getActiveRolesByGuild(memberId, guildId);
+
+  // Admin bypass: adminNormal 이상이면 guildId 무관하게 통과
+  const isAdmin = roles
+    .filter((r) => ADMIN_ROLES.includes(r.role as Role))
+    .some((r) => hasMinRole(r.role as Role, 'adminNormal'));
+  if (isAdmin) return true;
+
+  return roles.some((r) => hasMinRole(r.role as Role, minRole));
+};
+
+/**
  * Guild 스코프 역할 검증 미들웨어
  * - adminNormal 이상은 자동 bypass
  * @param minRole - 최소 요구 권한
@@ -71,19 +97,7 @@ export const requireGuildRole =
         throw new BusinessError('guildId is required', 400, { isLoggable: true });
       }
 
-      const roles = await discordMemberRoleService.getActiveRolesByGuild(memberId, guildId);
-
-      // Admin bypass: adminNormal 이상이면 guildId 무관하게 통과
-      const isAdmin = roles
-        .filter((r) => ADMIN_ROLES.includes(r.role as Role))
-        .some((r) => hasMinRole(r.role as Role, 'adminNormal'));
-
-      if (isAdmin) return next();
-
-      // Guild 스코프 권한 검증
-      const hasPermission = roles.some((r) => hasMinRole(r.role as Role, minRole));
-
-      if (!hasPermission) {
+      if (!(await hasGuildRole(req, minRole, guildId))) {
         throw new BusinessError('Forbidden: insufficient guild role', 403, { isLoggable: true });
       }
 
