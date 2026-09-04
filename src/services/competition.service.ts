@@ -141,7 +141,6 @@ export class CompetitionService {
     }
   }
 
-  /** 이름·승인 필요 여부 변경. 상태는 changeStatus가 담당한다. */
   public async update(
     guildId: string,
     id: number,
@@ -169,6 +168,25 @@ export class CompetitionService {
     try {
       return await db.transaction(async (tx) => {
         const target = await this.lockCompetition(tx, guildId, id);
+        const changes = {
+          ...(patch.name !== undefined && patch.name !== target.name
+            ? { name: { from: target.name, to: patch.name } }
+            : {}),
+          ...(patch.approvalRequired !== undefined &&
+          patch.approvalRequired !== target.approvalRequired
+            ? {
+                approvalRequired: {
+                  from: target.approvalRequired,
+                  to: patch.approvalRequired,
+                },
+              }
+            : {}),
+        };
+        // 빈 changes만 남은 감사 로그가 쌓이면 실제 수정 이력이 그 사이에 묻힌다.
+        if (Object.keys(changes).length === 0) {
+          return target;
+        }
+
         const [updated] = await tx
           .update(competition)
           .set(patch)
@@ -182,20 +200,7 @@ export class CompetitionService {
           detail: {
             competitionId: updated.id,
             name: updated.name,
-            changes: {
-              ...(patch.name !== undefined && patch.name !== target.name
-                ? { name: { from: target.name, to: patch.name } }
-                : {}),
-              ...(patch.approvalRequired !== undefined &&
-              patch.approvalRequired !== target.approvalRequired
-                ? {
-                    approvalRequired: {
-                      from: target.approvalRequired,
-                      to: patch.approvalRequired,
-                    },
-                  }
-                : {}),
-            },
+            changes,
             source: actor.source,
           },
         });

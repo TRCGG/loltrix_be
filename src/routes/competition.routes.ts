@@ -27,8 +27,14 @@ import {
   updateCompetition,
   updateTeam,
 } from '../controllers/competition.controller.js';
+import { COMPETITION_STATUS_VALUES } from '../services/competitionLifecycle.js';
+import { CompetitionStatus } from '../types/competition.js';
 
 const router: Router = Router();
+
+const competitionStatus = z.enum(
+  COMPETITION_STATUS_VALUES as [CompetitionStatus, ...CompetitionStatus[]],
+);
 
 const guildParams = z.object({
   guildId: z.string().min(1, 'Guild ID is required').max(128),
@@ -73,7 +79,7 @@ const updateSchema = z.object({
 const changeStatusSchema = z.object({
   params: competitionParams,
   body: z.object({
-    status: z.enum(['RECRUITING', 'IN_PROGRESS', 'CLOSED']),
+    status: competitionStatus,
     actorMemberId: z.string().min(1).max(64).optional(),
   }),
 });
@@ -82,7 +88,7 @@ const listSchema = z.object({
   params: guildParams,
   query: z.object({
     season: z.string().max(32).optional(),
-    status: z.enum(['RECRUITING', 'IN_PROGRESS', 'CLOSED']).optional(),
+    status: competitionStatus.optional(),
   }),
 });
 
@@ -203,7 +209,7 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 상태 변경'
-    #swagger.description = '허용되는 전이는 RECRUITING→IN_PROGRESS, IN_PROGRESS→RECRUITING, IN_PROGRESS→CLOSED, CLOSED→IN_PROGRESS(되돌리기)뿐입니다. 그 외는 409(competition-invalid-transition), 길드에 이미 진행중 대회가 있으면 409(competition-in-progress-exists), 대회가 없으면 404(competition-not-found). CLOSED로 가면 closeDate가 찍히고, 종료에서 나오면 다시 비워집니다. 신청은 모집중에만 받고(그 외 409 competition-not-recruiting), 종료 대회는 신청·승인·팀·로스터·경기 귀속이 모두 409(competition-closed)로 막힙니다.'
+    #swagger.description = '허용되는 전이는 RECRUITING→IN_PROGRESS, IN_PROGRESS→RECRUITING, IN_PROGRESS→CLOSED, CLOSED→IN_PROGRESS(되돌리기)뿐입니다. 그 외는 409(competition-invalid-transition), 길드에 이미 진행중 대회가 있으면 409(competition-in-progress-exists), 대회가 없으면 404(competition-not-found). CLOSED로 가면 closeDate가 찍히고, 종료에서 나오면 다시 비워집니다. 신청은 모집중에만 받고(진행중이면 409 competition-not-recruiting), 종료 대회는 신청·승인·팀·로스터·경기 귀속이 모두 409(competition-closed)로 막힙니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -345,7 +351,7 @@ router.post(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청'
-    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 모집중(RECRUITING) 대회만 신청을 받습니다 — 그 외 상태는 409(competition-not-recruiting). 대회의 approvalRequired가 false면 신청이 바로 APPROVED로 저장됩니다.'
+    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 모집중(RECRUITING) 대회만 신청을 받습니다 — 종료된 대회는 409(competition-closed), 진행중 대회는 409(competition-not-recruiting). 대회의 approvalRequired가 false면 신청이 바로 APPROVED로 저장됩니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }

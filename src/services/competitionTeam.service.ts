@@ -67,6 +67,8 @@ export class CompetitionTeamService {
     try {
       return await db.transaction(async (tx) => {
         const target = await this.loadCompetition(tx, guildId, competitionId, 'share');
+        // assertRecruiting도 CLOSED를 걸러내지만, 종료는 다른 쓰기 작업과 같은 에러로 알려야 한다.
+        this.assertWritable(target);
         this.assertRecruiting(target);
         const playerCode = await this.toMainAccount(guildId, input.playerCode, tx);
 

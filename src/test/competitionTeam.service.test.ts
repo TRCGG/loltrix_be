@@ -161,9 +161,9 @@ describe('신청은 모집중에만 받는다', () => {
     await expectStatus(apply(), 409, 'competition-not-recruiting');
   });
 
-  test('종료된 대회도 competition-closed가 아니라 같은 에러로 막는다', async () => {
+  test('종료된 대회는 다른 쓰기 작업과 같은 competition-closed로 막는다', async () => {
     queue = [closedCompetition];
-    await expectStatus(apply(), 409, 'competition-not-recruiting');
+    await expectStatus(apply(), 409, 'competition-closed');
   });
 
   test('승인이 필요한 대회는 PENDING으로 들어간다', async () => {
