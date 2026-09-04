@@ -46,7 +46,8 @@ export const message = pgTable('message', {
 
 /**
  * 대회: 클랜 안에서 여는 이벤트 단위(멸망전 1회 등). 스크림(2)·본경기(3) 경기가 어느 대회 것인지 잇는다.
- * 길드당 OPEN은 하나 — 리플 태깅 시 대회명 없이 OPEN 한 건으로 자동 해석하기 위한 전제.
+ * 모집중은 길드에 여러 개 둘 수 있고, 길드당 IN_PROGRESS는 하나 —
+ * 리플 태깅 시 대회명 없이 진행중 한 건으로 자동 해석하기 위한 전제.
  */
 export const competition = pgTable(
   'competition',
@@ -55,15 +56,17 @@ export const competition = pgTable(
     guildId: varchar('guild_id', { length: 128 }).notNull(),
     name: varchar('name', { length: 64 }).notNull(),
     season: varchar('season', { length: 32 }).notNull(),
-    status: varchar('status', { length: 16 }).notNull().default('OPEN'), // OPEN / CLOSED
+    status: varchar('status', { length: 16 }).notNull().default('RECRUITING'), // RECRUITING / IN_PROGRESS / CLOSED
+    // false면 신청이 들어오는 즉시 APPROVED로 저장된다 (승인 단계를 건너뛰는 대회)
+    approvalRequired: boolean('approval_required').notNull().default(true),
     createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
     closeDate: timestamp('close_date', { withTimezone: true }),
   },
   (t) => [
     unique('uq_competition_guild_name').on(t.guildId, t.name),
-    uniqueIndex('uq_competition_guild_open')
+    uniqueIndex('uq_competition_guild_in_progress')
       .on(t.guildId)
-      .where(sql`${t.status} = 'OPEN'`),
+      .where(sql`${t.status} = 'IN_PROGRESS'`),
   ],
 );
 
@@ -586,6 +589,18 @@ export type GuildAuditLogDetail =
   | { gameId: string; source: 'web' | 'bot' } // eventType 'replayDelete'
   // eventType 'competitionOpen' | 'competitionClose' | 'competitionDelete' — 하드 삭제 뒤에도 읽히도록 name 포함
   | { competitionId: number; name: string; source: 'web' | 'bot' }
+  // eventType 'competitionStatusChange' — 종료(CLOSED)로 가는 전이만 'competitionClose'로 남는다
+  | { competitionId: number; name: string; from: string; to: string; source: 'web' | 'bot' }
+  // eventType 'competitionUpdate'
+  | {
+      competitionId: number;
+      name: string;
+      changes: {
+        name?: { from: string; to: string };
+        approvalRequired?: { from: boolean; to: boolean };
+      };
+      source: 'web' | 'bot';
+    }
   // eventType 'applicationDecide'
   | {
       competitionId: number;
@@ -618,7 +633,7 @@ export const guildAuditLog = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
-    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete' | 'competitionOpen' | 'competitionClose' | 'competitionDelete' | 'applicationDecide' | 'matchTeamAssign'
+    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete' | 'competitionOpen' | 'competitionClose' | 'competitionStatusChange' | 'competitionUpdate' | 'competitionDelete' | 'applicationDecide' | 'matchTeamAssign'
     actorMemberId: text('actor_member_id').notNull(), // 행위자 Discord id (미상이면 'bot')
     targetMemberId: text('target_member_id'), // 대상 멤버 (roleChange), 없으면 NULL
     detail: jsonb('detail').$type<GuildAuditLogDetail>().notNull(),

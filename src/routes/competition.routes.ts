@@ -7,6 +7,7 @@ import {
   addTeamMember,
   approveApplication,
   assignMatchTeams,
+  changeCompetitionStatus,
   closeCompetition,
   createApplication,
   createCompetition,
@@ -23,6 +24,7 @@ import {
   rejectApplication,
   removeTeamMember,
   resolveCompetition,
+  updateCompetition,
   updateTeam,
 } from '../controllers/competition.controller.js';
 
@@ -39,10 +41,39 @@ const competitionParams = guildParams.extend({
 // 봇(!대회개설 등) 경유 시 body.actorMemberId로 명령 사용자를 전달 (감사 로그용)
 const actorBody = z.object({ actorMemberId: z.string().min(1).max(64).optional() }).optional();
 
+const competitionName = z
+  .string()
+  .trim()
+  .min(1, 'name is required')
+  .max(64, 'name must be 64 characters or less');
+
 const createSchema = z.object({
   params: guildParams,
   body: z.object({
-    name: z.string().trim().min(1, 'name is required').max(64, 'name must be 64 characters or less'),
+    name: competitionName,
+    status: z.enum(['RECRUITING', 'IN_PROGRESS']).optional(),
+    approvalRequired: z.boolean().optional(),
+    actorMemberId: z.string().min(1).max(64).optional(),
+  }),
+});
+
+const updateSchema = z.object({
+  params: competitionParams,
+  body: z
+    .object({
+      name: competitionName.optional(),
+      approvalRequired: z.boolean().optional(),
+      actorMemberId: z.string().min(1).max(64).optional(),
+    })
+    .refine((body) => body.name !== undefined || body.approvalRequired !== undefined, {
+      message: 'name or approvalRequired is required',
+    }),
+});
+
+const changeStatusSchema = z.object({
+  params: competitionParams,
+  body: z.object({
+    status: z.enum(['RECRUITING', 'IN_PROGRESS', 'CLOSED']),
     actorMemberId: z.string().min(1).max(64).optional(),
   }),
 });
@@ -51,7 +82,7 @@ const listSchema = z.object({
   params: guildParams,
   query: z.object({
     season: z.string().max(32).optional(),
-    status: z.enum(['OPEN', 'CLOSED']).optional(),
+    status: z.enum(['RECRUITING', 'IN_PROGRESS', 'CLOSED']).optional(),
   }),
 });
 
@@ -67,7 +98,7 @@ const manager = requireGuildRole('guildManager', { from: 'params', key: 'guildId
 
 /**
  * @route POST /api/competitions/:guildId
- * @desc 대회 개설 (길드당 OPEN 하나)
+ * @desc 대회 개설 (기본 모집중, 길드당 진행중 하나)
  * @access guildManager 이상
  */
 router.post(
@@ -75,10 +106,10 @@ router.post(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 개설'
-    #swagger.description = '클랜 내 대회(멸망전 1회 등)를 OPEN 상태로 만듭니다. 길드당 OPEN 대회는 하나 — 이미 있으면 409(competition-open-exists), 같은 이름이 있으면 409(competition-name-exists). guildId는 Base64. 세션 guildManager 이상 또는 봇.'
+    #swagger.description = '클랜 내 대회(멸망전 1회 등)를 만듭니다. status 생략 시 RECRUITING(모집중), 신청 단계 없이 바로 태깅하려면 IN_PROGRESS. 길드당 진행중 대회는 하나 — 이미 있으면 409(competition-in-progress-exists), 같은 이름이 있으면 409(competition-name-exists). approvalRequired=false면 신청이 들어오는 즉시 APPROVED가 됩니다(기본 true). guildId는 Base64. 세션 guildManager 이상 또는 봇.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
-    #swagger.parameters['body'] = { in: 'body', required: true, schema: { name: '멸망전 1회', actorMemberId: '123456789012345678' } }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { name: '멸망전 1회', status: 'RECRUITING', approvalRequired: true, actorMemberId: '123456789012345678' } }
   */
   decodeGuildIdMiddleware,
   manager,
@@ -95,10 +126,10 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 목록'
-    #swagger.description = '길드의 대회 목록을 최신순으로 반환합니다. 각 항목에 scrimCount(스크림)·mainCount(본경기) 활성 경기 수 포함. season·status 필터는 선택.'
+    #swagger.description = '길드의 대회 목록을 최신순으로 반환합니다. 각 항목에 scrimCount(스크림)·mainCount(본경기) 활성 경기 수와 applicationCount·pendingCount(신청)·teamCount·participantCount(로스터) 포함. season·status 필터는 선택.'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['season'] = { in: 'query', type: 'string' }
-    #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['OPEN', 'CLOSED'] }
+    #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['RECRUITING', 'IN_PROGRESS', 'CLOSED'] }
   */
   decodeGuildIdMiddleware,
   validateRequest(listSchema),
@@ -107,14 +138,14 @@ router.get(
 
 /**
  * @route GET /api/competitions/:guildId/resolve
- * @desc 대회명 해석 — name 생략 시 OPEN(없으면 최근 종료), 정확 일치 → 부분일치 1건 → 후보 목록
+ * @desc 대회명 해석 — name 생략 시 진행중(없으면 최근 종료), 정확 일치 → 부분일치 1건 → 후보 목록
  */
 router.get(
   '/:guildId/resolve',
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회명 해석'
-    #swagger.description = 'name 생략: OPEN 대회, 없으면 최근 종료 대회. name 지정: 정확 일치 1건 → 없으면 부분일치가 정확히 1건일 때만 match, 2건 이상이면 candidates로 반환(사용자가 고르게). 봇 !전적대회·!대회통계의 대회명 인자 처리용.'
+    #swagger.description = 'name 생략: 진행중 대회, 없으면 최근 종료 대회. name 지정: 정확 일치 1건 → 없으면 부분일치가 정확히 1건일 때만 match, 2건 이상이면 candidates로 반환(사용자가 고르게). 봇 !전적대회·!대회통계의 대회명 인자 처리용.'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['name'] = { in: 'query', type: 'string' }
   */
@@ -132,7 +163,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 상세'
-    #swagger.description = '대회 정보 + 유형별 경기 수 + 활성 경기 목록(gameId·gameType·createDate). 개인 랭킹·전적은 /api/statistics, /api/matches 에 competitionId 파라미터로 조회합니다.'
+    #swagger.description = '대회 정보 + 유형별 경기 수 + 신청·팀 규모 + 활성 경기 목록(gameId·gameType·createDate). 개인 랭킹·전적은 /api/statistics, /api/matches 에 competitionId 파라미터로 조회합니다.'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
   */
@@ -143,7 +174,7 @@ router.get(
 
 /**
  * @route PATCH /api/competitions/:guildId/:competitionId/close
- * @desc 대회 종료 — 이후 리플 태깅 불가(기록 잠금)
+ * @desc 대회 종료 — status 전이의 별칭(봇 !대회종료용)
  * @access guildManager 이상
  */
 router.patch(
@@ -151,7 +182,7 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 종료'
-    #swagger.description = 'OPEN 대회를 CLOSED로 바꿉니다. 종료 뒤엔 리플을 이 대회에 올릴 수 없으니 리플을 다 올린 뒤 종료하세요. OPEN이 아니면 404.'
+    #swagger.description = 'PATCH /status 에 status=CLOSED를 보낸 것과 같습니다. 진행중(IN_PROGRESS) 대회만 종료할 수 있고(아니면 409 competition-invalid-transition), 없으면 404(competition-not-found). 종료 뒤엔 리플 태깅과 신청·팀·로스터 수정이 모두 막히니 리플을 다 올린 뒤 종료하세요.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -160,6 +191,50 @@ router.patch(
   manager,
   validateRequest(mutateSchema),
   closeCompetition,
+);
+
+/**
+ * @route PATCH /api/competitions/:guildId/:competitionId/status
+ * @desc 대회 상태 전이 (모집중 ↔ 진행중 ↔ 종료)
+ * @access guildManager 이상
+ */
+router.patch(
+  '/:guildId/:competitionId/status',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '대회 상태 변경'
+    #swagger.description = '허용되는 전이는 RECRUITING→IN_PROGRESS, IN_PROGRESS→RECRUITING, IN_PROGRESS→CLOSED, CLOSED→IN_PROGRESS(되돌리기)뿐입니다. 그 외는 409(competition-invalid-transition), 길드에 이미 진행중 대회가 있으면 409(competition-in-progress-exists), 대회가 없으면 404(competition-not-found). CLOSED로 가면 closeDate가 찍히고, 종료에서 나오면 다시 비워집니다. 신청은 모집중에만 받고(그 외 409 competition-not-recruiting), 종료 대회는 신청·승인·팀·로스터·경기 귀속이 모두 409(competition-closed)로 막힙니다.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { status: 'IN_PROGRESS', actorMemberId: '123456789012345678' } }
+  */
+  decodeGuildIdMiddleware,
+  manager,
+  validateRequest(changeStatusSchema),
+  changeCompetitionStatus,
+);
+
+/**
+ * @route PATCH /api/competitions/:guildId/:competitionId
+ * @desc 대회 이름·승인 필요 여부 수정 (상태는 /status)
+ * @access guildManager 이상
+ */
+router.patch(
+  '/:guildId/:competitionId',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '대회 수정'
+    #swagger.description = 'name·approvalRequired 중 최소 하나가 필요합니다(둘 다 없으면 400). 이름은 대회 개설과 같은 공백 정규화를 거치고, 같은 이름이 있으면 409(competition-name-exists). approvalRequired=false로 바꾸면 이후 들어오는 신청이 즉시 APPROVED가 됩니다(이미 들어온 신청은 그대로). 상태 변경은 PATCH /status. guild_audit_log(competitionUpdate)에 남습니다.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { name: '멸망전 2회', approvalRequired: false, actorMemberId: '123456789012345678' } }
+  */
+  decodeGuildIdMiddleware,
+  manager,
+  validateRequest(updateSchema),
+  updateCompetition,
 );
 
 /**
@@ -270,7 +345,7 @@ router.post(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청'
-    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 종료된 대회는 409(competition-closed).'
+    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 모집중(RECRUITING) 대회만 신청을 받습니다 — 그 외 상태는 409(competition-not-recruiting). 대회의 approvalRequired가 false면 신청이 바로 APPROVED로 저장됩니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -310,7 +385,7 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청 승인'
-    #swagger.description = 'APPROVED로 바꾸고 guild_audit_log(applicationDecide)에 남깁니다. 이미 REJECTED여도 승인할 수 있습니다. 승인은 로스터 등록의 전제가 아닙니다.'
+    #swagger.description = 'APPROVED로 바꾸고 guild_audit_log(applicationDecide)에 남깁니다. 이미 REJECTED여도 승인할 수 있습니다. 종료된 대회는 409(competition-closed). 승인은 로스터 등록의 전제가 아닙니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -332,7 +407,7 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청 거절'
-    #swagger.description = 'REJECTED로 바꾸고 guild_audit_log(applicationDecide)에 남깁니다. APPROVED였어도 거절로 되돌릴 수 있습니다.'
+    #swagger.description = 'REJECTED로 바꾸고 guild_audit_log(applicationDecide)에 남깁니다. APPROVED였어도 거절로 되돌릴 수 있습니다. 종료된 대회는 409(competition-closed).'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -413,7 +488,7 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 팀 수정'
-    #swagger.description = 'captainPlayerCode는 그 팀 로스터에 있는 계정이어야 합니다(400 captain-not-in-roster). null을 보내면 팀장을 비웁니다.'
+    #swagger.description = 'captainPlayerCode는 그 팀 로스터에 있는 계정이어야 합니다(400 captain-not-in-roster). null을 보내면 팀장을 비웁니다. 종료된 대회는 409(competition-closed).'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -436,7 +511,7 @@ router.delete(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 팀 삭제'
-    #swagger.description = '이 팀으로 귀속된 활성 경기가 하나라도 있으면 409(team-has-matches). 로스터는 함께 지워집니다.'
+    #swagger.description = '이 팀으로 귀속된 활성 경기가 하나라도 있으면 409(team-has-matches). 로스터는 함께 지워집니다. 종료된 대회는 409(competition-closed).'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -515,7 +590,7 @@ router.get(
 
 /**
  * @route PUT /api/competitions/:guildId/:competitionId/matches/:customMatchId/teams
- * @desc 경기의 팀 귀속 지정·정정 (대회 종료 후에도 허용)
+ * @desc 경기의 팀 귀속 지정·정정 (대회 종료 전까지)
  * @access guildManager 이상
  */
 router.put(
@@ -523,7 +598,7 @@ router.put(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '경기 팀 귀속 지정'
-    #swagger.description = 'blue·red에 팀 id를 주거나 null(용병전)을 줍니다. 양쪽 null·같은 팀 양쪽은 400, 이 대회 팀이 아니면 400(team-not-in-competition), 이 길드·이 대회 경기가 아니면 404. 대회가 종료돼도 정정할 수 있습니다. guild_audit_log(matchTeamAssign)에 남습니다.'
+    #swagger.description = 'blue·red에 팀 id를 주거나 null(용병전)을 줍니다. 양쪽 null·같은 팀 양쪽은 400, 이 대회 팀이 아니면 400(team-not-in-competition), 이 길드·이 대회 경기가 아니면 404. 종료된 대회는 409(competition-closed) — 정정이 필요하면 상태를 IN_PROGRESS로 되돌린 뒤 고칩니다. guild_audit_log(matchTeamAssign)에 남습니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }

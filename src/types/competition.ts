@@ -5,12 +5,19 @@ import {
 } from '../database/schema.js';
 import { TeamRecordSplit } from '../services/competitionRecord.js';
 
-export type CompetitionStatus = 'OPEN' | 'CLOSED';
+export type CompetitionStatus = 'RECRUITING' | 'IN_PROGRESS' | 'CLOSED';
 
-/** 대회 + 유형별 활성 경기 수 */
+/** 개설 시 고를 수 있는 상태 — 종료된 대회를 새로 만들 일은 없다. */
+export type CompetitionInitialStatus = Extract<CompetitionStatus, 'RECRUITING' | 'IN_PROGRESS'>;
+
+/** 대회 + 유형별 활성 경기 수 + 신청·팀 규모 */
 export interface CompetitionSummary extends Competition {
   scrimCount: number;
   mainCount: number;
+  applicationCount: number;
+  pendingCount: number;
+  teamCount: number;
+  participantCount: number;
 }
 
 export interface CompetitionMatchItem {
@@ -25,7 +32,7 @@ export interface CompetitionDetail extends CompetitionSummary {
 
 /**
  * 대회명 해석 결과. match가 있으면 확정, 없고 candidates가 여럿이면 사용자에게 고르게 한다.
- * name 생략 시 OPEN 대회, 없으면 최근 종료 대회.
+ * name 생략 시 진행중 대회, 없으면 최근 종료 대회.
  */
 export interface CompetitionResolveResult {
   match: CompetitionSummary | null;
@@ -39,6 +46,17 @@ export interface CompetitionResolveResult {
 export interface CompetitionActor {
   memberId: string;
   source: 'web' | 'bot';
+}
+
+export interface CompetitionCreateInput {
+  name: string;
+  status?: CompetitionInitialStatus;
+  approvalRequired?: boolean;
+}
+
+export interface CompetitionUpdateInput {
+  name?: string;
+  approvalRequired?: boolean;
 }
 
 export interface CompetitionResponse<T> {

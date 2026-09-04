@@ -75,8 +75,9 @@ const GUILD = 'guild-1';
 const COMPETITION = 7;
 const TEAM = 5;
 
-const openCompetition = [{ id: COMPETITION, status: 'OPEN' }];
-const closedCompetition = [{ id: COMPETITION, status: 'CLOSED' }];
+const recruitingCompetition = [{ id: COMPETITION, status: 'RECRUITING', approvalRequired: true }];
+const inProgressCompetition = [{ id: COMPETITION, status: 'IN_PROGRESS', approvalRequired: true }];
+const closedCompetition = [{ id: COMPETITION, status: 'CLOSED', approvalRequired: true }];
 const teamRow = [
   {
     id: TEAM,
@@ -100,15 +101,6 @@ beforeEach(() => {
 });
 
 describe('종료된 대회는 잠긴다 (409)', () => {
-  test('신청', async () => {
-    queue = [closedCompetition];
-    await expectStatus(
-      service.apply(GUILD, COMPETITION, { playerCode: 'PLR_000001', title: '탑' }, 'member-1'),
-      409,
-      'competition-closed',
-    );
-  });
-
   test('팀 생성', async () => {
     queue = [closedCompetition];
     await expectStatus(service.createTeam(GUILD, COMPETITION, '1팀'), 409, 'competition-closed');
@@ -131,16 +123,81 @@ describe('종료된 대회는 잠긴다 (409)', () => {
       'competition-closed',
     );
   });
+
+  test('신청 승인·거절', async () => {
+    queue = [closedCompetition];
+    await expectStatus(
+      service.decideApplication(GUILD, COMPETITION, 1, 'APPROVED', {
+        memberId: 'member-1',
+        source: 'web',
+      }),
+      409,
+      'competition-closed',
+    );
+  });
+
+  test('경기 팀 귀속', async () => {
+    queue = [closedCompetition];
+    await expectStatus(
+      service.assignMatchTeams(
+        GUILD,
+        COMPETITION,
+        'match-1',
+        { blue: TEAM, red: null },
+        { memberId: 'member-1', source: 'web' },
+      ),
+      409,
+      'competition-closed',
+    );
+  });
+});
+
+describe('신청은 모집중에만 받는다', () => {
+  const apply = () =>
+    service.apply(GUILD, COMPETITION, { playerCode: 'PLR_000001', title: '탑' }, 'member-1');
+
+  test('진행중이면 거부한다 (409)', async () => {
+    queue = [inProgressCompetition];
+    await expectStatus(apply(), 409, 'competition-not-recruiting');
+  });
+
+  test('종료된 대회도 competition-closed가 아니라 같은 에러로 막는다', async () => {
+    queue = [closedCompetition];
+    await expectStatus(apply(), 409, 'competition-not-recruiting');
+  });
+
+  test('승인이 필요한 대회는 PENDING으로 들어간다', async () => {
+    queue = [recruitingCompetition, [], [{ id: 1 }]];
+    await apply();
+    expect(written).toEqual([expect.objectContaining({ status: 'PENDING', decidedDate: null })]);
+  });
+
+  test('승인이 필요 없는 대회는 신청 즉시 APPROVED가 된다', async () => {
+    queue = [
+      [{ id: COMPETITION, status: 'RECRUITING', approvalRequired: false }],
+      [],
+      [{ id: 1 }],
+    ];
+    await apply();
+    expect(written).toEqual([expect.objectContaining({ status: 'APPROVED' })]);
+    expect((written[0] as { decidedByMemberId?: string }).decidedByMemberId).toBeUndefined();
+    expect((written[0] as { decidedDate: Date | null }).decidedDate).toBeInstanceOf(Date);
+  });
+
+  test('팀·로스터 작업은 진행중에도 열려 있다', async () => {
+    queue = [inProgressCompetition, [{ teams: 0 }], [{ id: 1 }]];
+    await expect(service.createTeam(GUILD, COMPETITION, '1팀')).resolves.toEqual({ id: 1 });
+  });
 });
 
 describe('상한 (409)', () => {
   test(`대회당 팀은 ${MAX_TEAMS_PER_COMPETITION}개까지`, async () => {
-    queue = [openCompetition, [{ teams: MAX_TEAMS_PER_COMPETITION }]];
+    queue = [recruitingCompetition, [{ teams: MAX_TEAMS_PER_COMPETITION }]];
     await expectStatus(service.createTeam(GUILD, COMPETITION, '21팀'), 409, 'team-limit-exceeded');
   });
 
   test(`팀당 로스터는 ${MAX_ROSTER_SIZE}명까지`, async () => {
-    queue = [openCompetition, teamRow, [], [{ size: MAX_ROSTER_SIZE }]];
+    queue = [recruitingCompetition, teamRow, [], [{ size: MAX_ROSTER_SIZE }]];
     await expectStatus(
       service.addMember(GUILD, COMPETITION, TEAM, 'PLR_000001'),
       409,
@@ -150,7 +207,7 @@ describe('상한 (409)', () => {
 
   test('상한 미만이면 통과한다', async () => {
     const created = { id: 1, competitionId: COMPETITION, teamId: TEAM, playerCode: 'PLR_000001' };
-    queue = [openCompetition, teamRow, [], [{ size: MAX_ROSTER_SIZE - 1 }], [created]];
+    queue = [recruitingCompetition, teamRow, [], [{ size: MAX_ROSTER_SIZE - 1 }], [created]];
     await expect(service.addMember(GUILD, COMPETITION, TEAM, 'PLR_000001')).resolves.toEqual(
       created,
     );
@@ -159,7 +216,7 @@ describe('상한 (409)', () => {
 
 describe('중복 (409)', () => {
   test('같은 대회에 두 번 신청', async () => {
-    queue = [openCompetition, [], uniqueViolation('uq_competition_application')];
+    queue = [recruitingCompetition, [], uniqueViolation('uq_competition_application')];
     await expectStatus(
       service.apply(GUILD, COMPETITION, { playerCode: 'PLR_000001', title: '탑' }, 'member-1'),
       409,
@@ -168,13 +225,13 @@ describe('중복 (409)', () => {
   });
 
   test('같은 대회에 같은 팀 이름', async () => {
-    queue = [openCompetition, [{ teams: 0 }], uniqueViolation('uq_competition_team_name')];
+    queue = [recruitingCompetition, [{ teams: 0 }], uniqueViolation('uq_competition_team_name')];
     await expectStatus(service.createTeam(GUILD, COMPETITION, '1팀'), 409, 'team-name-exists');
   });
 
   test('한 선수가 대회 안 두 팀에 소속', async () => {
     queue = [
-      openCompetition,
+      recruitingCompetition,
       teamRow,
       [],
       [{ size: 0 }],
@@ -192,7 +249,7 @@ describe('본계정 정규화', () => {
   test('부캐로 신청해도 본계정으로 저장된다', async () => {
     const saved = { id: 1, competitionId: COMPETITION, playerCode: 'PLR_000100' };
     queue = [
-      openCompetition,
+      recruitingCompetition,
       [{ account: 'PLR_000200', mainAccount: 'PLR_000100' }],
       [{ playerCode: 'PLR_000100' }],
       [saved],
@@ -205,7 +262,7 @@ describe('본계정 정규화', () => {
 
   test('부캐로 로스터에 넣어도 본계정으로 저장된다', async () => {
     queue = [
-      openCompetition,
+      recruitingCompetition,
       teamRow,
       [{ account: 'PLR_000200', mainAccount: 'PLR_000100' }],
       [{ playerCode: 'PLR_000100' }],
@@ -217,7 +274,7 @@ describe('본계정 정규화', () => {
   });
 
   test('본계정 링크가 가리키는 계정이 사라졌으면 신청 계정 문제와 구분한다', async () => {
-    queue = [openCompetition, [{ account: 'PLR_000200', mainAccount: 'PLR_000100' }], []];
+    queue = [recruitingCompetition, [{ account: 'PLR_000200', mainAccount: 'PLR_000100' }], []];
     await expectStatus(
       service.apply(GUILD, COMPETITION, { playerCode: 'PLR_000200', title: '탑' }, 'member-1'),
       400,
@@ -256,7 +313,7 @@ describe('경기 팀 귀속 검증 (400)', () => {
   });
 
   test('이 대회 팀이 아니면 거부한다', async () => {
-    queue = [openCompetition, [{ id: 'match-1' }], []];
+    queue = [recruitingCompetition, [{ id: 'match-1' }], []];
     await expectStatus(
       service.assignMatchTeams(
         GUILD,
@@ -273,13 +330,13 @@ describe('경기 팀 귀속 검증 (400)', () => {
 
 describe('행 잠금', () => {
   test('팀 생성은 대회 행을 FOR UPDATE로 잡고 20팀을 센다', async () => {
-    queue = [openCompetition, [{ teams: 0 }], [{ id: 1 }]];
+    queue = [recruitingCompetition, [{ teams: 0 }], [{ id: 1 }]];
     await service.createTeam(GUILD, COMPETITION, '1팀');
     expect(locks).toEqual(['update']);
   });
 
   test('로스터 등록은 대회를 FOR SHARE, 팀을 FOR UPDATE로 잡는다', async () => {
-    queue = [openCompetition, teamRow, [], [{ size: 0 }], [{ id: 1 }]];
+    queue = [recruitingCompetition, teamRow, [], [{ size: 0 }], [{ id: 1 }]];
     await service.addMember(GUILD, COMPETITION, TEAM, 'PLR_000001');
     expect(locks).toEqual(['share', 'update']);
   });
@@ -327,7 +384,7 @@ describe('전적 집계의 승자 해석', () => {
 
   test('blue 진영이 이기면 blueTeamId가 승자', async () => {
     queue = [
-      openCompetition,
+      recruitingCompetition,
       teamRow,
       teamRow,
       [assignedMatch],
@@ -342,7 +399,7 @@ describe('전적 집계의 승자 해석', () => {
 
   test('red 진영이 이기면 redTeamId가 승자', async () => {
     queue = [
-      openCompetition,
+      recruitingCompetition,
       teamRow,
       teamRow,
       [assignedMatch],
@@ -354,14 +411,14 @@ describe('전적 집계의 승자 해석', () => {
   });
 
   test('승자 행이 없으면 판수만 세고 승패는 비운다', async () => {
-    queue = [openCompetition, teamRow, teamRow, [assignedMatch], []];
+    queue = [recruitingCompetition, teamRow, teamRow, [assignedMatch], []];
     const result = await headToHead();
     expect(result.scrim).toEqual({ games: 1, win: 0, lose: 0 });
     expect(result.matches[0].winnerTeamId).toBeNull();
   });
 
   test('한쪽이라도 귀속이 없으면 집계에서 빠진다', async () => {
-    queue = [openCompetition, teamRow, teamRow, [{ ...assignedMatch, redTeamId: null }]];
+    queue = [recruitingCompetition, teamRow, teamRow, [{ ...assignedMatch, redTeamId: null }]];
     const result = await headToHead();
     expect(result.scrim).toEqual({ games: 0, win: 0, lose: 0 });
     expect(result.matches).toEqual([]);

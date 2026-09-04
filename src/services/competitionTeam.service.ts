@@ -31,7 +31,8 @@ import {
   CompetitionTeamUpdateInput,
   CompetitionTeamWithRoster,
 } from '../types/competition.js';
-import { COMPETITION_STATUS, CompetitionService } from './competition.service.js';
+import { CompetitionService } from './competition.service.js';
+import { COMPETITION_STATUS } from './competitionLifecycle.js';
 import { decideMatchTeams, decideSide } from './competitionAssign.js';
 import { AssignedMatchRow, foldHeadToHead, foldOpponentRecords } from './competitionRecord.js';
 
@@ -65,9 +66,12 @@ export class CompetitionTeamService {
   ): Promise<CompetitionApplication> {
     try {
       return await db.transaction(async (tx) => {
-        this.assertOpen(await this.loadCompetition(tx, guildId, competitionId, 'share'));
+        const target = await this.loadCompetition(tx, guildId, competitionId, 'share');
+        this.assertRecruiting(target);
         const playerCode = await this.toMainAccount(guildId, input.playerCode, tx);
 
+        // 자동 승인에는 결정한 사람이 없어 decided_by_member_id를 비운다.
+        const autoApproved = !target.approvalRequired;
         const [created] = await tx
           .insert(competitionApplication)
           .values({
@@ -80,6 +84,8 @@ export class CompetitionTeamService {
             position: input.position,
             subPosition: input.subPosition,
             comment: input.comment,
+            status: autoApproved ? 'APPROVED' : 'PENDING',
+            decidedDate: autoApproved ? new Date() : null,
           })
           .returning();
         return created;
@@ -128,7 +134,7 @@ export class CompetitionTeamService {
     actor: CompetitionActor,
   ): Promise<CompetitionApplication> {
     return db.transaction(async (tx) => {
-      await this.loadCompetition(tx, guildId, competitionId);
+      this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
 
       const [updated] = await tx
         .update(competitionApplication)
@@ -178,7 +184,7 @@ export class CompetitionTeamService {
     try {
       return await db.transaction(async (tx) => {
         // 상한 검사가 count-then-insert라 동시 생성 두 건이 서로를 못 보고 21팀이 된다.
-        this.assertOpen(await this.loadCompetition(tx, guildId, competitionId, 'update'));
+        this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'update'));
 
         const [{ teams }] = await tx
           .select({ teams: sql<number>`count(*)::integer` })
@@ -255,7 +261,7 @@ export class CompetitionTeamService {
   ): Promise<CompetitionTeam> {
     try {
       return await db.transaction(async (tx) => {
-        await this.loadCompetition(tx, guildId, competitionId);
+        this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
         const team = await this.loadTeam(tx, competitionId, teamId);
 
         const patch: Partial<InsertCompetitionTeam> = {};
@@ -294,7 +300,7 @@ export class CompetitionTeamService {
     teamId: number,
   ): Promise<CompetitionTeam> {
     return db.transaction(async (tx) => {
-      await this.loadCompetition(tx, guildId, competitionId);
+      this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
       const team = await this.loadTeam(tx, competitionId, teamId);
 
       const [{ matches }] = await tx
@@ -339,7 +345,7 @@ export class CompetitionTeamService {
   ): Promise<CompetitionTeamMember> {
     try {
       return await db.transaction(async (tx) => {
-        this.assertOpen(await this.loadCompetition(tx, guildId, competitionId, 'share'));
+        this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
         // 상한 검사가 count-then-insert라 동시 추가 두 건이 서로를 못 보고 7명이 된다.
         await this.loadTeam(tx, competitionId, teamId, true);
 
@@ -378,7 +384,7 @@ export class CompetitionTeamService {
     rawPlayerCode: string,
   ): Promise<CompetitionTeamMember> {
     return db.transaction(async (tx) => {
-      this.assertOpen(await this.loadCompetition(tx, guildId, competitionId, 'share'));
+      this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
       await this.loadTeam(tx, competitionId, teamId);
 
       const playerCode = await this.toMainAccount(guildId, rawPlayerCode, tx);
@@ -505,7 +511,7 @@ export class CompetitionTeamService {
     }
 
     return db.transaction(async (tx) => {
-      await this.loadCompetition(tx, guildId, competitionId);
+      this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
 
       const [match] = await tx
         .select({ id: customMatch.id })
@@ -764,7 +770,7 @@ export class CompetitionTeamService {
   }
 
   /**
-   * lock을 주면 트랜잭션이 끝날 때까지 close()가 끼어들지 못한다 — 잠금 없이 읽으면
+   * lock을 주면 트랜잭션이 끝날 때까지 상태 변경이 끼어들지 못한다 — 잠금 없이 읽으면
    * status를 확인한 뒤 insert 하기 전에 대회가 닫혀 종료된 대회에 행이 들어간다.
    * 상태만 붙잡으면 되는 곳은 'share'(서로를 막지 않음), 상한을 count-then-insert로
    * 검사하는 곳은 'update'.
@@ -774,9 +780,13 @@ export class CompetitionTeamService {
     guildId: string,
     competitionId: number,
     lock?: 'update' | 'share',
-  ): Promise<{ id: number; status: string }> {
+  ): Promise<{ id: number; status: string; approvalRequired: boolean }> {
     const query = executor
-      .select({ id: competition.id, status: competition.status })
+      .select({
+        id: competition.id,
+        status: competition.status,
+        approvalRequired: competition.approvalRequired,
+      })
       .from(competition)
       .where(and(eq(competition.id, competitionId), eq(competition.guildId, guildId)))
       .limit(1);
@@ -790,10 +800,20 @@ export class CompetitionTeamService {
     return row;
   }
 
-  private assertOpen(row: { status: string }): void {
-    if (row.status !== COMPETITION_STATUS.OPEN) {
+  private assertWritable(row: { status: string }): void {
+    if (row.status === COMPETITION_STATUS.CLOSED) {
       throw new BusinessError('competition is closed', 409, {
         type: 'competition-closed',
+        isLoggable: false,
+      });
+    }
+  }
+
+  /** 신청은 모집중에만 받는다 — 진행중 대회는 로스터가 확정된 뒤라 신청이 들어와도 쓸 곳이 없다. */
+  private assertRecruiting(row: { status: string }): void {
+    if (row.status !== COMPETITION_STATUS.RECRUITING) {
+      throw new BusinessError('competition is not recruiting', 409, {
+        type: 'competition-not-recruiting',
         isLoggable: false,
       });
     }

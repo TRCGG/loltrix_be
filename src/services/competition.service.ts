@@ -2,23 +2,28 @@ import { and, desc, eq, ilike, inArray, sql } from 'drizzle-orm';
 import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import {
   competition,
+  competitionApplication,
   competitionMatchTeam,
+  competitionTeam,
+  competitionTeamMember,
   customMatch,
   guildAuditLog,
   replay,
   Competition,
+  InsertCompetition,
 } from '../database/schema.js';
 import { BusinessError } from '../types/error.js';
 import {
   CompetitionActor,
+  CompetitionCreateInput,
   CompetitionDetail,
   CompetitionResolveResult,
   CompetitionStatus,
   CompetitionSummary,
+  CompetitionUpdateInput,
 } from '../types/competition.js';
+import { COMPETITION_STATUS, canTransition, closeDateFor } from './competitionLifecycle.js';
 import { systemConfigService } from './systemConfig.service.js';
-
-export const COMPETITION_STATUS = { OPEN: 'OPEN', CLOSED: 'CLOSED' } as const;
 
 export interface CompetitionRef {
   id: number;
@@ -43,7 +48,7 @@ export class CompetitionService {
 
   /**
    * 리플이 붙을 대회를 확정한다. 일반내전(1)은 대회 없음.
-   * 스크림·본경기는 competitionId가 없으면 길드의 OPEN 대회로 해석한다.
+   * 스크림·본경기는 competitionId가 없으면 길드의 진행중 대회로 해석한다.
    *
    * lock=true(저장 트랜잭션 안): FOR SHARE로 잡아 트랜잭션이 끝날 때까지 종료(UPDATE)가 못 끼어들게 한다.
    * 봇이 첨부 여러 개를 수십 초에 걸쳐 순차 저장하는 동안 !대회종료가 오면, 잠금이 없을 때
@@ -70,7 +75,10 @@ export class CompetitionService {
     const condition =
       competitionId != null
         ? and(eq(competition.id, competitionId), eq(competition.guildId, guildId))
-        : and(eq(competition.guildId, guildId), eq(competition.status, COMPETITION_STATUS.OPEN));
+        : and(
+            eq(competition.guildId, guildId),
+            eq(competition.status, COMPETITION_STATUS.IN_PROGRESS),
+          );
 
     const query = executor
       .select({ id: competition.id, name: competition.name, status: competition.status })
@@ -86,13 +94,14 @@ export class CompetitionService {
           isLoggable: false,
         });
       }
-      throw new BusinessError('no open competition', 400, {
+      // 봇이 읽는 에러 타입이라 상태 이름이 바뀌어도 그대로 둔다.
+      throw new BusinessError('no competition in progress', 400, {
         type: 'no-open-competition',
         isLoggable: false,
       });
     }
-    if (row.status !== COMPETITION_STATUS.OPEN) {
-      throw new BusinessError('competition is closed', 400, {
+    if (row.status !== COMPETITION_STATUS.IN_PROGRESS) {
+      throw new BusinessError('competition is not in progress', 400, {
         type: 'competition-not-open',
         isLoggable: false,
       });
@@ -100,9 +109,13 @@ export class CompetitionService {
     return { id: row.id, name: row.name };
   }
 
-  /** 개설. 길드당 OPEN 하나·이름 중복은 DB 유니크가 막고 409로 돌려준다. */
-  public async create(guildId: string, rawName: string, actor: CompetitionActor): Promise<Competition> {
-    const name = CompetitionService.normalizeName(rawName);
+  /** 개설. 길드당 진행중 하나·이름 중복은 DB 유니크가 막고 409로 돌려준다. */
+  public async create(
+    guildId: string,
+    input: CompetitionCreateInput,
+    actor: CompetitionActor,
+  ): Promise<Competition> {
+    const name = CompetitionService.normalizeName(input.name);
     if (!name) {
       throw new BusinessError('competition name is required', 400, { isLoggable: false });
     }
@@ -112,26 +125,134 @@ export class CompetitionService {
       return await db.transaction(async (tx) => {
         const [created] = await tx
           .insert(competition)
-          .values({ guildId, name, season, status: COMPETITION_STATUS.OPEN })
+          .values({
+            guildId,
+            name,
+            season,
+            status: input.status ?? COMPETITION_STATUS.RECRUITING,
+            approvalRequired: input.approvalRequired ?? true,
+          })
           .returning();
         await this.writeAudit(tx, guildId, 'competitionOpen', created, actor);
         return created;
       });
     } catch (error) {
-      const constraint = violatedConstraint(error);
-      if (constraint === 'uq_competition_guild_open') {
-        throw new BusinessError('an open competition already exists', 409, {
-          type: 'competition-open-exists',
-          isLoggable: false,
-        });
+      this.rethrowUnique(error);
+    }
+  }
+
+  /** 이름·승인 필요 여부 변경. 상태는 changeStatus가 담당한다. */
+  public async update(
+    guildId: string,
+    id: number,
+    input: CompetitionUpdateInput,
+    actor: CompetitionActor,
+  ): Promise<Competition> {
+    const patch: Partial<InsertCompetition> = {};
+    if (input.name !== undefined) {
+      const name = CompetitionService.normalizeName(input.name);
+      if (!name) {
+        throw new BusinessError('competition name is required', 400, { isLoggable: false });
       }
-      if (constraint === 'uq_competition_guild_name') {
-        throw new BusinessError('competition name already exists', 409, {
-          type: 'competition-name-exists',
-          isLoggable: false,
+      patch.name = name;
+    }
+    if (input.approvalRequired !== undefined) {
+      patch.approvalRequired = input.approvalRequired;
+    }
+    if (Object.keys(patch).length === 0) {
+      throw new BusinessError('name or approvalRequired is required', 400, {
+        type: 'competition-update-empty',
+        isLoggable: false,
+      });
+    }
+
+    try {
+      return await db.transaction(async (tx) => {
+        const target = await this.lockCompetition(tx, guildId, id);
+        const [updated] = await tx
+          .update(competition)
+          .set(patch)
+          .where(eq(competition.id, id))
+          .returning();
+
+        await tx.insert(guildAuditLog).values({
+          guildId,
+          eventType: 'competitionUpdate',
+          actorMemberId: actor.memberId,
+          detail: {
+            competitionId: updated.id,
+            name: updated.name,
+            changes: {
+              ...(patch.name !== undefined && patch.name !== target.name
+                ? { name: { from: target.name, to: patch.name } }
+                : {}),
+              ...(patch.approvalRequired !== undefined &&
+              patch.approvalRequired !== target.approvalRequired
+                ? {
+                    approvalRequired: {
+                      from: target.approvalRequired,
+                      to: patch.approvalRequired,
+                    },
+                  }
+                : {}),
+            },
+            source: actor.source,
+          },
         });
-      }
-      throw error;
+        return updated;
+      });
+    } catch (error) {
+      this.rethrowUnique(error);
+    }
+  }
+
+  /**
+   * 상태 전이. 행을 FOR UPDATE로 잡고 검사한다 — 잠금 없이 읽으면 두 요청이 같은 현재 상태를 보고
+   * 각자 유효한 전이라고 판정한다(예: 종료 되돌리기 두 건).
+   */
+  public async changeStatus(
+    guildId: string,
+    id: number,
+    to: CompetitionStatus,
+    actor: CompetitionActor,
+  ): Promise<Competition> {
+    try {
+      return await db.transaction(async (tx) => {
+        const target = await this.lockCompetition(tx, guildId, id);
+        if (!canTransition(target.status, to)) {
+          throw new BusinessError(`cannot change status from ${target.status} to ${to}`, 409, {
+            type: 'competition-invalid-transition',
+            isLoggable: false,
+          });
+        }
+
+        const [updated] = await tx
+          .update(competition)
+          .set({ status: to, closeDate: closeDateFor(to) })
+          .where(eq(competition.id, id))
+          .returning();
+
+        // 종료만 기존 이벤트 타입을 유지한다 — 봇·프론트가 competitionClose를 읽고 있다.
+        if (to === COMPETITION_STATUS.CLOSED) {
+          await this.writeAudit(tx, guildId, 'competitionClose', updated, actor);
+        } else {
+          await tx.insert(guildAuditLog).values({
+            guildId,
+            eventType: 'competitionStatusChange',
+            actorMemberId: actor.memberId,
+            detail: {
+              competitionId: updated.id,
+              name: updated.name,
+              from: target.status,
+              to,
+              source: actor.source,
+            },
+          });
+        }
+        return updated;
+      });
+    } catch (error) {
+      this.rethrowUnique(error);
     }
   }
 
@@ -165,20 +286,25 @@ export class CompetitionService {
   }
 
   /**
-   * 대회명 해석. name 없음 → OPEN, 없으면 최근 종료(close_date DESC, id DESC).
+   * 대회명 해석. name 없음 → 진행중, 없으면 최근 종료(close_date DESC, id DESC).
    * name 있음 → 정확 일치 1건 → 없으면 부분일치가 정확히 1건일 때만 확정 → 2건 이상이면 candidates.
    */
   public async resolveByName(guildId: string, rawName?: string): Promise<CompetitionResolveResult> {
     const name = rawName ? CompetitionService.normalizeName(rawName) : '';
 
     if (!name) {
-      const [open] = await db
+      const [inProgress] = await db
         .select()
         .from(competition)
-        .where(and(eq(competition.guildId, guildId), eq(competition.status, COMPETITION_STATUS.OPEN)))
+        .where(
+          and(
+            eq(competition.guildId, guildId),
+            eq(competition.status, COMPETITION_STATUS.IN_PROGRESS),
+          ),
+        )
         .limit(1);
-      const [latest] = open
-        ? [open]
+      const [latest] = inProgress
+        ? [inProgress]
         : await db
             .select()
             .from(competition)
@@ -232,27 +358,7 @@ export class CompetitionService {
   }
 
   public async close(guildId: string, id: number, actor: CompetitionActor): Promise<Competition> {
-    return db.transaction(async (tx) => {
-      const [closed] = await tx
-        .update(competition)
-        .set({ status: COMPETITION_STATUS.CLOSED, closeDate: new Date() })
-        .where(
-          and(
-            eq(competition.id, id),
-            eq(competition.guildId, guildId),
-            eq(competition.status, COMPETITION_STATUS.OPEN),
-          ),
-        )
-        .returning();
-      if (!closed) {
-        throw new BusinessError('open competition not found', 404, {
-          type: 'competition-not-open',
-          isLoggable: false,
-        });
-      }
-      await this.writeAudit(tx, guildId, 'competitionClose', closed, actor);
-      return closed;
-    });
+    return this.changeStatus(guildId, id, COMPETITION_STATUS.CLOSED, actor);
   }
 
   /**
@@ -261,18 +367,7 @@ export class CompetitionService {
    */
   public async remove(guildId: string, id: number, actor: CompetitionActor): Promise<Competition> {
     return db.transaction(async (tx) => {
-      const [target] = await tx
-        .select()
-        .from(competition)
-        .where(and(eq(competition.id, id), eq(competition.guildId, guildId)))
-        .limit(1)
-        .for('update');
-      if (!target) {
-        throw new BusinessError('competition not found', 404, {
-          type: 'competition-not-found',
-          isLoggable: false,
-        });
-      }
+      const target = await this.lockCompetition(tx, guildId, id);
 
       const [{ active }] = await tx
         .select({ active: sql<number>`count(*)::integer` })
@@ -307,31 +402,121 @@ export class CompetitionService {
   private async attachCounts(guildId: string, rows: Competition[]): Promise<CompetitionSummary[]> {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
-    const counts = await db
-      .select({
-        competitionId: customMatch.competitionId,
-        gameType: customMatch.gameType,
-        count: sql<number>`count(*)::integer`,
-      })
-      .from(customMatch)
-      .where(
-        and(
-          eq(customMatch.guildId, guildId),
-          inArray(customMatch.competitionId, ids),
-          eq(customMatch.isDeleted, false),
-        ),
-      )
-      .groupBy(customMatch.competitionId, customMatch.gameType);
 
-    const byId = new Map<number, { scrimCount: number; mainCount: number }>();
-    for (const c of counts) {
-      if (c.competitionId == null) continue;
-      const acc = byId.get(c.competitionId) ?? { scrimCount: 0, mainCount: 0 };
-      if (c.gameType === '2') acc.scrimCount += c.count;
-      if (c.gameType === '3') acc.mainCount += c.count;
-      byId.set(c.competitionId, acc);
+    const [matches, applications, teams, participants] = await Promise.all([
+      db
+        .select({
+          competitionId: customMatch.competitionId,
+          gameType: customMatch.gameType,
+          count: sql<number>`count(*)::integer`,
+        })
+        .from(customMatch)
+        .where(
+          and(
+            eq(customMatch.guildId, guildId),
+            inArray(customMatch.competitionId, ids),
+            eq(customMatch.isDeleted, false),
+          ),
+        )
+        .groupBy(customMatch.competitionId, customMatch.gameType),
+      db
+        .select({
+          competitionId: competitionApplication.competitionId,
+          status: competitionApplication.status,
+          count: sql<number>`count(*)::integer`,
+        })
+        .from(competitionApplication)
+        .where(inArray(competitionApplication.competitionId, ids))
+        .groupBy(competitionApplication.competitionId, competitionApplication.status),
+      db
+        .select({
+          competitionId: competitionTeam.competitionId,
+          count: sql<number>`count(*)::integer`,
+        })
+        .from(competitionTeam)
+        .where(inArray(competitionTeam.competitionId, ids))
+        .groupBy(competitionTeam.competitionId),
+      db
+        .select({
+          competitionId: competitionTeamMember.competitionId,
+          count: sql<number>`count(*)::integer`,
+        })
+        .from(competitionTeamMember)
+        .where(inArray(competitionTeamMember.competitionId, ids))
+        .groupBy(competitionTeamMember.competitionId),
+    ]);
+
+    const empty = () => ({
+      scrimCount: 0,
+      mainCount: 0,
+      applicationCount: 0,
+      pendingCount: 0,
+      teamCount: 0,
+      participantCount: 0,
+    });
+    const byId = new Map<number, ReturnType<typeof empty>>(ids.map((id) => [id, empty()]));
+    const accOf = (competitionId: number | null) =>
+      competitionId == null ? undefined : byId.get(competitionId);
+
+    for (const row of matches) {
+      const acc = accOf(row.competitionId);
+      if (!acc) continue;
+      if (row.gameType === '2') acc.scrimCount += row.count;
+      if (row.gameType === '3') acc.mainCount += row.count;
     }
-    return rows.map((r) => ({ ...r, ...(byId.get(r.id) ?? { scrimCount: 0, mainCount: 0 }) }));
+    for (const row of applications) {
+      const acc = accOf(row.competitionId);
+      if (!acc) continue;
+      acc.applicationCount += row.count;
+      if (row.status === 'PENDING') acc.pendingCount += row.count;
+    }
+    for (const row of teams) {
+      const acc = accOf(row.competitionId);
+      if (acc) acc.teamCount += row.count;
+    }
+    for (const row of participants) {
+      const acc = accOf(row.competitionId);
+      if (acc) acc.participantCount += row.count;
+    }
+
+    return rows.map((r) => ({ ...r, ...(byId.get(r.id) ?? empty()) }));
+  }
+
+  private async lockCompetition(
+    tx: TransactionType,
+    guildId: string,
+    id: number,
+  ): Promise<Competition> {
+    const [row] = await tx
+      .select()
+      .from(competition)
+      .where(and(eq(competition.id, id), eq(competition.guildId, guildId)))
+      .limit(1)
+      .for('update');
+    if (!row) {
+      throw new BusinessError('competition not found', 404, {
+        type: 'competition-not-found',
+        isLoggable: false,
+      });
+    }
+    return row;
+  }
+
+  private rethrowUnique(error: unknown): never {
+    const constraint = violatedConstraint(error);
+    if (constraint === 'uq_competition_guild_in_progress') {
+      throw new BusinessError('a competition is already in progress', 409, {
+        type: 'competition-in-progress-exists',
+        isLoggable: false,
+      });
+    }
+    if (constraint === 'uq_competition_guild_name') {
+      throw new BusinessError('competition name already exists', 409, {
+        type: 'competition-name-exists',
+        isLoggable: false,
+      });
+    }
+    throw error;
   }
 
   private async writeAudit(

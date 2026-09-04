@@ -8,6 +8,7 @@ import {
   CompetitionApplicationItem,
   CompetitionApplicationStatus,
   CompetitionApplyInput,
+  CompetitionCreateInput,
   CompetitionDetail,
   CompetitionHeadToHeadResult,
   CompetitionMatchTeamItem,
@@ -18,6 +19,7 @@ import {
   CompetitionTeamRecordItem,
   CompetitionTeamUpdateInput,
   CompetitionTeamWithRoster,
+  CompetitionUpdateInput,
 } from '../types/competition.js';
 import {
   Competition,
@@ -46,11 +48,63 @@ export const createCompetition = async (
 ) => {
   try {
     const { guildId } = req.params as { guildId: string };
-    const { name } = req.body as { name: string };
-    const created = await competitionService.create(guildId, name, resolveActor(req));
+    const created = await competitionService.create(
+      guildId,
+      req.body as CompetitionCreateInput,
+      resolveActor(req),
+    );
     return res
       .status(201)
       .json({ status: 'success', message: 'Competition created successfully', data: created });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** @route PATCH /api/competitions/:guildId/:competitionId */
+export const updateCompetition = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<Competition>>,
+  next: NextFunction,
+) => {
+  try {
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const updated = await competitionService.update(
+      guildId,
+      Number(competitionId),
+      req.body as CompetitionUpdateInput,
+      resolveActor(req),
+    );
+    return res
+      .status(200)
+      .json({ status: 'success', message: 'Competition updated successfully', data: updated });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** @route PATCH /api/competitions/:guildId/:competitionId/status */
+export const changeCompetitionStatus = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<Competition>>,
+  next: NextFunction,
+) => {
+  try {
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const { status } = req.body as { status: CompetitionStatus };
+    const updated = await competitionService.changeStatus(
+      guildId,
+      Number(competitionId),
+      status,
+      resolveActor(req),
+    );
+    return res
+      .status(200)
+      .json({
+        status: 'success',
+        message: 'Competition status changed successfully',
+        data: updated,
+      });
   } catch (error) {
     return next(error);
   }
