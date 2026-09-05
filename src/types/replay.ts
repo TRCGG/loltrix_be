@@ -1,4 +1,5 @@
 import { Guild, Replay } from '../database/schema.js';
+import { TeamAssignmentResult } from './competition.js';
 
 export interface ReplayFileRequest {
   fileName: string;
@@ -10,7 +11,11 @@ export interface ReplayFileRequest {
   guild: Guild;
 }
 
-export type ReplaySaveResult = Omit<Replay, 'rawData'> & { competitionName: string | null };
+export type ReplaySaveResult = Omit<Replay, 'rawData'> & {
+  competitionName: string | null;
+  /** 자동 팀 귀속 결과. 대회 경기가 아니면 null. */
+  teamAssignment?: TeamAssignmentResult | null;
+};
 
 export interface ReplayResponse {
   status: 'success' | 'error';
@@ -19,9 +24,12 @@ export interface ReplayResponse {
 }
 
 export interface WebUploadResult {
-  succeeded: Array<{ fileName: string; replayCode: string }>;
+  succeeded: Array<{
+    fileName: string;
+    replayCode: string;
+    teamAssignment: TeamAssignmentResult | null;
+  }>;
   failed: Array<{ fileName: string; reason: string }>;
-
 }
 
 export interface WebUploadResponse {

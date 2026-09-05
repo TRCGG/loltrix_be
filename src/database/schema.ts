@@ -622,6 +622,14 @@ export type GuildAuditLogDetail =
       prevBlueTeamId: number | null;
       prevRedTeamId: number | null;
       source: 'web' | 'bot';
+    }
+  // eventType 'matchGameTypeChange' — 경기 하나당 한 줄
+  | {
+      competitionId: number;
+      customMatchId: string;
+      from: string;
+      to: string;
+      source: 'web' | 'bot';
     };
 
 /**
@@ -637,7 +645,7 @@ export const guildAuditLog = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
-    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete' | 'competitionOpen' | 'competitionClose' | 'competitionStatusChange' | 'competitionUpdate' | 'competitionDelete' | 'applicationDecide' | 'matchTeamAssign'
+    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete' | 'competitionOpen' | 'competitionClose' | 'competitionStatusChange' | 'competitionUpdate' | 'competitionDelete' | 'applicationDecide' | 'matchTeamAssign' | 'matchGameTypeChange'
     actorMemberId: text('actor_member_id').notNull(), // 행위자 Discord id (미상이면 'bot')
     targetMemberId: text('target_member_id'), // 대상 멤버 (roleChange), 없으면 NULL
     detail: jsonb('detail').$type<GuildAuditLogDetail>().notNull(),

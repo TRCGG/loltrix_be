@@ -14,6 +14,7 @@ import {
   CompetitionApplicationStatus,
   CompetitionApplicationUpdateInput,
   CompetitionApplyInput,
+  CompetitionGameType,
   CompetitionPosition,
   RosterSaveInput,
   CompetitionCreateInput,
@@ -25,6 +26,7 @@ import {
   CompetitionStandings,
   CompetitionStatus,
   CompetitionSummary,
+  MatchGameTypeChangeResult,
   PlayerCompetitionItem,
   CompetitionTeamRecordItem,
   CompetitionTeamRoster,
@@ -567,6 +569,33 @@ export const assignMatchTeams = async (
     return res
       .status(200)
       .json({ status: 'success', message: 'Match teams assigned successfully', data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** @route PATCH /api/competitions/:guildId/:competitionId/matches/game-type */
+export const changeMatchGameType = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<MatchGameTypeChangeResult>>,
+  next: NextFunction,
+) => {
+  try {
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const { customMatchIds, gameType } = req.body as {
+      customMatchIds: string[];
+      gameType: CompetitionGameType;
+    };
+    const data = await competitionTeamService.changeMatchGameType(
+      guildId,
+      Number(competitionId),
+      customMatchIds,
+      gameType,
+      resolveActor(req),
+    );
+    return res
+      .status(200)
+      .json({ status: 'success', message: 'Match game type changed successfully', data });
   } catch (error) {
     return next(error);
   }

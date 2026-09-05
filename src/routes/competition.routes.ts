@@ -7,6 +7,7 @@ import {
   addTeamMember,
   assignMatchTeams,
   changeCompetitionStatus,
+  changeMatchGameType,
   closeCompetition,
   createApplication,
   createCompetition,
@@ -34,6 +35,7 @@ import {
 } from '../controllers/competition.controller.js';
 import { COMPETITION_STATUS_VALUES } from '../types/competition.js';
 import {
+  COMPETITION_GAME_TYPES,
   COMPETITION_POSITIONS,
   CompetitionStatus,
   MAX_APPLICATION_CHAMPIONS,
@@ -413,6 +415,21 @@ const assignMatchTeamsSchema = z.object({
   }),
 });
 
+const changeMatchGameTypeSchema = z.object({
+  params: competitionParams,
+  body: z.object({
+    customMatchIds: z
+      .array(z.string().min(1).max(255))
+      .min(1, 'customMatchIds is required')
+      .max(100, 'customMatchIds must be 100 or fewer')
+      .refine((ids) => new Set(ids).size === ids.length, 'customMatchIds must be unique'),
+    gameType: z.enum(COMPETITION_GAME_TYPES, {
+      errorMap: () => ({ message: '경기 유형은 2(스크림)/3(본경기) 중 하나여야 합니다.' }),
+    }),
+    actorMemberId: z.string().min(1).max(64).optional(),
+  }),
+});
+
 const headToHeadSchema = z.object({
   params: competitionParams,
   query: z.object({
@@ -752,6 +769,36 @@ router.put(
   manager,
   validateRequest(assignMatchTeamsSchema),
   assignMatchTeams,
+);
+
+/**
+ * @route PATCH /api/competitions/:guildId/:competitionId/matches/game-type
+ * @desc 대회 경기의 유형(스크림/본경기) 일괄 변경
+ * @access guildManager 이상
+ */
+router.patch(
+  '/:guildId/:competitionId/matches/game-type',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '경기 유형 일괄 변경'
+    #swagger.description = 'customMatchIds(1~100개, 중복 불가)의 유형을 gameType으로 한 번에 바꿉니다. 대회 경기는 스크림(2)·본경기(3)뿐이라 일반내전(1)로는 오갈 수 없습니다. 하나라도 이 길드·이 대회의 살아있는 경기가 아니면 404(match-not-found, 메시지에 해당 id 나열)이고 아무것도 바뀌지 않습니다. 이미 그 유형인 경기는 skipped로 빠지고 요청은 성공합니다. 종료된 대회는 409(competition-closed). 바뀐 경기마다 guild_audit_log(matchGameTypeChange)에 한 줄 남습니다.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { customMatchIds: ['RPY-260310-game1-1'], gameType: '3', actorMemberId: '123456789012345678' } }
+    #swagger.responses[200] = {
+      description: '변경 완료',
+      schema: {
+        status: 'success',
+        message: 'Match game type changed successfully',
+        data: { changed: ['RPY-260310-game1-1'], skipped: ['RPY-260310-game2-2'] }
+      }
+    }
+  */
+  decodeGuildIdMiddleware,
+  manager,
+  validateRequest(changeMatchGameTypeSchema),
+  changeMatchGameType,
 );
 
 /**

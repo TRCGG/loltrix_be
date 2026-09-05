@@ -18,6 +18,8 @@ import {
   customMatch,
   guildAuditLog,
   matchParticipant,
+  mmrParticipantMetric,
+  replay,
   riotAccount,
 } from '../database/schema.js';
 import { mainAccountMap } from '../database/subAccountLink.js';
@@ -30,6 +32,7 @@ import {
   CompetitionApplicationStatus,
   CompetitionApplicationUpdateInput,
   CompetitionApplyInput,
+  CompetitionGameType,
   CompetitionHeadToHeadResult,
   CompetitionMatchTeamItem,
   CompetitionPlayerSummary,
@@ -39,7 +42,9 @@ import {
   CompetitionTeamRoster,
   CompetitionTeamUpdateInput,
   CompetitionTeamWithRoster,
+  MatchGameTypeChangeResult,
   RosterSaveInput,
+  TeamAssignmentResult,
   COMPETITION_STATUS,
   CompetitionStandings,
   SideStats,
@@ -797,12 +802,12 @@ export class CompetitionTeamService {
     input: { guildId: string; competitionId: number | null; customMatchId: string },
     participants: AutoAssignParticipant[],
     tx: TransactionType,
-  ): Promise<void> {
+  ): Promise<TeamAssignmentResult> {
     const { guildId, competitionId, customMatchId } = input;
-    if (competitionId == null || participants.length === 0) return;
+    if (competitionId == null || participants.length === 0) return { status: 'unassigned' };
 
     try {
-      await tx.transaction(async (sp) => {
+      return await tx.transaction(async (sp): Promise<TeamAssignmentResult> => {
         const codes = [...new Set(participants.map((p) => p.playerCode))];
         const mainAccounts = await mainAccountMap(guildId, codes, sp);
         const rosterCodes = [...new Set(mainAccounts.values())];
@@ -819,7 +824,7 @@ export class CompetitionTeamService {
               inArray(competitionTeamMember.playerCode, rosterCodes),
             ),
           );
-        if (roster.length === 0) return;
+        if (roster.length === 0) return { status: 'unassigned' };
 
         const teamByPlayer = new Map(roster.map((r) => [r.playerCode, r.teamId]));
         const sideTeamIds = (gameTeam: string) =>
@@ -831,7 +836,7 @@ export class CompetitionTeamService {
           decideSide(sideTeamIds('blue')),
           decideSide(sideTeamIds('red')),
         );
-        if (!decided) return;
+        if (!decided) return { status: 'unassigned' };
 
         await sp
           .insert(competitionMatchTeam)
@@ -840,10 +845,98 @@ export class CompetitionTeamService {
             { customMatchId, gameTeam: 'red', teamId: decided.redTeamId },
           ])
           .onConflictDoNothing();
+
+        const { blueTeamId, redTeamId } = decided;
+        if (blueTeamId != null && redTeamId != null) {
+          return { status: 'assigned', blueTeamId, redTeamId };
+        }
+        if (blueTeamId != null) return { status: 'mercenary', blueTeamId, redTeamId: null };
+        if (redTeamId != null) return { status: 'mercenary', blueTeamId: null, redTeamId };
+        return { status: 'unassigned' };
       });
     } catch (error) {
       console.error('[competition] auto team assign failed', { customMatchId, error });
+      return { status: 'unassigned' };
     }
+  }
+
+  /**
+   * 대회 경기의 유형(스크림/본경기)을 한 번에 옮긴다. 유형은 custom_match·replay·
+   * mmr_participant_metric 세 곳에 복제돼 있어 셋을 같은 트랜잭션에서 함께 바꿔야
+   * 전적·MMR 조회가 서로 다른 유형으로 갈린다.
+   */
+  public async changeMatchGameType(
+    guildId: string,
+    competitionId: number,
+    customMatchIds: string[],
+    gameType: CompetitionGameType,
+    actor: CompetitionActor,
+  ): Promise<MatchGameTypeChangeResult> {
+    return db.transaction(async (tx) => {
+      this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
+
+      // 삭제(!drop)가 끼어들면 이미 지운 경기의 유형을 바꾸게 되므로 대상 행을 잠근 뒤 검사한다.
+      const matches = await tx
+        .select({ id: customMatch.id, gameType: customMatch.gameType })
+        .from(customMatch)
+        .where(
+          and(
+            inArray(customMatch.id, customMatchIds),
+            eq(customMatch.guildId, guildId),
+            eq(customMatch.competitionId, competitionId),
+            eq(customMatch.isDeleted, false),
+          ),
+        )
+        .for('update');
+
+      const found = new Set(matches.map((match) => match.id));
+      const missing = customMatchIds.filter((id) => !found.has(id));
+      if (missing.length > 0) {
+        throw new BusinessError(
+          `matches not found in this competition: ${missing.join(', ')}`,
+          404,
+          {
+            type: 'match-not-found',
+            isLoggable: false,
+          },
+        );
+      }
+
+      const targets = matches.filter((match) => match.gameType !== gameType);
+      const skipped = matches
+        .filter((match) => match.gameType === gameType)
+        .map((match) => match.id);
+      if (targets.length === 0) return { changed: [], skipped };
+
+      const changed = targets.map((match) => match.id);
+      await tx.update(customMatch).set({ gameType }).where(inArray(customMatch.id, changed));
+      // replay만 $onUpdate가 없어 갱신 시각을 직접 넣는다.
+      await tx
+        .update(replay)
+        .set({ gameType, updateDate: new Date() })
+        .where(inArray(replay.replayCode, changed));
+      await tx
+        .update(mmrParticipantMetric)
+        .set({ gameType })
+        .where(inArray(mmrParticipantMetric.customMatchId, changed));
+
+      await tx.insert(guildAuditLog).values(
+        targets.map((match) => ({
+          guildId,
+          eventType: 'matchGameTypeChange',
+          actorMemberId: actor.memberId,
+          detail: {
+            competitionId,
+            customMatchId: match.id,
+            from: match.gameType,
+            to: gameType,
+            source: actor.source,
+          },
+        })),
+      );
+
+      return { changed, skipped };
+    });
   }
 
   // ── 전적 ──

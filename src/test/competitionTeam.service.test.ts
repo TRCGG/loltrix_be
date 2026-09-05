@@ -380,18 +380,56 @@ describe('행 잠금', () => {
   });
 });
 
-describe('자동 배정은 리플 저장을 실패시키지 않는다', () => {
-  test('savepoint 안에서 터져도 정상 반환한다', async () => {
+describe('자동 배정 결과', () => {
+  const sideMembers = (gameTeam: string, prefix: string) =>
+    [1, 2, 3].map((n) => ({ gameTeam, playerCode: `PLR_${prefix}${n}` }));
+  const autoAssign = (participants: { gameTeam: string; playerCode: string }[]) =>
+    service.tryAutoAssignMatchTeams(
+      { guildId: GUILD, competitionId: COMPETITION, customMatchId: 'match-1' },
+      participants,
+      executor as never,
+    );
+
+  test('양 진영이 다수결로 잡히면 assigned', async () => {
+    const participants = [...sideMembers('blue', 'b'), ...sideMembers('red', 'r')];
+    queue = [
+      [],
+      participants.map((p) => ({
+        playerCode: p.playerCode,
+        teamId: p.gameTeam === 'blue' ? 1 : 2,
+      })),
+    ];
+
+    await expect(autoAssign(participants)).resolves.toEqual({
+      status: 'assigned',
+      blueTeamId: 1,
+      redTeamId: 2,
+    });
+  });
+
+  test('한쪽만 로스터면 mercenary', async () => {
+    const participants = [...sideMembers('blue', 'b'), ...sideMembers('red', 'r')];
+    queue = [[], sideMembers('blue', 'b').map((p) => ({ playerCode: p.playerCode, teamId: 1 }))];
+
+    await expect(autoAssign(participants)).resolves.toEqual({
+      status: 'mercenary',
+      blueTeamId: 1,
+      redTeamId: null,
+    });
+  });
+
+  test('로스터에 아무도 없으면 unassigned', async () => {
+    queue = [[], []];
+    await expect(autoAssign(sideMembers('blue', 'b'))).resolves.toEqual({ status: 'unassigned' });
+  });
+
+  test('savepoint 안에서 터져도 리플 저장을 실패시키지 않고 unassigned', async () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     queue = [new Error('roster lookup failed')];
 
-    await expect(
-      service.tryAutoAssignMatchTeams(
-        { guildId: GUILD, competitionId: COMPETITION, customMatchId: 'match-1' },
-        [{ gameTeam: 'blue', playerCode: 'PLR_000001' }],
-        executor as never,
-      ),
-    ).resolves.toBeUndefined();
+    await expect(autoAssign([{ gameTeam: 'blue', playerCode: 'PLR_000001' }])).resolves.toEqual({
+      status: 'unassigned',
+    });
 
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
@@ -405,8 +443,74 @@ describe('자동 배정은 리플 저장을 실패시키지 않는다', () => {
         [{ gameTeam: 'blue', playerCode: 'PLR_000001' }],
         executor as never,
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ status: 'unassigned' });
     expect(queue).toHaveLength(1);
+  });
+});
+
+describe('경기 유형 일괄 변경', () => {
+  const changeToMain = (ids: string[]) =>
+    service.changeMatchGameType(GUILD, COMPETITION, ids, '3', ACTOR);
+
+  test('종료된 대회는 잠긴다', async () => {
+    queue = [closedCompetition];
+    await expectStatus(changeToMain(['m1']), 409, 'competition-closed');
+  });
+
+  test('하나라도 이 대회 경기가 아니면 404이고 아무것도 쓰지 않는다', async () => {
+    queue = [inProgressCompetition, [{ id: 'm1', gameType: '2' }]];
+    await expect(changeToMain(['m1', 'm2'])).rejects.toMatchObject({
+      status: 404,
+      type: 'match-not-found',
+      message: expect.stringContaining('m2'),
+    });
+    expect(written).toEqual([]);
+  });
+
+  test('이미 목표 유형이면 skipped로 빠지고 쓰지 않는다', async () => {
+    queue = [inProgressCompetition, [{ id: 'm1', gameType: '3' }]];
+    await expect(changeToMain(['m1'])).resolves.toEqual({ changed: [], skipped: ['m1'] });
+    expect(written).toEqual([]);
+  });
+
+  test('바뀐 경기는 세 테이블을 갱신하고 경기마다 감사 로그를 남긴다', async () => {
+    queue = [
+      inProgressCompetition,
+      [
+        { id: 'm1', gameType: '2' },
+        { id: 'm2', gameType: '3' },
+      ],
+    ];
+
+    await expect(changeToMain(['m1', 'm2'])).resolves.toEqual({
+      changed: ['m1'],
+      skipped: ['m2'],
+    });
+    expect(written.slice(0, 3)).toEqual([
+      { gameType: '3' },
+      { gameType: '3', updateDate: expect.any(Date) },
+      { gameType: '3' },
+    ]);
+    expect(written[3]).toEqual([
+      {
+        guildId: GUILD,
+        eventType: 'matchGameTypeChange',
+        actorMemberId: ACTOR.memberId,
+        detail: {
+          competitionId: COMPETITION,
+          customMatchId: 'm1',
+          from: '2',
+          to: '3',
+          source: 'web',
+        },
+      },
+    ]);
+  });
+
+  test('대회는 FOR SHARE, 대상 경기는 FOR UPDATE로 잡는다', async () => {
+    queue = [inProgressCompetition, [{ id: 'm1', gameType: '2' }]];
+    await changeToMain(['m1']);
+    expect(locks).toEqual(['share', 'update']);
   });
 });
 

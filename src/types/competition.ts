@@ -176,6 +176,16 @@ export interface CompetitionMatchTeamItem {
   red: CompetitionPlayerSummary[];
 }
 
+/** 대회 경기가 가질 수 있는 유형 — 일반내전(1)은 대회에 속하지 않으므로 오갈 수 없다. */
+export const COMPETITION_GAME_TYPES = ['2', '3'] as const;
+export type CompetitionGameType = (typeof COMPETITION_GAME_TYPES)[number];
+
+/** 이미 목표 유형이던 경기는 skipped로 빠지고 요청은 성공한다. */
+export interface MatchGameTypeChangeResult {
+  changed: string[];
+  skipped: string[];
+}
+
 export interface CompetitionTeamRecordItem extends TeamRecordSplit {
   teamId: number;
   name: string;
@@ -218,6 +228,16 @@ export interface MatchTeamAssignment {
   blueTeamId: number | null;
   redTeamId: number | null;
 }
+
+/**
+ * 리플 저장 시 자동 귀속이 어디까지 갔는지. unassigned면 운영진이 수동으로 지정해야 한다.
+ * mercenary는 한쪽만 팀인 경기라 정상 저장이지만 순위표에는 잡히지 않는다.
+ */
+export type TeamAssignmentResult =
+  | { status: 'assigned'; blueTeamId: number; redTeamId: number }
+  | { status: 'mercenary'; blueTeamId: number; redTeamId: null }
+  | { status: 'mercenary'; blueTeamId: null; redTeamId: number }
+  | { status: 'unassigned' };
 
 export interface AssignedMatchRow {
   customMatchId: string;

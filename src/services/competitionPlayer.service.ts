@@ -11,6 +11,7 @@ import {
 } from '../database/schema.js';
 import { mainAccountMap } from '../database/subAccountLink.js';
 import {
+  COMPETITION_GAME_TYPES,
   CompetitionApplicationStatus,
   CompetitionPosition,
   CompetitionStandings,
@@ -20,7 +21,6 @@ import {
 import { competitionTeamService } from './competitionTeam.service.js';
 import { kdaOf, winRateOf } from './competitionRecord.js';
 
-const COMPETITION_GAME_TYPES = ['2', '3'];
 const WIN = '승';
 const RECENT_SIZE = 6;
 
@@ -125,7 +125,7 @@ export class CompetitionPlayerService {
             eq(matchParticipant.isDeleted, false),
             eq(customMatch.isDeleted, false),
             isNotNull(customMatch.competitionId),
-            inArray(customMatch.gameType, COMPETITION_GAME_TYPES),
+            inArray(customMatch.gameType, [...COMPETITION_GAME_TYPES]),
           ),
         )
         .orderBy(desc(customMatch.createDate), desc(customMatch.id)),

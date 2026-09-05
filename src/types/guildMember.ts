@@ -119,7 +119,8 @@ export type GuildAuditLogType =
   | 'competitionUpdate'
   | 'competitionDelete'
   | 'applicationDecide'
-  | 'matchTeamAssign';
+  | 'matchTeamAssign'
+  | 'matchGameTypeChange';
 
 export const GUILD_AUDIT_LOG_TYPES: readonly GuildAuditLogType[] = [
   'roleChange',
@@ -131,6 +132,7 @@ export const GUILD_AUDIT_LOG_TYPES: readonly GuildAuditLogType[] = [
   'competitionDelete',
   'applicationDecide',
   'matchTeamAssign',
+  'matchGameTypeChange',
 ];
 
 /**
@@ -142,6 +144,7 @@ export const GUILD_AUDIT_LOG_TYPES: readonly GuildAuditLogType[] = [
  * - competitionUpdate: competitionId/competitionName(변경 후)/source 채워짐
  * - applicationDecide: competitionId/playerCode/applicationStatus/source 채워짐
  * - matchTeamAssign: competitionId/gameId/blueTeamId/redTeamId/source 채워짐
+ * - matchGameTypeChange: competitionId/gameId/fromGameType/toGameType/source 채워짐
  * - 나머지 필드는 null. displayName = guild 별명 ?? global 별명 ?? discord_id ('bot'은 그대로 'bot')
  */
 export interface GuildAuditLogItem {
@@ -164,6 +167,8 @@ export interface GuildAuditLogItem {
   applicationStatus: string | null;
   blueTeamId: number | null;
   redTeamId: number | null;
+  fromGameType: string | null;
+  toGameType: string | null;
 }
 
 export interface GuildAuditLogListAPIResponse {

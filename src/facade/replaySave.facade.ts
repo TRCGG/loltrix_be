@@ -7,6 +7,7 @@ import { matchParticipantService } from '../services/matchParticipant.service.js
 import { competitionTeamService } from '../services/competitionTeam.service.js';
 import { mmrMetricService } from '../services/mmrMetric.service.js';
 import { ReplaySaveResult, ReplayFileRequest } from '../types/replay.js';
+import { TeamAssignmentResult } from '../types/competition.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { SystemError } from '../types/error.js';
 /**
@@ -29,9 +30,9 @@ export class ReplaySaveFacade {
       // 2. 리플레이 저장
       const savedReplay = await replayService.replaySave(fileData, rawData, tx, patchVersion);
 
-      await this.saveMatchData(rawData, savedReplay, tx);
+      const teamAssignment = await this.saveMatchData(rawData, savedReplay, tx);
 
-      return savedReplay;
+      return { ...savedReplay, teamAssignment };
     });
   }
 
@@ -56,16 +57,20 @@ export class ReplaySaveFacade {
         patchVersion,
       );
 
-      await this.saveMatchData(rawData, savedReplay, tx);
+      const teamAssignment = await this.saveMatchData(rawData, savedReplay, tx);
 
-      return savedReplay;
+      return { ...savedReplay, teamAssignment };
     });
   }
 
   /**
    * 공통: riot 계정, 내전, 참여자, 길드멤버 저장
    */
-  private async saveMatchData(rawData: any[], savedReplay: ReplaySaveResult, tx: TransactionType) {
+  private async saveMatchData(
+    rawData: any[],
+    savedReplay: ReplaySaveResult,
+    tx: TransactionType,
+  ): Promise<TeamAssignmentResult | null> {
     await riotAccountService.upsertRiotAccount(rawData, tx);
 
     const rawDataPuuids = new Set<string>(rawData.map((d: { PUUID: string }) => d.PUUID));
@@ -106,7 +111,7 @@ export class ReplaySaveFacade {
       puuidToPlayerCodeMap,
     );
 
-    await competitionTeamService.tryAutoAssignMatchTeams(
+    const teamAssignment = await competitionTeamService.tryAutoAssignMatchTeams(
       {
         guildId: savedReplay.guildId,
         competitionId: savedReplay.competitionId,
@@ -133,6 +138,9 @@ export class ReplaySaveFacade {
       tx,
     );
     await mmrMetricService.insertMetrics(metricRows, tx);
+
+    // 대회 경기가 아니면 귀속 개념 자체가 없다 — 수동 지정이 필요한 'unassigned'와 구분해 null로 알린다.
+    return savedReplay.competitionId == null ? null : teamAssignment;
   }
 }
 

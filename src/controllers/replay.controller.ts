@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ReplayResponse, ReplayFileRequest, WebUploadResponse, ReplayListResponse, GetReplaysQuery } from '../types/replay.js';
+import { ReplayResponse, ReplayFileRequest, WebUploadResponse, WebUploadResult, ReplayListResponse, GetReplaysQuery } from '../types/replay.js';
 import { replaySaveFacade } from '../facade/replaySave.facade.js';
 import { ReplayService, replayService } from '../services/replay.service.js';
 import { competitionService } from '../services/competition.service.js';
@@ -89,8 +89,8 @@ export const webCreateReplay = async (
     // 대회 검증은 파일 루프 밖에서 한 번. 실패하면 파일별 save_failed가 아니라 요청 전체가 400.
     await competitionService.resolveForSave(guildId, gameType ?? '1', competitionId);
 
-    const succeeded: Array<{ fileName: string; replayCode: string }> = [];
-    const failed: Array<{ fileName: string; reason: string }> = [];
+    const succeeded: WebUploadResult['succeeded'] = [];
+    const failed: WebUploadResult['failed'] = [];
 
     for (const file of files) {
       const originalName = file.originalname;
@@ -140,7 +140,11 @@ export const webCreateReplay = async (
           nick,
           patchVersion,
         );
-        succeeded.push({ fileName, replayCode: savedReplay.replayCode });
+        succeeded.push({
+          fileName,
+          replayCode: savedReplay.replayCode,
+          teamAssignment: savedReplay.teamAssignment ?? null,
+        });
       } catch (error) {
         console.error('web replay save failed:', { guildId, fileName }, error);
         failed.push({ fileName, reason: 'save_failed' });
