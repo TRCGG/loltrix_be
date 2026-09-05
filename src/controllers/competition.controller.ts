@@ -21,6 +21,7 @@ import {
   CompetitionDetail,
   CompetitionHeadToHeadResult,
   CompetitionMatchTeamItem,
+  CompetitionRemoveResult,
   CompetitionResolveResult,
   CompetitionResponse,
   CompetitionStandings,
@@ -210,12 +211,18 @@ export const closeCompetition = async (
 /** @route DELETE /api/competitions/:guildId/:competitionId */
 export const deleteCompetition = async (
   req: AuthRequest,
-  res: Response<CompetitionResponse<Competition>>,
+  res: Response<CompetitionResponse<CompetitionRemoveResult>>,
   next: NextFunction,
 ) => {
   try {
     const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
-    const removed = await competitionService.remove(guildId, Number(competitionId), resolveActor(req));
+    const { confirmName } = req.body as { confirmName: string };
+    const removed = await competitionService.remove(
+      guildId,
+      Number(competitionId),
+      confirmName,
+      resolveActor(req),
+    );
     return res
       .status(200)
       .json({ status: 'success', message: 'Competition deleted successfully', data: removed });

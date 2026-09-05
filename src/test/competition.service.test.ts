@@ -1,4 +1,5 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import { getTableName } from 'drizzle-orm';
 
 /**
  * DB는 결과 큐로 대신한다 — 쿼리 빌더의 모든 체인 메서드는 자기 자신을 돌려주고,
@@ -10,6 +11,8 @@ let queue: unknown[] = [];
 let written: unknown[] = [];
 /** .for(...)로 요청한 행 잠금 */
 let locks: unknown[] = [];
+/** 실행된 쓰기 문을 `op table` 형태로 — 캐스케이드가 어느 테이블까지 갔는지 보려고 모은다. */
+let statements: string[] = [];
 
 const CHAIN_METHODS = [
   'from',
@@ -50,12 +53,17 @@ const makeBuilder = (): Record<string, unknown> => {
   return builder;
 };
 
+const record = (op: string) => (table: unknown) => {
+  statements.push(`${op} ${getTableName(table as Parameters<typeof getTableName>[0])}`);
+  return makeBuilder();
+};
+
 const executor: Record<string, unknown> = {
   select: () => makeBuilder(),
   selectDistinct: () => makeBuilder(),
-  insert: () => makeBuilder(),
-  update: () => makeBuilder(),
-  delete: () => makeBuilder(),
+  insert: record('insert'),
+  update: record('update'),
+  delete: record('delete'),
   transaction: async (callback: (tx: unknown) => unknown) => callback(executor),
 };
 
@@ -90,6 +98,7 @@ beforeEach(() => {
   queue = [];
   written = [];
   locks = [];
+  statements = [];
 });
 
 describe('상태 전이', () => {
@@ -227,5 +236,109 @@ describe('대회명 해석', () => {
     const result = await service.resolveByName(GUILD);
 
     expect(result.match).toMatchObject({ id: 99, status: 'CLOSED' });
+  });
+});
+
+describe('삭제', () => {
+  const NAME = '멸망전 1회';
+  const matchRows = (...ids: string[]) => ids.map((id) => ({ id }));
+
+  test('확인용 이름이 다르면 400이고 아무것도 건드리지 않는다', async () => {
+    queue = [competitionRow('CLOSED')];
+    await expectStatus(
+      service.remove(GUILD, COMPETITION, '멸망전 2회', ACTOR),
+      400,
+      'competition-name-mismatch',
+    );
+
+    expect(statements).toEqual([]);
+    expect(written).toEqual([]);
+  });
+
+  test('앞뒤·연속 공백만 다른 이름은 통과한다', async () => {
+    queue = [competitionRow('CLOSED'), []];
+    await service.remove(GUILD, COMPETITION, '  멸망전   1회 ', ACTOR);
+
+    expect(statements).toContain('delete competition');
+  });
+
+  test('활성 경기를 !drop과 같은 캐스케이드로 함께 지운다', async () => {
+    queue = [competitionRow('CLOSED'), matchRows('m1', 'm2'), matchRows('m1', 'm2')];
+    const result = await service.remove(GUILD, COMPETITION, NAME, ACTOR);
+
+    expect(statements).toEqual([
+      'update custom_match',
+      'update match_participant',
+      'update mmr_participant_metric',
+      'update replay',
+      'delete competition_match_team',
+      'delete competition_match_team',
+      'update custom_match',
+      'update replay',
+      'delete competition',
+      'insert guild_audit_log',
+    ]);
+    expect(written.slice(0, 4)).toEqual(
+      Array(4).fill({ isDeleted: true, updateDate: expect.any(Date) }),
+    );
+    expect(written.slice(4, 6)).toEqual([{ competitionId: null }, { competitionId: null }]);
+    expect(result.deletedMatchCount).toBe(2);
+  });
+
+  test('감사 로그 한 줄에 지운 경기 id와 수를 남긴다', async () => {
+    queue = [competitionRow('CLOSED'), matchRows('m1', 'm2'), matchRows('m1', 'm2')];
+    await service.remove(GUILD, COMPETITION, NAME, ACTOR);
+
+    expect(statements.filter((s) => s === 'insert guild_audit_log')).toHaveLength(1);
+    expect(auditOf(6).eventType).toBe('competitionDelete');
+    expect(auditOf(6).detail).toEqual({
+      competitionId: COMPETITION,
+      name: NAME,
+      deletedMatchIds: ['m1', 'm2'],
+      deletedMatchCount: 2,
+      source: 'web',
+    });
+  });
+
+  test('활성 경기가 없으면 경기 캐스케이드 없이 대회만 지운다', async () => {
+    queue = [competitionRow('CLOSED'), []];
+    const result = await service.remove(GUILD, COMPETITION, NAME, ACTOR);
+
+    expect(statements).toEqual([
+      'delete competition_match_team',
+      'update custom_match',
+      'update replay',
+      'delete competition',
+      'insert guild_audit_log',
+    ]);
+    expect(auditOf(2).detail).toMatchObject({ deletedMatchIds: [], deletedMatchCount: 0 });
+    expect(result.deletedMatchCount).toBe(0);
+  });
+
+  test('사이에 !drop이 들어와 덜 뒤집히면 감사 로그·응답 수도 뒤집힌 것만 센다', async () => {
+    queue = [competitionRow('CLOSED'), matchRows('m1', 'm2'), matchRows('m1')];
+    const result = await service.remove(GUILD, COMPETITION, NAME, ACTOR);
+
+    expect(auditOf(6).detail).toMatchObject({ deletedMatchIds: ['m1'], deletedMatchCount: 1 });
+    expect(result.deletedMatchCount).toBe(1);
+  });
+
+  test('없는 대회면 404이고 아무것도 쓰지 않는다', async () => {
+    queue = [[]];
+    await expectStatus(
+      service.remove(GUILD, COMPETITION, NAME, ACTOR),
+      404,
+      'competition-not-found',
+    );
+
+    expect(statements).toEqual([]);
+    expect(written).toEqual([]);
+  });
+
+  test('이름 대조는 FOR UPDATE로 잡은 뒤에 한다', async () => {
+    queue = [competitionRow('CLOSED'), []];
+    await service.remove(GUILD, COMPETITION, NAME, ACTOR);
+
+    expect(locks).toEqual(['update']);
   });
 });

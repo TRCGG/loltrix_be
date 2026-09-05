@@ -119,6 +119,11 @@ const playerCompetitionsSchema = z.object({
 });
 const mutateSchema = z.object({ params: competitionParams, body: actorBody });
 
+const deleteSchema = z.object({
+  params: competitionParams,
+  body: actorBody.unwrap().extend({ confirmName: competitionName }),
+});
+
 const manager = requireGuildRole('guildManager', { from: 'params', key: 'guildId' });
 
 /**
@@ -283,7 +288,7 @@ router.patch(
 
 /**
  * @route DELETE /api/competitions/:guildId/:competitionId
- * @desc 대회 삭제 — 활성 경기 0건일 때만
+ * @desc 대회 삭제 — 활성 경기도 함께 soft-delete. 대회명 확인 필수
  * @access guildManager 이상
  */
 router.delete(
@@ -291,14 +296,23 @@ router.delete(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 삭제'
-    #swagger.description = '활성 경기가 하나라도 있으면 409(competition-has-matches). 삭제된 경기(!drop)의 대회 참조는 끊고 하드 삭제합니다.'
+    #swagger.description = 'body.confirmName에 지울 대회의 이름을 그대로 넣어야 합니다(앞뒤·연속 공백은 무시). 다르면 400(competition-name-mismatch). 대회에 남은 활성 경기는 !drop과 똑같이 함께 삭제되어 개인 전적·통계·팀 순위에서 사라지고, 화면에서 되돌릴 방법은 없습니다. 지워진 경기 id는 관리 로그(competitionDelete)의 deletedMatchIds에 남습니다. 응답 data는 삭제된 대회에 deletedMatchCount(함께 지운 경기 수)를 더한 값입니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { confirmName: '멸망전 1회', actorMemberId: '123456789012345678' } }
+    #swagger.responses[200] = {
+      description: '삭제 완료',
+      schema: {
+        status: 'success',
+        message: 'Competition deleted successfully',
+        data: { id: 1, guildId: '123456789012345678', name: '멸망전 1회', status: 'CLOSED', deletedMatchCount: 2 }
+      }
+    }
   */
   decodeGuildIdMiddleware,
   manager,
-  validateRequest(mutateSchema),
+  validateRequest(deleteSchema),
   deleteCompetition,
 );
 

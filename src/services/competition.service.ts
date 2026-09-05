@@ -10,6 +10,7 @@ import {
   guildAuditLog,
   replay,
   Competition,
+  GuildAuditLogDetail,
   InsertCompetition,
 } from '../database/schema.js';
 import { BusinessError } from '../types/error.js';
@@ -18,12 +19,14 @@ import {
   CompetitionActor,
   CompetitionCreateInput,
   CompetitionDetail,
+  CompetitionRemoveResult,
   CompetitionResolveResult,
   CompetitionStatus,
   CompetitionSummary,
   CompetitionUpdateInput,
 } from '../types/competition.js';
 import { canTransition, closeDateFor } from './competitionLifecycle.js';
+import { softDeleteMatches } from './matchSoftDelete.js';
 import { systemConfigService } from './systemConfig.service.js';
 
 export interface CompetitionRef {
@@ -372,26 +375,50 @@ export class CompetitionService {
   }
 
   /**
-   * 삭제. 활성 경기가 있으면 거부. soft-delete된 경기(!drop)는 competition_id를 NULL로 끊고 하드 삭제한다 —
-   * 지운 경기에 대회 정보를 남길 이유가 없고, 남기면 FK 때문에 대회를 못 지운다.
+   * 삭제. 활성 경기는 !drop과 같은 캐스케이드로 함께 soft-delete하고, 이미 지워진 경기까지 포함해
+   * competition_id를 NULL로 끊은 뒤 대회를 하드 삭제한다 — 참조가 남으면 FK 때문에 못 지운다.
+   *
+   * confirmName은 잠금 뒤에 대조한다. 먼저 읽고 비교하면 그 사이 이름이 바뀐 대회를
+   * 옛 이름으로 지울 수 있다.
    */
-  public async remove(guildId: string, id: number, actor: CompetitionActor): Promise<Competition> {
+  public async remove(
+    guildId: string,
+    id: number,
+    confirmName: string,
+    actor: CompetitionActor,
+  ): Promise<CompetitionRemoveResult> {
     return db.transaction(async (tx) => {
       const target = await this.lockCompetition(tx, guildId, id);
-
-      const [{ active }] = await tx
-        .select({ active: sql<number>`count(*)::integer` })
-        .from(customMatch)
-        .where(and(eq(customMatch.competitionId, id), eq(customMatch.isDeleted, false)));
-      if (active > 0) {
-        throw new BusinessError('competition has matches', 409, {
-          type: 'competition-has-matches',
+      if (CompetitionService.normalizeName(confirmName) !== target.name) {
+        throw new BusinessError('confirmName must match the competition name', 400, {
+          type: 'competition-name-mismatch',
           isLoggable: false,
         });
       }
 
-      // 팀·로스터·신청은 FK cascade로 지워지지만, 용병전(team_id NULL) 귀속 행은 지워지지 않는다.
-      // 아래에서 custom_match의 대회 참조를 끊으면 어느 대회 것인지도 사라지므로 여기서 함께 지운다.
+      const activeMatches = await tx
+        .select({ id: customMatch.id })
+        .from(customMatch)
+        .where(
+          and(
+            eq(customMatch.competitionId, id),
+            eq(customMatch.guildId, guildId),
+            eq(customMatch.isDeleted, false),
+          ),
+        );
+
+      // custom_match를 따로 잠그지 않는다 — 대회 잠금이 이 대회로 오는 업로드를 막고 있어 목록이
+      // 도중에 늘지 않고, 같은 경기에 !drop이 동시에 들어와도 is_deleted=false 조건에 걸려 한쪽만
+      // 뒤집는다. 그래서 감사 로그와 응답 수는 select 목록이 아니라 실제로 뒤집힌 행에서 뽑는다.
+      const deleted = await softDeleteMatches(
+        activeMatches.map((row) => row.id),
+        tx,
+        guildId,
+      );
+      const deletedMatchIds = deleted.map((match) => match.id);
+
+      // 옛 경로·롤백으로 이미 soft-delete된 경기의 귀속 행은 위 캐스케이드가 닿지 않는다 — 대회 참조를
+      // 끊고 나면 어느 읽기 경로에도 안 걸린 채 남는다.
       await tx.delete(competitionMatchTeam).where(
         inArray(
           competitionMatchTeam.customMatchId,
@@ -402,8 +429,8 @@ export class CompetitionService {
       await tx.update(customMatch).set({ competitionId: null }).where(eq(customMatch.competitionId, id));
       await tx.update(replay).set({ competitionId: null }).where(eq(replay.competitionId, id));
       await tx.delete(competition).where(eq(competition.id, id));
-      await this.writeAudit(tx, guildId, 'competitionDelete', target, actor);
-      return target;
+      await this.writeAudit(tx, guildId, 'competitionDelete', target, actor, deletedMatchIds);
+      return { ...target, deletedMatchCount: deletedMatchIds.length };
     });
   }
 
@@ -535,13 +562,24 @@ export class CompetitionService {
     eventType: 'competitionOpen' | 'competitionClose' | 'competitionDelete',
     target: Competition,
     actor: CompetitionActor,
+    deletedMatchIds?: string[],
   ) {
     // 하드 삭제 뒤에도 로그가 읽히도록 이름을 같이 남긴다.
+    const detail: GuildAuditLogDetail = deletedMatchIds
+      ? {
+          competitionId: target.id,
+          name: target.name,
+          deletedMatchIds,
+          deletedMatchCount: deletedMatchIds.length,
+          source: actor.source,
+        }
+      : { competitionId: target.id, name: target.name, source: actor.source };
+
     await tx.insert(guildAuditLog).values({
       guildId,
       eventType,
       actorMemberId: actor.memberId,
-      detail: { competitionId: target.id, name: target.name, source: actor.source },
+      detail,
     });
   }
 }

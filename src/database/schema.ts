@@ -591,8 +591,16 @@ export type GuildAuditLogDetail =
   // eventType 'roleChange' — source 생략 시 웹 수동 부여/회수
   | { fromRole: string; toRole: string; source?: 'discordPermission' }
   | { gameId: string; source: 'web' | 'bot' } // eventType 'replayDelete'
-  // eventType 'competitionOpen' | 'competitionClose' | 'competitionDelete' — 하드 삭제 뒤에도 읽히도록 name 포함
+  // eventType 'competitionOpen' | 'competitionClose' — 대회가 나중에 하드 삭제돼도 읽히도록 name 포함
   | { competitionId: number; name: string; source: 'web' | 'bot' }
+  // eventType 'competitionDelete' — 동반 삭제된 경기의 id는 대회 참조가 끊겨 여기에만 남는다
+  | {
+      competitionId: number;
+      name: string;
+      deletedMatchIds: string[];
+      deletedMatchCount: number;
+      source: 'web' | 'bot';
+    }
   // eventType 'competitionStatusChange' — 종료(CLOSED)로 가는 전이만 'competitionClose'로 남는다
   | { competitionId: number; name: string; from: string; to: string; source: 'web' | 'bot' }
   // eventType 'competitionUpdate'

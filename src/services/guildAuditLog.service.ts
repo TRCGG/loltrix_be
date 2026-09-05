@@ -85,6 +85,7 @@ export class GuildAuditLogService {
         customMatchId?: string;
         blueTeamId?: number | null;
         redTeamId?: number | null;
+        deletedMatchCount?: number;
       };
       // detail.from/to는 상태 전이와 유형 변경이 같은 키를 쓴다 — 갈라야 서로의 필드가 오염되지 않는다.
       const gameTypeChange = r.eventType === 'matchGameTypeChange';
@@ -111,6 +112,7 @@ export class GuildAuditLogService {
         redTeamId: detail.redTeamId ?? null,
         fromGameType: gameTypeChange ? (detail.from ?? null) : null,
         toGameType: gameTypeChange ? (detail.to ?? null) : null,
+        deletedMatchCount: detail.deletedMatchCount ?? null,
       };
     });
 

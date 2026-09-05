@@ -30,6 +30,11 @@ export const MAX_APPLICATION_CHAMPIONS = 3;
 /** 개설 시 고를 수 있는 상태 — 종료된 대회를 새로 만들 일은 없다. */
 export type CompetitionInitialStatus = Extract<CompetitionStatus, 'RECRUITING' | 'IN_PROGRESS'>;
 
+/** 삭제된 대회 + 함께 soft-delete된 경기 수 */
+export interface CompetitionRemoveResult extends Competition {
+  deletedMatchCount: number;
+}
+
 /** 대회 + 유형별 활성 경기 수 + 신청·팀 규모 */
 export interface CompetitionSummary extends Competition {
   scrimCount: number;

@@ -169,6 +169,7 @@ export interface GuildAuditLogItem {
   redTeamId: number | null;
   fromGameType: string | null;
   toGameType: string | null;
+  deletedMatchCount: number | null;
 }
 
 export interface GuildAuditLogListAPIResponse {

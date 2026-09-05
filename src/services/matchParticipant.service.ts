@@ -5,7 +5,6 @@ import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import {
   InsertMatchParticipant,
   matchParticipant,
-  mmrParticipantMetric,
   champion,
   riotAccount,
   customMatch,
@@ -27,7 +26,7 @@ import {
   ignoresPeriod,
   isCompetitionScope,
 } from '../types/matchScope.js';
-import { replayService } from './replay.service.js';
+import { softDeleteMatches } from './matchSoftDelete.js';
 
 const MatchparticipantSchema = z.object({
   PUUID: z.string().max(64),
@@ -747,7 +746,6 @@ export class MatchParticipantService {
 
   /**
    * @desc 게임 기록 소프트 삭제
-   * customMatch와 연관된 matchParticipant를 모두 isDeleted = true 처리
    * @param actor 삭제 수행자 — guild_audit_log에 감사 기록 (웹 세션 memberId 또는 봇 !drop 사용자)
    */
   public async deleteMatch(
@@ -756,59 +754,11 @@ export class MatchParticipantService {
     actor: { memberId: string; source: 'web' | 'bot' },
   ) {
     return db.transaction(async (tx) => {
-      // 1. CustomMatch 삭제
-      const [deletedMatch] = await tx
-        .update(customMatch)
-        .set({
-          isDeleted: true,
-          updateDate: new Date(),
-        })
-        .where(
-          and(
-            eq(customMatch.id, gameId),
-            eq(customMatch.guildId, guildId),
-            eq(customMatch.isDeleted, false),
-          ),
-        )
-        .returning();
-
-      // 해당 게임이 없거나 이미 삭제된 경우 null 반환
+      const [deletedMatch] = await softDeleteMatches([gameId], tx, guildId);
       if (!deletedMatch) {
         return null;
       }
 
-      // 2. 연관된 MatchParticipant 일괄 삭제
-      await tx
-        .update(matchParticipant)
-        .set({
-          isDeleted: true,
-          updateDate: new Date(),
-        })
-        .where(
-          and(eq(matchParticipant.customMatchId, gameId), eq(matchParticipant.isDeleted, false)),
-        );
-
-      // 2-1. mmr_participant_metric도 동일 soft delete (H2H가 삭제 경기 제외하도록)
-      await tx
-        .update(mmrParticipantMetric)
-        .set({
-          isDeleted: true,
-          updateDate: new Date(),
-        })
-        .where(
-          and(
-            eq(mmrParticipantMetric.customMatchId, gameId),
-            eq(mmrParticipantMetric.isDeleted, false),
-          ),
-        );
-
-      // 2-2. 대회 경기의 팀 귀속 제거 — soft-delete 컬럼이 없고, 지운 경기가 팀 전적에 남을 이유가 없다
-      await tx.delete(competitionMatchTeam).where(eq(competitionMatchTeam.customMatchId, gameId));
-
-      // 3. 연관된 replays 삭제
-      await replayService.softDeleteReplayByCode(gameId, tx);
-
-      // 4. 삭제 감사 로그 (append-only) — 누가 어느 게임을 지웠는지
       await tx.insert(guildAuditLog).values({
         guildId,
         eventType: 'replayDelete',
