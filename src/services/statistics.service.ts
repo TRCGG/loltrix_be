@@ -8,6 +8,7 @@ import {
   guildMember,
 } from '../database/schema.js';
 import { subAccountLink } from '../database/subAccountLink.js';
+import { competitionStatSql, EMPTY_COMPETITION_STATS } from '../database/competitionStats.js';
 import { scopeConditions } from '../database/matchScope.js';
 import { periodCondition } from '../database/datePeriod.js';
 import { systemConfigService } from './systemConfig.service.js';
@@ -115,6 +116,10 @@ export class StatisticsService {
     // 부캐 전적은 본캐(effective player_code)로 합산 (TRC-243 A안)
     const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
+    const { competitionId } = scope;
+    const competitionStats =
+      competitionId != null ? competitionStatSql(guildId, competitionId) : null;
+
     const whereCondition = and(
       eq(guildMember.guildId, guildId),
       eq(customMatch.guildId, guildId),
@@ -138,13 +143,14 @@ export class StatisticsService {
       ...(shouldGroupByPosition ? [matchParticipant.position] : []),
     ];
 
-    const result = await db
+    const baseQuery = db
       .select({
         playerCode: riotAccount.playerCode,
         riotName: riotAccount.riotName,
         riotNameTag: riotAccount.riotNameTag,
         ...(shouldGroupByPosition ? { position: matchParticipant.position } : {}),
         ...statColumns,
+        ...(competitionStats ? competitionStats.columns : {}),
       })
       .from(matchParticipant)
       .leftJoin(link.table, link.on)
@@ -152,12 +158,18 @@ export class StatisticsService {
       .innerJoin(guildMember, eq(riotAccount.playerCode, guildMember.account))
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
+      .$dynamic();
+
+    const rows = await (competitionStats?.joins ?? [])
+      .reduce((query, join) => query.leftJoin(join.table, join.on), baseQuery)
       .where(whereCondition)
       .groupBy(...groupByColumns)
       .having(havingCondition)
       .orderBy(orderCriteria)
       .limit(limit)
       .offset(offset);
+
+    const result = rows.map((row) => ({ ...EMPTY_COMPETITION_STATS, ...row }));
 
     const subQuery = db
       .select({
