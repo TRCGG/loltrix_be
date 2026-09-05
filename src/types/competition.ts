@@ -102,6 +102,7 @@ export interface CompetitionApplicationChampion {
 export interface CompetitionApplicationItem extends Omit<CompetitionApplication, 'champions'> {
   riotName: string;
   riotNameTag: string;
+  appliedByDisplayName: string;
   champions: CompetitionApplicationChampion[];
 }
 

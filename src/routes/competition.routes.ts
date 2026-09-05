@@ -481,7 +481,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '내 대회 신청 조회'
-    #swagger.description = '로그인한 사용자가 이 대회에 넣은 신청 한 건을 반환합니다(riotName·riotNameTag와 champions는 id·한글명·영문명으로 채워집니다). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
+    #swagger.description = '로그인한 사용자가 이 대회에 넣은 신청 한 건을 반환합니다(riotName·riotNameTag, champions는 id·한글명·영문명으로 채워집니다). appliedByDisplayName은 신청자의 디스코드 표시명으로, 이 길드의 별명 → 전역 표시명 → member id 순으로 정해집니다(예: 폿신). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -539,7 +539,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청 목록'
-    #swagger.description = '최신순. 각 항목에 riotName·riotNameTag와 champions(id·champName·champNameEng)가 붙습니다. 보이는 범위는 권한에 따라 다릅니다 — guildManager 이상과 봇은 status로 PENDING/APPROVED/REJECTED를 고르거나 생략해 전체를 보고, 그 아래 권한은 승인된 신청만 봅니다(status 생략 시 APPROVED만, PENDING·REJECTED를 지정하면 403 application-status-forbidden).'
+    #swagger.description = '최신순. 각 항목에 riotName·riotNameTag와 champions(id·champName·champNameEng), 그리고 신청자의 디스코드 표시명 appliedByDisplayName(이 길드의 별명 → 전역 표시명 → member id 순, 예: 폿신)이 붙습니다. 보이는 범위는 권한에 따라 다릅니다 — guildManager 이상과 봇은 status로 PENDING/APPROVED/REJECTED를 고르거나 생략해 전체를 보고, 그 아래 권한은 승인된 신청만 봅니다(status 생략 시 APPROVED만, PENDING·REJECTED를 지정하면 403 application-status-forbidden).'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
     #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['PENDING', 'APPROVED', 'REJECTED'] }

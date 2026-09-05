@@ -11,6 +11,8 @@ let queue: unknown[] = [];
 let written: unknown[] = [];
 /** .for(...)로 요청한 행 잠금 — 상태 확인과 상한 검사가 잠금 안에서 도는지 보려고 모은다. */
 let locks: unknown[] = [];
+/** select에 넘어간 필드 — 조회가 몇 번 도는지, 산식이 무엇인지 보려고 모은다. */
+let selects: unknown[] = [];
 
 const CHAIN_METHODS = [
   'from',
@@ -52,7 +54,10 @@ const makeBuilder = (): Record<string, unknown> => {
 };
 
 const executor: Record<string, unknown> = {
-  select: () => makeBuilder(),
+  select: (fields: unknown) => {
+    selects.push(fields);
+    return makeBuilder();
+  },
   selectDistinct: () => makeBuilder(),
   insert: () => makeBuilder(),
   update: () => makeBuilder(),
@@ -117,6 +122,7 @@ beforeEach(() => {
   queue = [];
   written = [];
   locks = [];
+  selects = [];
 });
 
 describe('종료된 대회는 잠긴다 (409)', () => {
@@ -637,12 +643,17 @@ describe('신청 v2 검증', () => {
   });
 });
 
-describe('본인 신청 조회', () => {
-  const applicationRow = (champions: string[]) => ({
-    competition_application: { id: 1, competitionId: COMPETITION, champions },
-    riot_account: { riotName: '소환사', riotNameTag: 'KR1' },
-  });
+const applicationRow = (champions: string[], appliedByMemberId = 'member-1') => ({
+  competition_application: { id: 1, competitionId: COMPETITION, champions, appliedByMemberId },
+  riot_account: { riotName: '소환사', riotNameTag: 'KR1' },
+});
 
+const displayNameSelects = () =>
+  selects.filter(
+    (fields) => typeof fields === 'object' && fields !== null && 'displayName' in fields,
+  );
+
+describe('본인 신청 조회', () => {
   test('신청이 없으면 404', async () => {
     queue = [recruitingCompetition, []];
     await expectStatus(
@@ -657,10 +668,54 @@ describe('본인 신청 조회', () => {
       recruitingCompetition,
       [applicationRow(['266'])],
       [{ id: '266', champName: '아트록스', champNameEng: 'Aatrox' }],
+      [{ memberId: 'member-1', displayName: '폿신' }],
     ];
     const item = await service.getMyApplication(GUILD, COMPETITION, 'member-1');
     expect(item.riotName).toBe('소환사');
     expect(item.champions).toEqual([{ id: '266', champName: '아트록스', champNameEng: 'Aatrox' }]);
+    expect(item.appliedByDisplayName).toBe('폿신');
+  });
+});
+
+describe('신청자 표시명', () => {
+  test('디스코드 행이 없으면 member id가 그대로 남는다', async () => {
+    queue = [recruitingCompetition, [applicationRow([], 'member-9')], []];
+    const [item] = await service.listApplications(GUILD, COMPETITION);
+    expect(item.appliedByDisplayName).toBe('member-9');
+  });
+
+  test('신청자가 여럿이어도 조회는 한 번', async () => {
+    queue = [
+      recruitingCompetition,
+      [applicationRow([], 'member-1'), applicationRow([], 'member-2'), applicationRow([])],
+      [
+        { memberId: 'member-1', displayName: '폿신' },
+        { memberId: 'member-2', displayName: '탑신' },
+      ],
+    ];
+    const items = await service.listApplications(GUILD, COMPETITION);
+    expect(items.map((item) => item.appliedByDisplayName)).toEqual(['폿신', '탑신', '폿신']);
+    expect(displayNameSelects()).toHaveLength(1);
+  });
+
+  test('신청이 없으면 조회하지 않는다', async () => {
+    queue = [recruitingCompetition, []];
+    expect(await service.listApplications(GUILD, COMPETITION)).toEqual([]);
+    expect(displayNameSelects()).toHaveLength(0);
+  });
+
+  test('표시명은 길드 별명 → 전역 표시명 → member id 순으로 정해진다', async () => {
+    queue = [recruitingCompetition, [applicationRow([])], []];
+    await service.listApplications(GUILD, COMPETITION);
+
+    const [fields] = displayNameSelects() as { displayName: { queryChunks?: unknown[] } }[];
+    const columns = (fields.displayName.queryChunks ?? [])
+      .filter(
+        (chunk): chunk is { name: string } =>
+          typeof (chunk as { name?: unknown })?.name === 'string',
+      )
+      .map((chunk) => chunk.name);
+    expect(columns).toEqual(['nickname', 'display_name', 'id']);
   });
 });
 

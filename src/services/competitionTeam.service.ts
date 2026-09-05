@@ -16,6 +16,8 @@ import {
   competitionTeam,
   competitionTeamMember,
   customMatch,
+  discordGuildMember,
+  discordMember,
   guildAuditLog,
   matchParticipant,
   mmrParticipantMetric,
@@ -103,6 +105,8 @@ interface ApplicationJoinRow {
   competition_application: CompetitionApplication;
   riot_account: { riotName: string; riotNameTag: string };
 }
+
+type ApplicationItemDraft = Omit<CompetitionApplicationItem, 'appliedByDisplayName'>;
 
 interface ExistingRosterTeam {
   id: number;
@@ -214,7 +218,7 @@ export class CompetitionTeamService {
         status ? eq(competitionApplication.status, status) : undefined,
       ),
     );
-    return this.attachChampions(rows);
+    return this.attachApplicants(guildId, await this.attachChampions(rows));
   }
 
   public async getMyApplication(
@@ -230,7 +234,7 @@ export class CompetitionTeamService {
         eq(competitionApplication.appliedByMemberId, memberId),
       ),
     );
-    const [item] = await this.attachChampions(rows);
+    const [item] = await this.attachApplicants(guildId, await this.attachChampions(rows));
     if (!item) throw this.applicationNotFound();
     return item;
   }
@@ -1081,7 +1085,7 @@ export class CompetitionTeamService {
       .orderBy(desc(competitionApplication.createDate), desc(competitionApplication.id));
   }
 
-  private async attachChampions(rows: ApplicationJoinRow[]): Promise<CompetitionApplicationItem[]> {
+  private async attachChampions(rows: ApplicationJoinRow[]): Promise<ApplicationItemDraft[]> {
     const ids = [...new Set(rows.flatMap((row) => row.competition_application.champions))];
     const champions =
       ids.length > 0
@@ -1103,6 +1107,37 @@ export class CompetitionTeamService {
       champions: row.competition_application.champions
         .map((id) => byId.get(id))
         .filter((found): found is CompetitionApplicationChampion => found !== undefined),
+    }));
+  }
+
+  /** 관리 로그 조회와 같은 규칙으로 푼다 — 두 화면의 이름이 어긋나지 않게. */
+  private async attachApplicants(
+    guildId: string,
+    items: ApplicationItemDraft[],
+  ): Promise<CompetitionApplicationItem[]> {
+    if (items.length === 0) return [];
+    const memberIds = [...new Set(items.map((item) => item.appliedByMemberId))];
+
+    const rows = await db
+      .select({
+        memberId: discordMember.id,
+        displayName: sql<string>`COALESCE(${discordGuildMember.nickname}, ${discordMember.displayName}, ${discordMember.id})`,
+      })
+      .from(discordMember)
+      .leftJoin(
+        discordGuildMember,
+        and(
+          eq(discordGuildMember.memberId, discordMember.id),
+          eq(discordGuildMember.guildId, guildId),
+        ),
+      )
+      .where(inArray(discordMember.id, memberIds));
+    const byMember = new Map(rows.map((row) => [row.memberId, row.displayName]));
+
+    // 웹 로그인 이력이 없으면 discord_member 행 자체가 없어 SQL COALESCE가 닿지 않는다.
+    return items.map((item) => ({
+      ...item,
+      appliedByDisplayName: byMember.get(item.appliedByMemberId) ?? item.appliedByMemberId,
     }));
   }
 
