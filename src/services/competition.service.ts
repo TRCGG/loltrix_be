@@ -14,6 +14,7 @@ import {
 } from '../database/schema.js';
 import { BusinessError } from '../types/error.js';
 import {
+  COMPETITION_STATUS,
   CompetitionActor,
   CompetitionCreateInput,
   CompetitionDetail,
@@ -22,7 +23,7 @@ import {
   CompetitionSummary,
   CompetitionUpdateInput,
 } from '../types/competition.js';
-import { COMPETITION_STATUS, canTransition, closeDateFor } from './competitionLifecycle.js';
+import { canTransition, closeDateFor } from './competitionLifecycle.js';
 import { systemConfigService } from './systemConfig.service.js';
 
 export interface CompetitionRef {

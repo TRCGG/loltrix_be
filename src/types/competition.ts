@@ -3,9 +3,20 @@ import {
   CompetitionApplication,
   CompetitionTeam,
 } from '../database/schema.js';
-import { CompetitionStandings, TeamRecordSplit } from '../services/competitionRecord.js';
 
 export type CompetitionStatus = 'RECRUITING' | 'IN_PROGRESS' | 'CLOSED';
+
+export const COMPETITION_STATUS = {
+  RECRUITING: 'RECRUITING',
+  IN_PROGRESS: 'IN_PROGRESS',
+  CLOSED: 'CLOSED',
+} as const;
+
+export const COMPETITION_STATUS_VALUES: readonly CompetitionStatus[] = [
+  COMPETITION_STATUS.RECRUITING,
+  COMPETITION_STATUS.IN_PROGRESS,
+  COMPETITION_STATUS.CLOSED,
+];
 
 /** 통계·경기 조회의 포지션 코드와 같은 값 — 신청·로스터가 그 필터에 그대로 걸리게 맞춘다. */
 export const COMPETITION_POSITIONS = ['TOP', 'JUG', 'MID', 'ADC', 'SUP'] as const;
@@ -196,4 +207,62 @@ export interface PlayerCompetitionItem {
   recent: string[];
 }
 
-export type { CompetitionStandings };
+// ── 팀 귀속·전적 집계 (services/competitionAssign, competitionRecord) ──
+
+export type SideDecision =
+  | { kind: 'team'; teamId: number }
+  | { kind: 'mercenary' }
+  | { kind: 'undecided' };
+
+export interface MatchTeamAssignment {
+  blueTeamId: number | null;
+  redTeamId: number | null;
+}
+
+export interface AssignedMatchRow {
+  customMatchId: string;
+  gameType: string;
+  date: Date;
+  blueTeamId: number;
+  redTeamId: number;
+  winnerTeamId: number | null;
+}
+
+export interface RecordCount {
+  games: number;
+  win: number;
+  lose: number;
+}
+
+export interface TeamRecordSplit {
+  scrim: RecordCount;
+  main: RecordCount;
+}
+
+export interface SideStats {
+  kill: number;
+  death: number;
+  assist: number;
+}
+
+/** 순위표는 팀 관점의 KDA를 함께 내므로 승패만으로는 접을 수 없다. */
+export interface StandingMatchRow extends AssignedMatchRow {
+  blue: SideStats;
+  red: SideStats;
+}
+
+export interface StandingRow {
+  rank: number;
+  teamId: number;
+  name: string;
+  games: number;
+  win: number;
+  lose: number;
+  winRate: number;
+  avgKda: number;
+}
+
+export interface CompetitionStandings {
+  scrim: StandingRow[];
+  main: StandingRow[];
+}

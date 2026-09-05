@@ -1,9 +1,6 @@
 import { describe, test, expect } from '@jest/globals';
-import {
-  COMPETITION_STATUS,
-  canTransition,
-  closeDateFor,
-} from '../services/competitionLifecycle.js';
+import { COMPETITION_STATUS } from '../types/competition.js';
+import { canTransition, closeDateFor } from '../services/competitionLifecycle.js';
 
 const { RECRUITING, IN_PROGRESS, CLOSED } = COMPETITION_STATUS;
 

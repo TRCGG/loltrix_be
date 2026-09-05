@@ -1,9 +1,12 @@
 import { describe, test, expect } from '@jest/globals';
-import { decideMatchTeams, decideSide, SideDecision } from '../services/competitionAssign.js';
+import { decideMatchTeams, decideSide } from '../services/competitionAssign.js';
 import {
   AssignedMatchRow,
+  SideDecision,
   SideStats,
   StandingMatchRow,
+} from '../types/competition.js';
+import {
   foldHeadToHead,
   foldOpponentRecords,
   foldStandings,

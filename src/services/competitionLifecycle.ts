@@ -1,19 +1,7 @@
 /**
  * 대회 상태 전이 규칙. DB 접근은 호출자(competition.service)가 한다.
  */
-import { CompetitionStatus } from '../types/competition.js';
-
-export const COMPETITION_STATUS = {
-  RECRUITING: 'RECRUITING',
-  IN_PROGRESS: 'IN_PROGRESS',
-  CLOSED: 'CLOSED',
-} as const;
-
-export const COMPETITION_STATUS_VALUES: readonly CompetitionStatus[] = [
-  COMPETITION_STATUS.RECRUITING,
-  COMPETITION_STATUS.IN_PROGRESS,
-  COMPETITION_STATUS.CLOSED,
-];
+import { COMPETITION_STATUS, CompetitionStatus } from '../types/competition.js';
 
 /**
  * 종료 되돌리기(CLOSED → IN_PROGRESS)는 있어도 CLOSED → RECRUITING은 없다 —

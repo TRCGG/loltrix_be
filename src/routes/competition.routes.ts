@@ -32,7 +32,7 @@ import {
   updateMyApplication,
   updateTeam,
 } from '../controllers/competition.controller.js';
-import { COMPETITION_STATUS_VALUES } from '../services/competitionLifecycle.js';
+import { COMPETITION_STATUS_VALUES } from '../types/competition.js';
 import {
   COMPETITION_POSITIONS,
   CompetitionStatus,

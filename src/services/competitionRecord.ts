@@ -2,26 +2,15 @@
  * 팀 vs 팀 전적 집계의 순수 로직. 양 진영이 모두 팀에 귀속된 경기만 들어온다
  * (용병전 = team_id NULL은 호출자가 걸러낸다).
  */
-
-export interface AssignedMatchRow {
-  customMatchId: string;
-  gameType: string;
-  date: Date;
-  blueTeamId: number;
-  redTeamId: number;
-  winnerTeamId: number | null;
-}
-
-export interface RecordCount {
-  games: number;
-  win: number;
-  lose: number;
-}
-
-export interface TeamRecordSplit {
-  scrim: RecordCount;
-  main: RecordCount;
-}
+import {
+  AssignedMatchRow,
+  CompetitionStandings,
+  RecordCount,
+  SideStats,
+  StandingMatchRow,
+  StandingRow,
+  TeamRecordSplit,
+} from '../types/competition.js';
 
 const emptyCount = (): RecordCount => ({ games: 0, win: 0, lose: 0 });
 
@@ -72,34 +61,6 @@ export const foldHeadToHead = (
   for (const row of matches) tally(record, row, teamA);
   return { record, matches };
 };
-
-export interface SideStats {
-  kill: number;
-  death: number;
-  assist: number;
-}
-
-/** 순위표는 팀 관점의 KDA를 함께 내므로 승패만으로는 접을 수 없다. */
-export interface StandingMatchRow extends AssignedMatchRow {
-  blue: SideStats;
-  red: SideStats;
-}
-
-export interface StandingRow {
-  rank: number;
-  teamId: number;
-  name: string;
-  games: number;
-  win: number;
-  lose: number;
-  winRate: number;
-  avgKda: number;
-}
-
-export interface CompetitionStandings {
-  scrim: StandingRow[];
-  main: StandingRow[];
-}
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
 

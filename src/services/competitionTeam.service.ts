@@ -40,14 +40,14 @@ import {
   CompetitionTeamUpdateInput,
   CompetitionTeamWithRoster,
   RosterSaveInput,
-} from '../types/competition.js';
-import { CompetitionService } from './competition.service.js';
-import { COMPETITION_STATUS } from './competitionLifecycle.js';
-import { decideMatchTeams, decideSide } from './competitionAssign.js';
-import {
+  COMPETITION_STATUS,
   CompetitionStandings,
   SideStats,
   StandingMatchRow,
+} from '../types/competition.js';
+import { CompetitionService } from './competition.service.js';
+import { decideMatchTeams, decideSide } from './competitionAssign.js';
+import {
   emptySplit,
   foldHeadToHead,
   foldOpponentRecords,

@@ -13,11 +13,12 @@ import { mainAccountMap } from '../database/subAccountLink.js';
 import {
   CompetitionApplicationStatus,
   CompetitionPosition,
+  CompetitionStandings,
   CompetitionStatus,
   PlayerCompetitionItem,
 } from '../types/competition.js';
 import { competitionTeamService } from './competitionTeam.service.js';
-import { CompetitionStandings, kdaOf, winRateOf } from './competitionRecord.js';
+import { kdaOf, winRateOf } from './competitionRecord.js';
 
 const COMPETITION_GAME_TYPES = ['2', '3'];
 const WIN = '승';
