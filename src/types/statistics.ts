@@ -13,8 +13,22 @@ export interface RankingStats extends MatchStats {
   avgDpm: number;
 }
 
+/** 대회 범위(competitionId 지정) 조회에서만 값이 찬다 — 그 밖에서는 전부 null. */
+export interface CompetitionRankingStats {
+  /** (킬+어시) / 팀 킬 × 100 */
+  killParticipation: number | null;
+  /** 챔피언 피해 / 팀 챔피언 피해 × 100 */
+  damageShare: number | null;
+  goldPerMin: number | null;
+  avgVisionScore: number | null;
+  damagePerDeath: number | null;
+  /** 사망 시간 / 게임 시간 × 100 */
+  deadTimePct: number | null;
+  multiKills: { double: number; triple: number; quadra: number; penta: number } | null;
+}
+
 // 유저별 게임 통계 결과 타입
-export interface UserGameStatistic extends RankingStats {
+export interface UserGameStatistic extends RankingStats, CompetitionRankingStats {
   riotName: string;
   riotNameTag: string;
   position?: string;
