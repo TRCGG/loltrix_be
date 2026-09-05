@@ -17,9 +17,11 @@ import {
   deleteTeam,
   getCompetitionDetail,
   getMyApplication,
+  getStandings,
   getTeamHeadToHead,
   getTeamRecords,
   listApplications,
+  listPlayerCompetitions,
   listCompetitionMatches,
   listCompetitions,
   listTeams,
@@ -106,6 +108,13 @@ const resolveSchema = z.object({
 });
 
 const detailSchema = z.object({ params: competitionParams });
+
+const playerCompetitionsSchema = z.object({
+  params: guildParams.extend({
+    playerCode: z.string().trim().min(1, 'playerCode is required').max(64),
+  }),
+  query: z.object({ status: competitionStatus.optional() }),
+});
 const mutateSchema = z.object({ params: competitionParams, body: actorBody });
 
 const manager = requireGuildRole('guildManager', { from: 'params', key: 'guildId' });
@@ -166,6 +175,25 @@ router.get(
   decodeGuildIdMiddleware,
   validateRequest(resolveSchema),
   resolveCompetition,
+);
+
+/**
+ * @route GET /api/competitions/:guildId/players/:playerCode/competitions
+ * @desc 한 선수가 참여한 대회 목록 (소속 팀·신청 상태·본인 전적·팀 순위)
+ */
+router.get(
+  '/:guildId/players/:playerCode/competitions',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '선수의 대회 목록'
+    #swagger.description = '로스터에 올랐거나, 신청했거나, 한 판이라도 뛴 대회를 최신순으로 반환합니다. playerCode는 본계정으로 정규화하고, 링크된 부계정으로 뛴 경기도 본인 전적에 합칩니다. record는 팀 귀속과 무관한 본인 전적(스크림+본경기 합산, 삭제 경기 제외), teamRank는 소속 팀의 순위표 등수(팀이 없으면 null), recent는 최근 6경기 결과를 최신순으로 담습니다. status로 모집중·진행중·종료를 걸러낼 수 있습니다.'
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['playerCode'] = { in: 'path', required: true, type: 'string' }
+    #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['RECRUITING', 'IN_PROGRESS', 'CLOSED'] }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(playerCompetitionsSchema),
+  listPlayerCompetitions,
 );
 
 /**
@@ -543,7 +571,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 팀 목록'
-    #swagger.description = '각 팀에 roster(playerCode·position·riotName·riotNameTag)가 붙고, roster는 TOP→JUG→MID→ADC→SUP 순으로 정렬됩니다.'
+    #swagger.description = '각 팀에 roster(playerCode·position·riotName·riotNameTag)가 붙고, roster는 TOP→JUG→MID→ADC→SUP 순으로 정렬됩니다. records에는 상대를 가리지 않은 팀 전체 전적이 scrim·main으로 나뉘어 담기며, 양 진영이 모두 팀에 귀속된 경기만 셉니다(용병전·미배정·삭제 경기 제외).'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
   */
@@ -562,7 +590,7 @@ router.put(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 로스터 전체 저장'
-    #swagger.description = '보낸 teams가 이 대회의 편성 전체가 됩니다 — id를 준 팀은 이름·팀장·로스터가 payload대로 맞춰지고, id 없는 팀은 새로 만들어지며, payload에 없는 기존 팀은 삭제됩니다. 삭제 대상 팀에 귀속된 활성 경기가 있으면 409(team-has-matches)로 전체가 실패합니다. 팀은 20개까지(409 team-limit-exceeded), 팀당 5명·포지션 하나씩(같은 팀에 같은 포지션이 둘이면 409 roster-position-taken, 6명 이상이면 409 roster-limit-exceeded), 한 선수는 한 팀에만(409 roster-duplicate), 이름은 중복 불가(409 team-name-exists), captainPlayerCode는 그 팀 members 안에 있어야 합니다(400 captain-not-in-roster). id가 이 대회 팀이 아니면 404(team-not-found), 같은 id가 두 번 오면 400(team-duplicate), 종료된 대회는 409(competition-closed). playerCode는 본계정으로 정규화해 저장하고, 응답은 GET /teams와 같은 모양입니다.'
+    #swagger.description = '보낸 teams가 이 대회의 편성 전체가 됩니다 — id를 준 팀은 이름·팀장·로스터가 payload대로 맞춰지고, id 없는 팀은 새로 만들어지며, payload에 없는 기존 팀은 삭제됩니다. 삭제 대상 팀에 귀속된 활성 경기가 있으면 409(team-has-matches)로 전체가 실패합니다. 팀은 20개까지(409 team-limit-exceeded), 팀당 5명·포지션 하나씩(같은 팀에 같은 포지션이 둘이면 409 roster-position-taken, 6명 이상이면 409 roster-limit-exceeded), 한 선수는 한 팀에만(409 roster-duplicate), 이름은 중복 불가(409 team-name-exists), captainPlayerCode는 그 팀 members 안에 있어야 합니다(400 captain-not-in-roster). id가 이 대회 팀이 아니면 404(team-not-found), 같은 id가 두 번 오면 400(team-duplicate), 종료된 대회는 409(competition-closed). playerCode는 본계정으로 정규화해 저장하고, 응답은 GET /teams의 팀·로스터 부분과 같습니다(전적 records는 빠집니다).'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -693,7 +721,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 경기 목록 (팀 귀속)'
-    #swagger.description = '경기마다 blueTeamId·redTeamId(미배정이면 null, 용병전도 null)와 양 진영 참가자 요약을 반환합니다. unassigned=true면 귀속 행이 아예 없는 경기(운영진 수동 지정 대상)만 반환합니다.'
+    #swagger.description = '경기마다 blueTeamId·redTeamId(미배정이면 null, 용병전도 null)와 팀 이름(blueTeamName·redTeamName, 팀이 없으면 null), 이긴 팀(winnerTeamId — 이긴 진영이 팀이 아니거나 승자를 못 찾으면 null), 경기 길이(gameLength, 초), 양 진영 참가자 요약을 반환합니다. unassigned=true면 귀속 행이 아예 없는 경기(운영진 수동 지정 대상)만 반환합니다.'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
     #swagger.parameters['unassigned'] = { in: 'query', type: 'string', enum: ['true', 'false'] }
@@ -724,6 +752,24 @@ router.put(
   manager,
   validateRequest(assignMatchTeamsSchema),
   assignMatchTeams,
+);
+
+/**
+ * @route GET /api/competitions/:guildId/:competitionId/standings
+ * @desc 대회 순위표 (스크림/본경기 분리)
+ */
+router.get(
+  '/:guildId/:competitionId/standings',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '대회 순위표'
+    #swagger.description = 'scrim(스크림)·main(본경기) 두 순위표를 따로 반환하며 절대 합치지 않습니다. 각 행은 rank·teamId·name·games·win·lose·winRate·avgKda. 양 진영이 모두 팀에 귀속된 경기만 셉니다 — 용병전(한쪽이 팀이 아닌 경기)·미배정 경기·삭제된 경기는 빠집니다. 대회의 모든 팀이 0판이어도 두 목록에 모두 나옵니다. 정렬은 승률 내림차순 → 승 내림차순 → 패 오름차순 → 이름 오름차순이고, 경기가 없는 팀은 맨 아래에 같은 순위로 모입니다. 정렬 키가 모두 같은 팀들은 같은 등수를 공유합니다(다음 팀은 자기 자리 번호를 받아 1,1,3이 됩니다). winRate는 퍼센트(소수 둘째 자리), avgKda는 (킬+어시)/데스이며 데스가 0이면 9999.'
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(detailSchema),
+  getStandings,
 );
 
 /**

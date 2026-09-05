@@ -12,7 +12,7 @@ import { scopeConditions } from '../database/matchScope.js';
 import { periodCondition } from '../database/datePeriod.js';
 import { systemConfigService } from './systemConfig.service.js';
 import { StatisticsDatePreset, StatisticsServiceOptions } from '../types/statistics.js';
-import { NORMAL_MATCH_SCOPE, isCompetitionScope } from '../types/matchScope.js';
+import { NORMAL_MATCH_SCOPE, ignoresPeriod, isCompetitionScope } from '../types/matchScope.js';
 
 export class StatisticsService {
   /**
@@ -95,14 +95,15 @@ export class StatisticsService {
     const statColumns = this.getStatSqlChunks();
     const competitionScope = isCompetitionScope(scope);
 
-    const dateCondition = competitionScope
+    const noPeriod = ignoresPeriod(scope);
+    const dateCondition = noPeriod
       ? undefined
       : this.buildDateCondition(datePreset, fromMonth, toMonth);
     const shouldGroupByPosition = !!position;
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
-    const seasonCondition = competitionScope ? undefined : await this.buildSeasonCondition(season);
+    const seasonCondition = noPeriod ? undefined : await this.buildSeasonCondition(season);
 
     // 대회는 판수가 적어 최소 판수 조건을 두지 않는다.
     const statsMinGameCount = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
@@ -197,13 +198,14 @@ export class StatisticsService {
     const statColumns = this.getStatSqlChunks();
     const competitionScope = isCompetitionScope(scope);
 
-    const dateCondition = competitionScope
+    const noPeriod = ignoresPeriod(scope);
+    const dateCondition = noPeriod
       ? undefined
       : this.buildDateCondition(datePreset, fromMonth, toMonth);
     const shouldGroupByPosition = !!position;
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
-    const seasonCondition = competitionScope ? undefined : await this.buildSeasonCondition(season);
+    const seasonCondition = noPeriod ? undefined : await this.buildSeasonCondition(season);
 
     const statsMinGameCount = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
     const minGameCount = sortBy === 'winRate' && !competitionScope ? statsMinGameCount : 0;

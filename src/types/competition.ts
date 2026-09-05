@@ -3,7 +3,7 @@ import {
   CompetitionApplication,
   CompetitionTeam,
 } from '../database/schema.js';
-import { TeamRecordSplit } from '../services/competitionRecord.js';
+import { CompetitionStandings, TeamRecordSplit } from '../services/competitionRecord.js';
 
 export type CompetitionStatus = 'RECRUITING' | 'IN_PROGRESS' | 'CLOSED';
 
@@ -134,8 +134,13 @@ export interface RosterSaveInput {
   teams: RosterSaveTeamInput[];
 }
 
-export interface CompetitionTeamWithRoster extends CompetitionTeam {
+export interface CompetitionTeamRoster extends CompetitionTeam {
   roster: CompetitionRosterMember[];
+}
+
+/** 팀 목록 항목. records는 상대를 가리지 않은 이 팀 전체 전적이다. */
+export interface CompetitionTeamWithRoster extends CompetitionTeamRoster {
+  records: TeamRecordSplit;
 }
 
 export interface CompetitionTeamUpdateInput {
@@ -150,6 +155,12 @@ export interface CompetitionMatchTeamItem {
   date: Date;
   blueTeamId: number | null;
   redTeamId: number | null;
+  blueTeamName: string | null;
+  redTeamName: string | null;
+  /** 이긴 진영이 팀에 귀속돼 있을 때만 값이 있다 (용병전·미배정·승자 미상은 null) */
+  winnerTeamId: number | null;
+  /** 초 */
+  gameLength: number | null;
   blue: CompetitionPlayerSummary[];
   red: CompetitionPlayerSummary[];
 }
@@ -167,3 +178,22 @@ export interface CompetitionHeadToHeadResult extends TeamRecordSplit {
     winnerTeamId: number | null;
   }[];
 }
+
+/** 선수 한 명이 참여한 대회 한 건. team이 null이면 로스터에 오르지 않았다. */
+export interface PlayerCompetitionItem {
+  competitionId: number;
+  name: string;
+  status: CompetitionStatus;
+  season: string;
+  createDate: Date;
+  closeDate: Date | null;
+  team: { id: number; name: string; position: CompetitionPosition; isCaptain: boolean } | null;
+  applicationStatus: CompetitionApplicationStatus | null;
+  /** 팀 귀속과 무관한 본인 전적 (스크림+본경기 합산) */
+  record: { games: number; win: number; lose: number; winRate: number; kda: number };
+  teamRank: { scrim: number | null; main: number | null };
+  /** 최근 6경기 결과('승'/'패'), 최신순 */
+  recent: string[];
+}
+
+export type { CompetitionStandings };

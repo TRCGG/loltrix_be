@@ -172,7 +172,11 @@ describe('종료된 대회는 잠긴다 (409)', () => {
 
   test('로스터 전체 저장', async () => {
     queue = [closedCompetition];
-    await expectStatus(service.saveRoster(GUILD, COMPETITION, { teams: [] }), 409, 'competition-closed');
+    await expectStatus(
+      service.saveRoster(GUILD, COMPETITION, { teams: [] }),
+      409,
+      'competition-closed',
+    );
   });
 
   test('경기 팀 귀속', async () => {
@@ -192,8 +196,7 @@ describe('종료된 대회는 잠긴다 (409)', () => {
 });
 
 describe('신청은 모집중에만 받는다', () => {
-  const apply = () =>
-    service.apply(GUILD, COMPETITION, applyInput(), 'member-1');
+  const apply = () => service.apply(GUILD, COMPETITION, applyInput(), 'member-1');
 
   test('진행중이면 거부한다 (409)', async () => {
     queue = [inProgressCompetition];
@@ -212,11 +215,7 @@ describe('신청은 모집중에만 받는다', () => {
   });
 
   test('승인이 필요 없는 대회는 신청 즉시 APPROVED가 된다', async () => {
-    queue = [
-      [{ id: COMPETITION, status: 'RECRUITING', approvalRequired: false }],
-      [],
-      [{ id: 1 }],
-    ];
+    queue = [[{ id: COMPETITION, status: 'RECRUITING', approvalRequired: false }], [], [{ id: 1 }]];
     await apply();
     expect(written).toEqual([expect.objectContaining({ status: 'APPROVED' })]);
     expect((written[0] as { decidedByMemberId?: string }).decidedByMemberId).toBeUndefined();
@@ -412,7 +411,16 @@ describe('자동 배정은 리플 저장을 실패시키지 않는다', () => {
 });
 
 describe('전적 집계의 승자 해석', () => {
+  const side = (gameTeam: string, won: boolean) => ({
+    customMatchId: 'm1',
+    gameTeam,
+    won,
+    kill: 10,
+    death: 5,
+    assist: 20,
+  });
   const assignedMatch = {
+    competitionId: COMPETITION,
     customMatchId: 'm1',
     gameType: '2',
     date: new Date('2026-08-01T00:00:00Z'),
@@ -427,7 +435,7 @@ describe('전적 집계의 승자 해석', () => {
       teamRow,
       teamRow,
       [assignedMatch],
-      [{ customMatchId: 'm1', gameTeam: 'blue' }],
+      [side('blue', true), side('red', false)],
     ];
     const result = await headToHead();
     expect(result.scrim).toEqual({ games: 1, win: 1, lose: 0 });
@@ -442,7 +450,7 @@ describe('전적 집계의 승자 해석', () => {
       teamRow,
       teamRow,
       [assignedMatch],
-      [{ customMatchId: 'm1', gameTeam: 'red' }],
+      [side('blue', false), side('red', true)],
     ];
     const result = await headToHead();
     expect(result.scrim).toEqual({ games: 1, win: 0, lose: 1 });
@@ -907,5 +915,150 @@ describe('팀 목록', () => {
     ];
     const [saved] = await service.listTeams(GUILD, COMPETITION);
     expect(saved.roster.map((member) => member.position)).toEqual(['TOP', 'MID', 'SUP']);
+  });
+
+  test('팀마다 상대를 가리지 않은 전체 전적이 붙는다', async () => {
+    queue = [
+      recruitingCompetition,
+      [
+        { id: TEAM, name: '1팀' },
+        { id: 6, name: '2팀' },
+      ],
+      [],
+      [
+        {
+          competitionId: COMPETITION,
+          customMatchId: 'm1',
+          gameType: '2',
+          date: new Date(),
+          blueTeamId: TEAM,
+          redTeamId: 6,
+        },
+        {
+          competitionId: COMPETITION,
+          customMatchId: 'm2',
+          gameType: '3',
+          date: new Date(),
+          blueTeamId: 6,
+          redTeamId: TEAM,
+        },
+      ],
+      [
+        { customMatchId: 'm1', gameTeam: 'blue', won: true, kill: 1, death: 1, assist: 1 },
+        { customMatchId: 'm1', gameTeam: 'red', won: false, kill: 1, death: 1, assist: 1 },
+        { customMatchId: 'm2', gameTeam: 'blue', won: true, kill: 1, death: 1, assist: 1 },
+        { customMatchId: 'm2', gameTeam: 'red', won: false, kill: 1, death: 1, assist: 1 },
+      ],
+    ];
+    const [first, second] = await service.listTeams(GUILD, COMPETITION);
+
+    expect(first.records).toEqual({
+      scrim: { games: 1, win: 1, lose: 0 },
+      main: { games: 1, win: 0, lose: 1 },
+    });
+    expect(second.records).toEqual({
+      scrim: { games: 1, win: 0, lose: 1 },
+      main: { games: 1, win: 1, lose: 0 },
+    });
+  });
+
+  test('귀속된 경기가 없는 팀은 0판으로 남는다', async () => {
+    queue = [recruitingCompetition, [{ id: TEAM, name: '1팀' }], [], []];
+    const [team] = await service.listTeams(GUILD, COMPETITION);
+
+    expect(team.records).toEqual({
+      scrim: { games: 0, win: 0, lose: 0 },
+      main: { games: 0, win: 0, lose: 0 },
+    });
+  });
+});
+
+describe('대회 순위표', () => {
+  test('팀 목록과 귀속 경기를 합쳐 유형별 순위를 낸다', async () => {
+    queue = [
+      recruitingCompetition,
+      [
+        { competitionId: COMPETITION, id: TEAM, name: '1팀' },
+        { competitionId: COMPETITION, id: 6, name: '2팀' },
+      ],
+      [
+        {
+          competitionId: COMPETITION,
+          customMatchId: 'm1',
+          gameType: '2',
+          date: new Date(),
+          blueTeamId: TEAM,
+          redTeamId: 6,
+        },
+      ],
+      [
+        { customMatchId: 'm1', gameTeam: 'blue', won: true, kill: 20, death: 5, assist: 10 },
+        { customMatchId: 'm1', gameTeam: 'red', won: false, kill: 5, death: 20, assist: 5 },
+      ],
+    ];
+    const { scrim, main } = await service.getStandings(GUILD, COMPETITION);
+
+    expect(scrim.map((team) => [team.name, team.rank, team.winRate, team.avgKda])).toEqual([
+      ['1팀', 1, 100, 6],
+      ['2팀', 2, 0, 0.5],
+    ]);
+    expect(main.every((team) => team.games === 0)).toBe(true);
+  });
+});
+
+describe('대회 경기 목록', () => {
+  const matchRow = (extra: Record<string, unknown> = {}) => ({
+    customMatchId: 'm1',
+    gameType: '2',
+    date: new Date('2026-08-01T00:00:00Z'),
+    blueTeamId: TEAM,
+    redTeamId: 6,
+    blueTeamName: '1팀',
+    redTeamName: '2팀',
+    ...extra,
+  });
+  const participant = (gameTeam: string, gameResult: string, timePlayed: number) => ({
+    customMatchId: 'm1',
+    gameTeam,
+    gameResult,
+    timePlayed,
+    playerCode: `PLR_${gameTeam}`,
+    riotName: gameTeam,
+    riotNameTag: 'KR1',
+  });
+
+  test('팀 이름·승자 팀·경기 길이가 붙는다', async () => {
+    queue = [
+      recruitingCompetition,
+      [matchRow()],
+      [participant('blue', '패', 1800), participant('red', '승', 1802)],
+    ];
+    const [match] = await service.listMatches(GUILD, COMPETITION, false);
+
+    expect(match).toMatchObject({
+      blueTeamName: '1팀',
+      redTeamName: '2팀',
+      winnerTeamId: 6,
+      gameLength: 1802,
+    });
+    expect(match.blue.map((player) => player.playerCode)).toEqual(['PLR_blue']);
+  });
+
+  test('용병전 진영은 팀 이름이 없고, 그 쪽이 이기면 승자도 없다', async () => {
+    queue = [
+      recruitingCompetition,
+      [matchRow({ redTeamId: null, redTeamName: null })],
+      [participant('blue', '패', 1500), participant('red', '승', 1500)],
+    ];
+    const [match] = await service.listMatches(GUILD, COMPETITION, false);
+
+    expect(match).toMatchObject({ redTeamName: null, winnerTeamId: null, gameLength: 1500 });
+  });
+
+  test('참가자가 없으면 경기 길이는 비운다', async () => {
+    queue = [recruitingCompetition, [matchRow()], []];
+    const [match] = await service.listMatches(GUILD, COMPETITION, false);
+
+    expect(match).toMatchObject({ gameLength: null, winnerTeamId: null });
   });
 });

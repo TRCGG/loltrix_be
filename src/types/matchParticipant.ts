@@ -29,7 +29,9 @@ export type Member = {
 };
 
 /** 최근 한 달 요약 (상단) */
-export type MatchSummary = MatchStats;
+export interface MatchSummary extends MatchStats {
+  avgDpm: number;
+}
 
 /** 라인별 전적 */
 export interface LineStat extends MatchStats {
@@ -43,7 +45,7 @@ export interface MostPick extends MatchStats {
 }
 
 /** 게임 상세 정보 (한 경기 내의 플레이어 정보) */
-export type GameDetail = RecentGame;
+export type GameDetail = Omit<RecentGame, 'teamName' | 'opponentTeamName'>;
 
 export interface SynergyTeammate extends MatchStats {
   riotName: string;
@@ -105,6 +107,10 @@ export interface RecentGame {
   keystoneName: string | null;
   substyleIcon: string | null;
   substyleName: string | null;
+
+  /** 대회 범위(competitionId 지정) 조회에서만 값이 찬다 — 그 밖에서는 null. */
+  teamName: string | null;
+  opponentTeamName: string | null;
 }
 
 /** 대시보드 통합 데이터 */

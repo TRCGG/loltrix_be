@@ -6,6 +6,7 @@ import {
   competitionTeamService,
   visibleApplicationStatus,
 } from '../services/competitionTeam.service.js';
+import { competitionPlayerService } from '../services/competitionPlayer.service.js';
 import { hasGuildRole } from '../middlewares/requireRole.js';
 import {
   CompetitionActor,
@@ -21,9 +22,12 @@ import {
   CompetitionMatchTeamItem,
   CompetitionResolveResult,
   CompetitionResponse,
+  CompetitionStandings,
   CompetitionStatus,
   CompetitionSummary,
+  PlayerCompetitionItem,
   CompetitionTeamRecordItem,
+  CompetitionTeamRoster,
   CompetitionTeamUpdateInput,
   CompetitionTeamWithRoster,
   CompetitionUpdateInput,
@@ -500,7 +504,7 @@ export const removeTeamMember = async (
 /** @route PUT /api/competitions/:guildId/:competitionId/roster */
 export const saveRoster = async (
   req: AuthRequest,
-  res: Response<CompetitionResponse<CompetitionTeamWithRoster[]>>,
+  res: Response<CompetitionResponse<CompetitionTeamRoster[]>>,
   next: NextFunction,
 ) => {
   try {
@@ -588,6 +592,41 @@ export const getTeamRecords = async (
     return res
       .status(200)
       .json({ status: 'success', message: 'Team records retrieved successfully', data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** @route GET /api/competitions/:guildId/:competitionId/standings */
+export const getStandings = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<CompetitionStandings>>,
+  next: NextFunction,
+) => {
+  try {
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const data = await competitionTeamService.getStandings(guildId, Number(competitionId));
+    return res
+      .status(200)
+      .json({ status: 'success', message: 'Standings retrieved successfully', data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/** @route GET /api/competitions/:guildId/players/:playerCode/competitions */
+export const listPlayerCompetitions = async (
+  req: AuthRequest,
+  res: Response<CompetitionResponse<PlayerCompetitionItem[]>>,
+  next: NextFunction,
+) => {
+  try {
+    const { guildId, playerCode } = req.params as { guildId: string; playerCode: string };
+    const { status } = req.query as { status?: CompetitionStatus };
+    const data = await competitionPlayerService.listCompetitions(guildId, playerCode, status);
+    return res
+      .status(200)
+      .json({ status: 'success', message: 'Player competitions retrieved successfully', data });
   } catch (error) {
     return next(error);
   }

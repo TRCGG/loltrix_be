@@ -15,11 +15,18 @@ import {
   guildAuditLog,
   competition,
   competitionMatchTeam,
+  competitionTeam,
 } from '../database/schema.js'; // 스키마 import 추가
 import { subAccountLink } from '../database/subAccountLink.js';
 import { scopeConditions } from '../database/matchScope.js';
 import { SystemError } from '../types/error.js';
-import { MatchScope, NORMAL_MATCH_SCOPE, isCompetitionScope } from '../types/matchScope.js';
+import {
+  MatchScope,
+  NORMAL_MATCH_SCOPE,
+  competitionTeamNames,
+  ignoresPeriod,
+  isCompetitionScope,
+} from '../types/matchScope.js';
 import { replayService } from './replay.service.js';
 
 const MatchparticipantSchema = z.object({
@@ -102,6 +109,17 @@ const mapPosition = (position: string): string => {
       return position;
   }
 };
+
+/** 분당 챔피언 피해량 = 총 피해 / 총 플레이 분. time_played는 초 — 통계 랭킹과 같은 산식. */
+const avgDpmSql = () => sql<number>`
+  CASE
+    WHEN COALESCE(SUM(${matchParticipant.timePlayed}), 0) = 0 THEN 0
+    ELSE ROUND(
+      COALESCE(SUM(${matchParticipant.totalDamageChampions}), 0)::numeric
+      / (SUM(${matchParticipant.timePlayed})::numeric / 60),
+      0
+    )
+  END`;
 
 /**
  * @desc 내전 참여자 서비스
@@ -272,7 +290,7 @@ export class MatchParticipantService {
     scope: MatchScope = NORMAL_MATCH_SCOPE,
   ) {
     // 통계 쿼리 실행
-    const statColumns = this.getStatSqlChunks();
+    const statColumns = { ...this.getStatSqlChunks(), avgDpm: avgDpmSql() };
     // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
     const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
@@ -289,21 +307,13 @@ export class MatchParticipantService {
           eq(customMatch.isDeleted, false),
           ...scopeConditions(customMatch, scope),
           // 대회 요약은 "이번 달"이 아니라 대회 전체
-          isCompetitionScope(scope)
+          ignoresPeriod(scope)
             ? undefined
             : sql`TO_CHAR(${customMatch.createDate}, 'YYYY-MM') = TO_CHAR(NOW(), 'YYYY-MM')`,
         ),
       );
 
-    return (
-      result || {
-        totalCount: 0,
-        winCount: 0,
-        loseCount: 0,
-        winRate: 0,
-        kda: 0,
-      }
-    );
+    return result || { totalCount: 0, win: 0, lose: 0, winRate: 0, kda: 0, avgDpm: 0 };
   }
 
   /**
@@ -437,6 +447,11 @@ export class MatchParticipantService {
     // riotAccount도 effective 기준으로 조인해 본캐 계정명으로 노출한다 (기존 응답 유지).
     const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
+    const mySide = alias(competitionMatchTeam, 'cmt_me');
+    const opponentSide = alias(competitionMatchTeam, 'cmt_opp');
+    const myTeam = alias(competitionTeam, 'ct_me');
+    const opponentTeam = alias(competitionTeam, 'ct_opp');
+
     const whereCondition = and(
       eq(link.effectivePlayerCode, playerCode),
       eq(matchParticipant.isDeleted, false),
@@ -500,6 +515,9 @@ export class MatchParticipantService {
         keystoneName: keystone.name,
         substyleIcon: substyle.icon,
         substyleName: substyle.name,
+
+        teamName: myTeam.name,
+        opponentTeamName: opponentTeam.name,
       })
       .from(matchParticipant)
       // Standard Joins
@@ -513,6 +531,23 @@ export class MatchParticipantService {
       .leftJoin(sp2, eq(matchParticipant.summonerSpell2, sp2.id))
       .leftJoin(keystone, eq(matchParticipant.keyStoneId, keystone.id))
       .leftJoin(substyle, eq(matchParticipant.perkSubStyle, substyle.id))
+      // 귀속 행은 경기당 진영마다 하나뿐이라 반대 진영도 한 건으로 정해진다
+      .leftJoin(
+        mySide,
+        and(
+          eq(mySide.customMatchId, matchParticipant.customMatchId),
+          eq(mySide.gameTeam, matchParticipant.gameTeam),
+        ),
+      )
+      .leftJoin(
+        opponentSide,
+        and(
+          eq(opponentSide.customMatchId, matchParticipant.customMatchId),
+          ne(opponentSide.gameTeam, matchParticipant.gameTeam),
+        ),
+      )
+      .leftJoin(myTeam, eq(myTeam.id, mySide.teamId))
+      .leftJoin(opponentTeam, eq(opponentTeam.id, opponentSide.teamId))
       // Conditions
       .where(whereCondition)
       .orderBy(desc(customMatch.createDate))
@@ -529,7 +564,10 @@ export class MatchParticipantService {
     const [games, countResult] = await Promise.all([gamesQuery, countQuery]);
     const totalCount = countResult[0]?.count || 0;
 
-    return { games, totalCount };
+    return {
+      games: games.map((game) => ({ ...game, ...competitionTeamNames(scope, game) })),
+      totalCount,
+    };
   }
 
   /**

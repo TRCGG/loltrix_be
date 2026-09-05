@@ -40,7 +40,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Statistics']
     #swagger.summary = '유저별 게임 통계'
-    #swagger.description = '특정 길드 내 유저들의 게임 통계를 조회합니다. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위 검색을 지원합니다.'
+    #swagger.description = '특정 길드 내 유저들의 게임 통계를 조회합니다. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위 검색을 지원합니다. gameType에 1이 없고 competitionId도 없으면(전 대회 합산) 시즌·기간 조건을 무시합니다.'
 
     #swagger.parameters['guildId'] = {
       in: 'path',
@@ -111,7 +111,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Statistics']
     #swagger.summary = '챔피언별 통계'
-    #swagger.description = '길드 내에서 플레이된 챔피언 통계를 조회합니다. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위 검색을 지원합니다.'
+    #swagger.description = '길드 내에서 플레이된 챔피언 통계를 조회합니다. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위 검색을 지원합니다. gameType에 1이 없고 competitionId도 없으면(전 대회 합산) 시즌·기간 조건을 무시합니다.'
 
     #swagger.parameters['guildId'] = {
       in: 'path',

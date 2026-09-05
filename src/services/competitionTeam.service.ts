@@ -36,6 +36,7 @@ import {
   CompetitionPosition,
   CompetitionRosterMember,
   CompetitionTeamRecordItem,
+  CompetitionTeamRoster,
   CompetitionTeamUpdateInput,
   CompetitionTeamWithRoster,
   RosterSaveInput,
@@ -43,7 +44,30 @@ import {
 import { CompetitionService } from './competition.service.js';
 import { COMPETITION_STATUS } from './competitionLifecycle.js';
 import { decideMatchTeams, decideSide } from './competitionAssign.js';
-import { AssignedMatchRow, foldHeadToHead, foldOpponentRecords } from './competitionRecord.js';
+import {
+  CompetitionStandings,
+  SideStats,
+  StandingMatchRow,
+  emptySplit,
+  foldHeadToHead,
+  foldOpponentRecords,
+  foldStandings,
+  foldTeamTotals,
+} from './competitionRecord.js';
+
+interface AssignedStandingRow extends StandingMatchRow {
+  competitionId: number;
+}
+
+const groupByCompetition = <T extends { competitionId: number }>(rows: T[]): Map<number, T[]> => {
+  const grouped = new Map<number, T[]>();
+  for (const row of rows) {
+    const list = grouped.get(row.competitionId) ?? [];
+    list.push(row);
+    grouped.set(row.competitionId, list);
+  }
+  return grouped;
+};
 
 export const MAX_TEAMS_PER_COMPETITION = 20;
 /** 팀은 포지션당 한 명 — 상한과 포지션 유니크가 같은 규칙의 앞뒤다. */
@@ -383,7 +407,12 @@ export class CompetitionTeamService {
     competitionId: number,
   ): Promise<CompetitionTeamWithRoster[]> {
     await this.loadCompetition(db, guildId, competitionId);
-    return this.teamsWithRoster(db, competitionId);
+    const [teams, assigned] = await Promise.all([
+      this.teamsWithRoster(db, competitionId),
+      this.loadAssignedMatches(guildId, [competitionId]),
+    ]);
+    const totals = foldTeamTotals(assigned);
+    return teams.map((team) => ({ ...team, records: totals.get(team.id) ?? emptySplit() }));
   }
 
   public async updateTeam(
@@ -486,7 +515,7 @@ export class CompetitionTeamService {
     guildId: string,
     competitionId: number,
     input: RosterSaveInput,
-  ): Promise<CompetitionTeamWithRoster[]> {
+  ): Promise<CompetitionTeamRoster[]> {
     const payload = this.normalizeRosterPayload(input);
 
     try {
@@ -573,6 +602,8 @@ export class CompetitionTeamService {
 
     const blueSide = alias(competitionMatchTeam, 'cmt_blue');
     const redSide = alias(competitionMatchTeam, 'cmt_red');
+    const blueTeam = alias(competitionTeam, 'ct_blue');
+    const redTeam = alias(competitionTeam, 'ct_red');
     const rows = await db
       .select({
         customMatchId: customMatch.id,
@@ -580,6 +611,8 @@ export class CompetitionTeamService {
         date: customMatch.createDate,
         blueTeamId: blueSide.teamId,
         redTeamId: redSide.teamId,
+        blueTeamName: blueTeam.name,
+        redTeamName: redTeam.name,
       })
       .from(customMatch)
       .leftJoin(
@@ -590,6 +623,8 @@ export class CompetitionTeamService {
         redSide,
         and(eq(redSide.customMatchId, customMatch.id), eq(redSide.gameTeam, 'red')),
       )
+      .leftJoin(blueTeam, eq(blueTeam.id, blueSide.teamId))
+      .leftJoin(redTeam, eq(redTeam.id, redSide.teamId))
       .where(
         and(
           eq(customMatch.competitionId, competitionId),
@@ -606,6 +641,8 @@ export class CompetitionTeamService {
       .select({
         customMatchId: matchParticipant.customMatchId,
         gameTeam: matchParticipant.gameTeam,
+        gameResult: matchParticipant.gameResult,
+        timePlayed: matchParticipant.timePlayed,
         playerCode: matchParticipant.playerCode,
         riotName: riotAccount.riotName,
         riotNameTag: riotAccount.riotNameTag,
@@ -623,18 +660,32 @@ export class CompetitionTeamService {
       );
 
     const bySide = new Map<string, CompetitionPlayerSummary[]>();
+    const winnerSide = new Map<string, string | null>();
+    const gameLength = new Map<string, number>();
     for (const p of participants) {
       const key = `${p.customMatchId}:${p.gameTeam}`;
       const list = bySide.get(key) ?? [];
       list.push({ playerCode: p.playerCode, riotName: p.riotName, riotNameTag: p.riotNameTag });
       bySide.set(key, list);
+      if (p.gameResult === WIN) {
+        // 양 진영에 모두 승 행이 있는 손상 데이터는 어느 쪽도 승자로 세지 않는다
+        const seen = winnerSide.has(p.customMatchId) ? winnerSide.get(p.customMatchId) : p.gameTeam;
+        winnerSide.set(p.customMatchId, seen === p.gameTeam ? p.gameTeam : null);
+      }
+      // time_played는 참가자별 값이라 어긋날 수 있어, 가장 긴 값을 경기 길이로 삼는다
+      gameLength.set(p.customMatchId, Math.max(gameLength.get(p.customMatchId) ?? 0, p.timePlayed));
     }
 
-    return rows.map((row) => ({
-      ...row,
-      blue: bySide.get(`${row.customMatchId}:blue`) ?? [],
-      red: bySide.get(`${row.customMatchId}:red`) ?? [],
-    }));
+    return rows.map((row) => {
+      const side = winnerSide.get(row.customMatchId);
+      return {
+        ...row,
+        winnerTeamId: side === 'blue' ? row.blueTeamId : side === 'red' ? row.redTeamId : null,
+        gameLength: gameLength.get(row.customMatchId) ?? null,
+        blue: bySide.get(`${row.customMatchId}:blue`) ?? [],
+        red: bySide.get(`${row.customMatchId}:red`) ?? [],
+      };
+    });
   }
 
   public async assignMatchTeams(
@@ -806,7 +857,7 @@ export class CompetitionTeamService {
     await this.loadTeam(db, competitionId, teamId);
 
     const [rows, teams] = await Promise.all([
-      this.loadAssignedMatches(guildId, competitionId),
+      this.loadAssignedMatches(guildId, [competitionId]),
       db
         .select({ id: competitionTeam.id, name: competitionTeam.name })
         .from(competitionTeam)
@@ -819,6 +870,54 @@ export class CompetitionTeamService {
       name: names.get(opponentId) ?? '',
       ...split,
     }));
+  }
+
+  /**
+   * 대회 순위표. 양 진영이 모두 팀에 귀속된 경기만 세고, 스크림·본경기를 따로 매긴다.
+   * 대회의 모든 팀이 0판이어도 목록에 남는다 — 화면이 참가 팀 전체를 보여줘야 한다.
+   */
+  public async getStandings(guildId: string, competitionId: number): Promise<CompetitionStandings> {
+    await this.loadCompetition(db, guildId, competitionId);
+    return this.computeStandings(guildId, competitionId);
+  }
+
+  /** 대회 존재를 이미 확인한 호출자용. */
+  public async computeStandings(
+    guildId: string,
+    competitionId: number,
+  ): Promise<CompetitionStandings> {
+    const standings = await this.computeStandingsMany(guildId, [competitionId]);
+    return standings.get(competitionId) ?? foldStandings([], []);
+  }
+
+  /**
+   * 대회 수와 무관하게 조회 횟수가 고정 — 여러 대회를 도는 쪽이 대회마다 같은 조회를 반복하지 않게.
+   * 대회가 이 길드 것인지는 검사하지 않으므로 호출자가 먼저 확인한다.
+   */
+  public async computeStandingsMany(
+    guildId: string,
+    competitionIds: number[],
+  ): Promise<Map<number, CompetitionStandings>> {
+    const ids = [...new Set(competitionIds)];
+    const result = new Map<number, CompetitionStandings>();
+    if (ids.length === 0) return result;
+
+    const teams = await db
+      .select({
+        competitionId: competitionTeam.competitionId,
+        id: competitionTeam.id,
+        name: competitionTeam.name,
+      })
+      .from(competitionTeam)
+      .where(inArray(competitionTeam.competitionId, ids));
+    const rows = await this.loadAssignedMatches(guildId, ids);
+
+    const teamsById = groupByCompetition(teams);
+    const rowsById = groupByCompetition(rows);
+    for (const id of ids) {
+      result.set(id, foldStandings(teamsById.get(id) ?? [], rowsById.get(id) ?? []));
+    }
+    return result;
   }
 
   public async getHeadToHead(
@@ -837,7 +936,7 @@ export class CompetitionTeamService {
     await this.loadTeam(db, competitionId, teamA);
     await this.loadTeam(db, competitionId, teamB);
 
-    const rows = await this.loadAssignedMatches(guildId, competitionId);
+    const rows = await this.loadAssignedMatches(guildId, [competitionId]);
     const { record, matches } = foldHeadToHead(rows, teamA, teamB);
     return {
       ...record,
@@ -956,7 +1055,7 @@ export class CompetitionTeamService {
   private async teamsWithRoster(
     executor: DbOrTx,
     competitionId: number,
-  ): Promise<CompetitionTeamWithRoster[]> {
+  ): Promise<CompetitionTeamRoster[]> {
     const [teams, members] = await Promise.all([
       executor
         .select()
@@ -1151,11 +1250,15 @@ export class CompetitionTeamService {
       teams.flatMap((team) =>
         team.id === undefined
           ? []
-          : team.members.map((member) => seat(team.id as number, member.playerCode, member.position)),
+          : team.members.map((member) =>
+              seat(team.id as number, member.playerCode, member.position),
+            ),
       ),
     );
 
-    const stale = existing.filter((row) => !wanted.has(seat(row.teamId, row.playerCode, row.position)));
+    const stale = existing.filter(
+      (row) => !wanted.has(seat(row.teamId, row.playerCode, row.position)),
+    );
     if (stale.length > 0) {
       await tx.delete(competitionTeamMember).where(
         inArray(
@@ -1235,13 +1338,15 @@ export class CompetitionTeamService {
   /** 양 진영이 모두 팀에 귀속된 경기만 (용병전은 팀 전적에서 뺀다). */
   private async loadAssignedMatches(
     guildId: string,
-    competitionId: number,
-  ): Promise<AssignedMatchRow[]> {
+    competitionIds: number[],
+  ): Promise<AssignedStandingRow[]> {
+    if (competitionIds.length === 0) return [];
     const blueSide = alias(competitionMatchTeam, 'cmt_blue');
     const redSide = alias(competitionMatchTeam, 'cmt_red');
     const rows = (
       await db
         .select({
+          competitionId: customMatch.competitionId,
           customMatchId: customMatch.id,
           gameType: customMatch.gameType,
           date: customMatch.createDate,
@@ -1259,22 +1364,26 @@ export class CompetitionTeamService {
         )
         .where(
           and(
-            eq(customMatch.competitionId, competitionId),
+            inArray(customMatch.competitionId, competitionIds),
             eq(customMatch.guildId, guildId),
             eq(customMatch.isDeleted, false),
           ),
         )
         .orderBy(desc(customMatch.createDate))
     ).filter(
-      (row): row is typeof row & { blueTeamId: number; redTeamId: number } =>
-        row.blueTeamId != null && row.redTeamId != null,
+      (row): row is typeof row & { competitionId: number; blueTeamId: number; redTeamId: number } =>
+        row.competitionId != null && row.blueTeamId != null && row.redTeamId != null,
     );
     if (rows.length === 0) return [];
 
-    const winners = await db
-      .selectDistinct({
+    const sides = await db
+      .select({
         customMatchId: matchParticipant.customMatchId,
         gameTeam: matchParticipant.gameTeam,
+        won: sql<boolean>`BOOL_OR(${matchParticipant.gameResult} = ${WIN})`,
+        kill: sql<number>`COALESCE(SUM(${matchParticipant.kill}), 0)::integer`,
+        death: sql<number>`COALESCE(SUM(${matchParticipant.death}), 0)::integer`,
+        assist: sql<number>`COALESCE(SUM(${matchParticipant.assist}), 0)::integer`,
       })
       .from(matchParticipant)
       .where(
@@ -1283,16 +1392,35 @@ export class CompetitionTeamService {
             matchParticipant.customMatchId,
             rows.map((row) => row.customMatchId),
           ),
-          eq(matchParticipant.gameResult, WIN),
           eq(matchParticipant.isDeleted, false),
         ),
-      );
-    const winnerSide = new Map(winners.map((w) => [w.customMatchId, w.gameTeam]));
+      )
+      .groupBy(matchParticipant.customMatchId, matchParticipant.gameTeam);
+
+    const bySide = new Map(
+      sides.map((side) => [
+        `${side.customMatchId}:${side.gameTeam}`,
+        { kill: side.kill, death: side.death, assist: side.assist },
+      ]),
+    );
+    // 양쪽 다 승으로 집계된 손상 데이터는 어느 쪽도 승자로 세지 않는다
+    const winnerSide = new Map<string, string | null>();
+    for (const side of sides) {
+      if (!side.won) continue;
+      winnerSide.set(side.customMatchId, winnerSide.has(side.customMatchId) ? null : side.gameTeam);
+    }
+    const statsOf = (customMatchId: string, gameTeam: string): SideStats =>
+      bySide.get(`${customMatchId}:${gameTeam}`) ?? { kill: 0, death: 0, assist: 0 };
 
     return rows.map((row) => {
       const side = winnerSide.get(row.customMatchId);
       const winnerTeamId = side === 'blue' ? row.blueTeamId : side === 'red' ? row.redTeamId : null;
-      return { ...row, winnerTeamId };
+      return {
+        ...row,
+        winnerTeamId,
+        blue: statsOf(row.customMatchId, 'blue'),
+        red: statsOf(row.customMatchId, 'red'),
+      };
     });
   }
 
