@@ -347,6 +347,7 @@ export const champion = pgTable('champion', {
   id: varchar('id', { length: 16 }).primaryKey(),
   champName: varchar('champ_name', { length: 128 }).notNull(),
   champNameEng: varchar('champ_name_eng', { length: 128 }).notNull(),
+  riotKey: integer('riot_key'),
   createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   updateDate: timestamp('update_date', { withTimezone: true })
     .notNull()
