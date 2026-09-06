@@ -328,7 +328,7 @@ const applicationBody = {
   mainPosition: position,
   subPositions: z.array(position).max(COMPETITION_POSITIONS.length - 1).optional(),
   champions: z
-    .array(z.string().trim().min(1).max(16))
+    .array(z.string().trim().min(1).max(64))
     .max(MAX_APPLICATION_CHAMPIONS, `champions must be ${MAX_APPLICATION_CHAMPIONS} or fewer`)
     .optional(),
   availableTime: z.string().trim().max(128).nullable().optional(),
@@ -461,11 +461,11 @@ router.post(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청'
-    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. mainPosition·practiceLevel·captainAvailable은 필수, subPositions는 mainPosition과 겹치거나 중복되면 400(sub-position-invalid), champions는 champion.id 최대 3개로 등록되지 않은 id가 있으면 400(champion-not-found), 같은 id가 반복되면 400(champion-duplicate). playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 모집중(RECRUITING) 대회만 신청을 받습니다 — 종료된 대회는 409(competition-closed), 진행중 대회는 409(competition-not-recruiting). 대회의 approvalRequired가 false면 신청이 바로 APPROVED로 저장됩니다.'
+    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. mainPosition·practiceLevel·captainAvailable은 필수, subPositions는 mainPosition과 겹치거나 중복되면 400(sub-position-invalid), champions는 챔피언 영문명(champNameEng, Data Dragon 챔피언 id와 동일) 최대 3개로 등록되지 않은 이름이 있으면 400(champion-not-found), 같은 이름이 반복되면 400(champion-duplicate) — 저장·응답은 내부 id입니다. playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 모집중(RECRUITING) 대회만 신청을 받습니다 — 종료된 대회는 409(competition-closed), 진행중 대회는 409(competition-not-recruiting). 대회의 approvalRequired가 false면 신청이 바로 APPROVED로 저장됩니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
-    #swagger.parameters['body'] = { in: 'body', required: true, schema: { playerCode: 'PLR_000123', mainPosition: 'TOP', subPositions: ['JUG'], champions: ['266', '103'], availableTime: '평일 21시 이후', captainAvailable: true, practiceLevel: 'MODERATE', comment: '잘 부탁드립니다' } }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { playerCode: 'PLR_000123', mainPosition: 'TOP', subPositions: ['JUG'], champions: ['Aatrox', 'Ahri'], availableTime: '평일 21시 이후', captainAvailable: true, practiceLevel: 'MODERATE', comment: '잘 부탁드립니다' } }
   */
   decodeGuildIdMiddleware,
   validateRequest(applySchema),
@@ -500,11 +500,11 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '내 대회 신청 수정'
-    #swagger.description = '신청 필드 중 최소 하나가 필요합니다. playerCode를 바꾸면 본계정으로 다시 정규화되고, 그 계정이 이미 신청돼 있으면 409(application-duplicate). subPositions·champions는 저장된 값과 합친 뒤 검사합니다 — 400(sub-position-invalid / champion-not-found / champion-duplicate). 수정해도 승인 상태(status)는 그대로입니다. 모집중 대회만 수정할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
+    #swagger.description = '신청 필드 중 최소 하나가 필요합니다. playerCode를 바꾸면 본계정으로 다시 정규화되고, 그 계정이 이미 신청돼 있으면 409(application-duplicate). subPositions는 저장된 mainPosition과 합친 뒤 검사하고(400 sub-position-invalid), champions는 보낸 배열로 통째로 대체됩니다(400 champion-not-found / champion-duplicate). champions는 챔피언 영문명(champNameEng, Data Dragon 챔피언 id와 동일) 최대 3개로 보내고 저장·응답은 내부 id이며, 빈 배열을 보내면 비웁니다. 수정해도 승인 상태(status)는 그대로입니다. 모집중 대회만 수정할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
-    #swagger.parameters['body'] = { in: 'body', required: true, schema: { mainPosition: 'MID', subPositions: ['ADC'], champions: ['103'], captainAvailable: false, practiceLevel: 'OFTEN', comment: '수정합니다' } }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { mainPosition: 'MID', subPositions: ['ADC'], champions: ['Ahri'], captainAvailable: false, practiceLevel: 'OFTEN', comment: '수정합니다' } }
   */
   decodeGuildIdMiddleware,
   validateRequest(updateApplicationSchema),
