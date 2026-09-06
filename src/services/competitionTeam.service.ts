@@ -166,7 +166,7 @@ export class CompetitionTeamService {
         // assertRecruiting도 CLOSED를 걸러내지만, 종료는 다른 쓰기 작업과 같은 에러로 알려야 한다.
         this.assertWritable(target);
         this.assertRecruiting(target);
-        await this.assertApplicationFields(
+        const championIds = await this.resolveApplicationFields(
           input.mainPosition,
           input.subPositions,
           input.champions,
@@ -184,7 +184,7 @@ export class CompetitionTeamService {
             appliedByMemberId,
             mainPosition: input.mainPosition,
             subPositions: input.subPositions ?? [],
-            champions: input.champions ?? [],
+            champions: championIds ?? [],
             availableTime: input.availableTime ?? null,
             captainAvailable: input.captainAvailable,
             practiceLevel: input.practiceLevel,
@@ -254,7 +254,7 @@ export class CompetitionTeamService {
         const current = await this.loadMyApplication(tx, competitionId, memberId);
 
         // 주포지션만 바꿔도 남아 있던 부포지션과 겹칠 수 있어, 저장될 조합으로 검사한다.
-        await this.assertApplicationFields(
+        const championIds = await this.resolveApplicationFields(
           input.mainPosition ?? current.mainPosition,
           input.subPositions ?? current.subPositions,
           input.champions,
@@ -267,7 +267,7 @@ export class CompetitionTeamService {
         }
         if (input.mainPosition !== undefined) patch.mainPosition = input.mainPosition;
         if (input.subPositions !== undefined) patch.subPositions = input.subPositions;
-        if (input.champions !== undefined) patch.champions = input.champions;
+        if (input.champions !== undefined) patch.champions = championIds ?? [];
         if (input.availableTime !== undefined) patch.availableTime = input.availableTime;
         if (input.captainAvailable !== undefined) patch.captainAvailable = input.captainAvailable;
         if (input.practiceLevel !== undefined) patch.practiceLevel = input.practiceLevel;
@@ -1142,12 +1142,13 @@ export class CompetitionTeamService {
     }));
   }
 
-  private async assertApplicationFields(
+  /** 입력은 챔피언 영문명, 저장은 내부 id — 입력 순서를 그대로 지켜 돌려준다. */
+  private async resolveApplicationFields(
     mainPosition: string,
     subPositions: string[] | undefined,
     champions: string[] | undefined,
     executor: DbOrTx,
-  ): Promise<void> {
+  ): Promise<string[] | undefined> {
     if (subPositions && subPositions.length > 0) {
       const distinct = new Set(subPositions);
       if (distinct.size !== subPositions.length || distinct.has(mainPosition)) {
@@ -1159,26 +1160,33 @@ export class CompetitionTeamService {
       }
     }
 
-    if (!champions || champions.length === 0) return;
-    const distinct = [...new Set(champions)];
-    if (distinct.length !== champions.length) {
+    if (!champions || champions.length === 0) return champions;
+    if (new Set(champions).size !== champions.length) {
       throw new BusinessError('champions must be distinct', 400, {
         type: 'champion-duplicate',
         isLoggable: false,
       });
     }
     const found = await executor
-      .select({ id: champion.id })
+      .select({ id: champion.id, champNameEng: champion.champNameEng })
       .from(champion)
-      .where(and(inArray(champion.id, distinct), eq(champion.isDeleted, false)));
-    if (found.length !== distinct.length) {
-      const known = new Set(found.map((row) => row.id));
-      const missing = distinct.filter((id) => !known.has(id));
+      .where(and(inArray(champion.champNameEng, champions), eq(champion.isDeleted, false)));
+    const idByName = new Map(found.map((row) => [row.champNameEng, row.id]));
+
+    const resolved: string[] = [];
+    const missing: string[] = [];
+    for (const name of champions) {
+      const id = idByName.get(name);
+      if (id === undefined) missing.push(name);
+      else resolved.push(id);
+    }
+    if (missing.length > 0) {
       throw new BusinessError(`champion not found: ${missing.join(', ')}`, 400, {
         type: 'champion-not-found',
         isLoggable: false,
       });
     }
+    return resolved;
   }
 
   private async teamsWithRoster(

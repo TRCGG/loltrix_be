@@ -586,6 +586,9 @@ describe('전적 집계의 승자 해석', () => {
   });
 });
 
+const aatrox = { id: 'CHN_1', champNameEng: 'Aatrox' };
+const ahri = { id: 'CHN_2', champNameEng: 'Ahri' };
+
 describe('신청 v2 검증', () => {
   test('부포지션에 주포지션이 들어가면 거부한다 (400)', async () => {
     queue = [recruitingCompetition];
@@ -608,38 +611,56 @@ describe('신청 v2 검증', () => {
   test('선호 챔피언이 중복이면 거부한다 (400)', async () => {
     queue = [recruitingCompetition];
     await expectStatus(
-      service.apply(GUILD, COMPETITION, applyInput({ champions: ['266', '266'] }), 'member-1'),
+      service.apply(
+        GUILD,
+        COMPETITION,
+        applyInput({ champions: ['Aatrox', 'Aatrox'] }),
+        'member-1',
+      ),
       400,
       'champion-duplicate',
     );
   });
 
-  test('등록되지 않은 챔피언은 거부한다 (400)', async () => {
-    queue = [recruitingCompetition, [{ id: '266' }]];
-    await expectStatus(
-      service.apply(GUILD, COMPETITION, applyInput({ champions: ['266', '999'] }), 'member-1'),
-      400,
-      'champion-not-found',
-    );
+  test('등록되지 않은 영문명은 찾지 못한 이름을 그대로 알려준다 (400)', async () => {
+    queue = [recruitingCompetition, [aatrox]];
+    await expect(
+      service.apply(GUILD, COMPETITION, applyInput({ champions: ['Aatrox', 'Foo'] }), 'member-1'),
+    ).rejects.toMatchObject({
+      status: 400,
+      type: 'champion-not-found',
+      message: 'champion not found: Foo',
+    });
   });
 
-  test('부포지션·챔피언이 그대로 저장된다', async () => {
-    queue = [recruitingCompetition, [{ id: '266' }], [], [{ id: 1 }]];
+  test('부포지션과 함께 챔피언 영문명이 내부 id로 저장된다', async () => {
+    queue = [recruitingCompetition, [aatrox], [], [{ id: 1 }]];
     await service.apply(
       GUILD,
       COMPETITION,
-      applyInput({ subPositions: ['MID'], champions: ['266'] }),
+      applyInput({ subPositions: ['MID'], champions: ['Aatrox'] }),
       'member-1',
     );
     expect(written).toEqual([
       expect.objectContaining({
         mainPosition: 'TOP',
         subPositions: ['MID'],
-        champions: ['266'],
+        champions: ['CHN_1'],
         practiceLevel: 'MODERATE',
         captainAvailable: false,
       }),
     ]);
+  });
+
+  test('조회 순서와 무관하게 입력 순서대로 id를 저장한다', async () => {
+    queue = [recruitingCompetition, [aatrox, ahri], [], [{ id: 1 }]];
+    await service.apply(
+      GUILD,
+      COMPETITION,
+      applyInput({ champions: ['Ahri', 'Aatrox'] }),
+      'member-1',
+    );
+    expect(written).toEqual([expect.objectContaining({ champions: ['CHN_2', 'CHN_1'] })]);
   });
 });
 
@@ -761,6 +782,31 @@ describe('본인 신청 수정·취소', () => {
     queue = [recruitingCompetition, [current], [{ ...current, comment: '수정' }]];
     await service.updateMyApplication(GUILD, COMPETITION, 'member-1', { comment: '수정' });
     expect(written).toEqual([{ comment: '수정' }]);
+  });
+
+  test('챔피언은 영문명으로 받아 내부 id로 바꿔 저장한다', async () => {
+    queue = [recruitingCompetition, [current], [aatrox, ahri], [current]];
+    await service.updateMyApplication(GUILD, COMPETITION, 'member-1', {
+      champions: ['Ahri', 'Aatrox'],
+    });
+    expect(written).toEqual([{ champions: ['CHN_2', 'CHN_1'] }]);
+  });
+
+  test('빈 배열을 보내면 챔피언을 비운다', async () => {
+    queue = [recruitingCompetition, [current], [current]];
+    await service.updateMyApplication(GUILD, COMPETITION, 'member-1', { champions: [] });
+    expect(written).toEqual([{ champions: [] }]);
+  });
+
+  test('등록되지 않은 영문명은 거부한다 (400)', async () => {
+    queue = [recruitingCompetition, [current], [ahri]];
+    await expect(
+      service.updateMyApplication(GUILD, COMPETITION, 'member-1', { champions: ['Ahri', 'Foo'] }),
+    ).rejects.toMatchObject({
+      status: 400,
+      type: 'champion-not-found',
+      message: 'champion not found: Foo',
+    });
   });
 
   test('playerCode를 바꾸면 본계정으로 정규화하고, 그 계정이 이미 신청돼 있으면 409', async () => {
