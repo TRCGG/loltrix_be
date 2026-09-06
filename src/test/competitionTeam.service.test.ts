@@ -667,12 +667,14 @@ describe('본인 신청 조회', () => {
     queue = [
       recruitingCompetition,
       [applicationRow(['266'])],
-      [{ id: '266', champName: '아트록스', champNameEng: 'Aatrox' }],
+      [{ id: '266', champName: '아트록스', champNameEng: 'Aatrox', riotKey: 266 }],
       [{ memberId: 'member-1', displayName: '폿신' }],
     ];
     const item = await service.getMyApplication(GUILD, COMPETITION, 'member-1');
     expect(item.riotName).toBe('소환사');
-    expect(item.champions).toEqual([{ id: '266', champName: '아트록스', champNameEng: 'Aatrox' }]);
+    expect(item.champions).toEqual([
+      { id: '266', champName: '아트록스', champNameEng: 'Aatrox', riotKey: 266 },
+    ]);
     expect(item.appliedByDisplayName).toBe('폿신');
   });
 });

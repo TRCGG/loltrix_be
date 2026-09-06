@@ -1094,6 +1094,7 @@ export class CompetitionTeamService {
               id: champion.id,
               champName: champion.champName,
               champNameEng: champion.champNameEng,
+              riotKey: champion.riotKey,
             })
             .from(champion)
             .where(and(inArray(champion.id, ids), eq(champion.isDeleted, false)))

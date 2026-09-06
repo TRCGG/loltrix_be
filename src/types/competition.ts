@@ -96,6 +96,7 @@ export interface CompetitionApplicationChampion {
   id: string;
   champName: string;
   champNameEng: string;
+  riotKey: number | null;
 }
 
 /** 신청 목록 항목 — 화면이 PLR 코드·챔피언 id 대신 이름을 보여줄 수 있게 붙인다. */
