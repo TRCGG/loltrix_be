@@ -193,7 +193,7 @@ export class CompetitionTeamService {
             decidedDate: autoApproved ? new Date() : null,
           })
           .returning();
-        return created;
+        return { ...created, champions: await this.toChampionNames(created.champions, tx) };
       });
     } catch (error) {
       return this.rethrowWrite(error, {
@@ -278,7 +278,7 @@ export class CompetitionTeamService {
           .set(patch)
           .where(eq(competitionApplication.id, current.id))
           .returning();
-        return updated;
+        return { ...updated, champions: await this.toChampionNames(updated.champions, tx) };
       });
     } catch (error) {
       return this.rethrowWrite(error, {
@@ -307,7 +307,7 @@ export class CompetitionTeamService {
         .where(eq(competitionApplication.id, current.id))
         .returning();
       if (!removed) throw this.applicationNotFound();
-      return removed;
+      return { ...removed, champions: await this.toChampionNames(removed.champions, tx) };
     });
   }
 
@@ -362,7 +362,17 @@ export class CompetitionTeamService {
           },
         })),
       );
-      return updated;
+
+      const nameById = await this.championNameById(
+        [...new Set(updated.flatMap((row) => row.champions))],
+        tx,
+      );
+      return updated.map((row) => ({
+        ...row,
+        champions: row.champions
+          .map((id) => nameById.get(id))
+          .filter((name): name is string => name !== undefined),
+      }));
     });
   }
 
@@ -1109,6 +1119,22 @@ export class CompetitionTeamService {
         .map((id) => byId.get(id))
         .filter((found): found is CompetitionApplicationChampion => found !== undefined),
     }));
+  }
+
+  /** 저장은 내부 id지만 응답은 신청에 쓴 영문명으로 돌려준다 — 입력 순서 그대로. */
+  private async toChampionNames(ids: string[], executor: DbOrTx): Promise<string[]> {
+    const nameById = await this.championNameById(ids, executor);
+    return ids.map((id) => nameById.get(id)).filter((name): name is string => name !== undefined);
+  }
+
+  /** 삭제된 챔피언도 이름은 돌려준다 — 이미 저장된 신청이 빈 값으로 보이지 않게. */
+  private async championNameById(ids: string[], executor: DbOrTx): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await executor
+      .select({ id: champion.id, champNameEng: champion.champNameEng })
+      .from(champion)
+      .where(inArray(champion.id, ids));
+    return new Map(rows.map((row) => [row.id, row.champNameEng]));
   }
 
   /** 관리 로그 조회와 같은 규칙으로 푼다 — 두 화면의 이름이 어긋나지 않게. */

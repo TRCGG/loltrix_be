@@ -215,13 +215,17 @@ describe('신청은 모집중에만 받는다', () => {
   });
 
   test('승인이 필요한 대회는 PENDING으로 들어간다', async () => {
-    queue = [recruitingCompetition, [], [{ id: 1 }]];
+    queue = [recruitingCompetition, [], [{ id: 1, champions: [] }]];
     await apply();
     expect(written).toEqual([expect.objectContaining({ status: 'PENDING', decidedDate: null })]);
   });
 
   test('승인이 필요 없는 대회는 신청 즉시 APPROVED가 된다', async () => {
-    queue = [[{ id: COMPETITION, status: 'RECRUITING', approvalRequired: false }], [], [{ id: 1 }]];
+    queue = [
+      [{ id: COMPETITION, status: 'RECRUITING', approvalRequired: false }],
+      [],
+      [{ id: 1, champions: [] }],
+    ];
     await apply();
     expect(written).toEqual([expect.objectContaining({ status: 'APPROVED' })]);
     expect((written[0] as { decidedByMemberId?: string }).decidedByMemberId).toBeUndefined();
@@ -291,7 +295,7 @@ describe('중복 (409)', () => {
 
 describe('본계정 정규화', () => {
   test('부캐로 신청해도 본계정으로 저장된다', async () => {
-    const saved = { id: 1, competitionId: COMPETITION, playerCode: 'PLR_000100' };
+    const saved = { id: 1, competitionId: COMPETITION, playerCode: 'PLR_000100', champions: [] };
     queue = [
       recruitingCompetition,
       [{ account: 'PLR_000200', mainAccount: 'PLR_000100' }],
@@ -609,7 +613,7 @@ describe('신청 v2 검증', () => {
   });
 
   test('부포지션 ALL은 단독이면 그대로 저장한다', async () => {
-    queue = [recruitingCompetition, [], [{ id: 1 }]];
+    queue = [recruitingCompetition, [], [{ id: 1, champions: [] }]];
     await service.apply(GUILD, COMPETITION, applyInput({ subPositions: ['ALL'] }), 'member-1');
     expect(written).toEqual([expect.objectContaining({ subPositions: ['ALL'] })]);
   });
@@ -649,7 +653,7 @@ describe('신청 v2 검증', () => {
   });
 
   test('부포지션과 함께 챔피언 영문명이 내부 id로 저장된다', async () => {
-    queue = [recruitingCompetition, [aatrox], [], [{ id: 1 }]];
+    queue = [recruitingCompetition, [aatrox], [], [{ id: 1, champions: [] }]];
     await service.apply(
       GUILD,
       COMPETITION,
@@ -668,7 +672,7 @@ describe('신청 v2 검증', () => {
   });
 
   test('조회 순서와 무관하게 입력 순서대로 id를 저장한다', async () => {
-    queue = [recruitingCompetition, [aatrox, ahri], [], [{ id: 1 }]];
+    queue = [recruitingCompetition, [aatrox, ahri], [], [{ id: 1, champions: [] }]];
     await service.apply(
       GUILD,
       COMPETITION,
@@ -676,6 +680,23 @@ describe('신청 v2 검증', () => {
       'member-1',
     );
     expect(written).toEqual([expect.objectContaining({ champions: ['CHN_2', 'CHN_1'] })]);
+  });
+
+  test('응답 챔피언은 보낸 영문명을 보낸 순서로 돌려준다', async () => {
+    queue = [
+      recruitingCompetition,
+      [aatrox, ahri],
+      [],
+      [{ id: 1, champions: ['CHN_2', 'CHN_1'] }],
+      [aatrox, ahri],
+    ];
+    const created = await service.apply(
+      GUILD,
+      COMPETITION,
+      applyInput({ champions: ['Ahri', 'Aatrox'] }),
+      'member-1',
+    );
+    expect(created.champions).toEqual(['Ahri', 'Aatrox']);
   });
 });
 
@@ -687,6 +708,11 @@ const applicationRow = (champions: string[], appliedByMemberId = 'member-1') => 
 const displayNameSelects = () =>
   selects.filter(
     (fields) => typeof fields === 'object' && fields !== null && 'displayName' in fields,
+  );
+
+const championSelects = () =>
+  selects.filter(
+    (fields) => typeof fields === 'object' && fields !== null && 'champNameEng' in fields,
   );
 
 describe('본인 신청 조회', () => {
@@ -763,6 +789,7 @@ describe('본인 신청 수정·취소', () => {
     competitionId: COMPETITION,
     mainPosition: 'TOP',
     subPositions: ['MID'],
+    champions: [],
     status: 'APPROVED',
   };
 
@@ -813,6 +840,20 @@ describe('본인 신청 수정·취소', () => {
     expect(written).toEqual([{ champions: [] }]);
   });
 
+  test('수정 응답도 저장한 id 대신 영문명을 돌려준다', async () => {
+    queue = [
+      recruitingCompetition,
+      [current],
+      [ahri],
+      [{ ...current, champions: ['CHN_2'] }],
+      [ahri],
+    ];
+    const updated = await service.updateMyApplication(GUILD, COMPETITION, 'member-1', {
+      champions: ['Ahri'],
+    });
+    expect(updated.champions).toEqual(['Ahri']);
+  });
+
   test('등록되지 않은 영문명은 거부한다 (400)', async () => {
     queue = [recruitingCompetition, [current], [ahri]];
     await expect(
@@ -841,12 +882,24 @@ describe('본인 신청 수정·취소', () => {
   });
 
   test('취소는 조회·수정이 고르는 한 건을 찾아 그 행만 지운다', async () => {
-    const newest = { id: 12, competitionId: COMPETITION, playerCode: 'PLR_000002' };
+    const newest = {
+      id: 12,
+      competitionId: COMPETITION,
+      playerCode: 'PLR_000002',
+      champions: [],
+    };
     queue = [recruitingCompetition, [newest], [newest]];
     await expect(service.deleteMyApplication(GUILD, COMPETITION, 'member-1')).resolves.toEqual(
       newest,
     );
     expect(queue).toHaveLength(0);
+  });
+
+  test('취소 응답도 챔피언을 영문명으로 돌려준다', async () => {
+    const removed = { id: 12, competitionId: COMPETITION, champions: ['CHN_1'] };
+    queue = [recruitingCompetition, [removed], [removed], [aatrox]];
+    const result = await service.deleteMyApplication(GUILD, COMPETITION, 'member-1');
+    expect(result.champions).toEqual(['Aatrox']);
   });
 
   test('취소할 신청이 없으면 404', async () => {
@@ -871,7 +924,7 @@ describe('신청 일괄 결정', () => {
   });
 
   test('PENDING으로 되돌리면 결정 기록을 지운다', async () => {
-    queue = [recruitingCompetition, [{ id: 1, playerCode: 'PLR_000001' }], []];
+    queue = [recruitingCompetition, [{ id: 1, playerCode: 'PLR_000001', champions: [] }], []];
     await service.decideApplications(GUILD, COMPETITION, [1], 'PENDING', ACTOR);
     expect(written[0]).toEqual({ status: 'PENDING', decidedByMemberId: null, decidedDate: null });
   });
@@ -880,8 +933,8 @@ describe('신청 일괄 결정', () => {
     queue = [
       recruitingCompetition,
       [
-        { id: 1, playerCode: 'PLR_000001' },
-        { id: 2, playerCode: 'PLR_000002' },
+        { id: 1, playerCode: 'PLR_000001', champions: [] },
+        { id: 2, playerCode: 'PLR_000002', champions: [] },
       ],
       [],
     ];
@@ -913,6 +966,21 @@ describe('신청 일괄 결정', () => {
         },
       },
     ]);
+  });
+
+  test('여러 건을 결정해도 챔피언 이름은 한 번만 조회해 붙인다', async () => {
+    queue = [
+      recruitingCompetition,
+      [
+        { id: 1, playerCode: 'PLR_000001', champions: ['CHN_1'] },
+        { id: 2, playerCode: 'PLR_000002', champions: ['CHN_2', 'CHN_1'] },
+      ],
+      [],
+      [aatrox, ahri],
+    ];
+    const rows = await service.decideApplications(GUILD, COMPETITION, [1, 2], 'APPROVED', ACTOR);
+    expect(rows.map((row) => row.champions)).toEqual([['Aatrox'], ['Ahri', 'Aatrox']]);
+    expect(championSelects()).toHaveLength(1);
   });
 });
 
