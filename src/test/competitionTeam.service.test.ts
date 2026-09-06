@@ -608,6 +608,21 @@ describe('신청 v2 검증', () => {
     );
   });
 
+  test('부포지션 ALL은 단독이면 그대로 저장한다', async () => {
+    queue = [recruitingCompetition, [], [{ id: 1 }]];
+    await service.apply(GUILD, COMPETITION, applyInput({ subPositions: ['ALL'] }), 'member-1');
+    expect(written).toEqual([expect.objectContaining({ subPositions: ['ALL'] })]);
+  });
+
+  test('부포지션 ALL을 다른 값과 섞으면 거부한다 (400)', async () => {
+    queue = [recruitingCompetition];
+    await expectStatus(
+      service.apply(GUILD, COMPETITION, applyInput({ subPositions: ['ALL', 'MID'] }), 'member-1'),
+      400,
+      'sub-position-invalid',
+    );
+  });
+
   test('선호 챔피언이 중복이면 거부한다 (400)', async () => {
     queue = [recruitingCompetition];
     await expectStatus(

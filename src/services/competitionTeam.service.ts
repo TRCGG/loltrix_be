@@ -1151,9 +1151,13 @@ export class CompetitionTeamService {
   ): Promise<string[] | undefined> {
     if (subPositions && subPositions.length > 0) {
       const distinct = new Set(subPositions);
-      if (distinct.size !== subPositions.length || distinct.has(mainPosition)) {
+      if (
+        distinct.size !== subPositions.length ||
+        distinct.has(mainPosition) ||
+        (distinct.has('ALL') && subPositions.length !== 1)
+      ) {
         throw new BusinessError(
-          'sub positions must be distinct and must not include the main position',
+          'sub positions must be distinct, must not include the main position, and ALL must be the only value',
           400,
           { type: 'sub-position-invalid', isLoggable: false },
         );
