@@ -22,6 +22,10 @@ export const COMPETITION_STATUS_VALUES: readonly CompetitionStatus[] = [
 export const COMPETITION_POSITIONS = ['TOP', 'JUG', 'MID', 'ADC', 'SUP'] as const;
 export type CompetitionPosition = (typeof COMPETITION_POSITIONS)[number];
 
+/** 부포지션만 '전체 가능'을 표현할 수 있다 — 주포지션·로스터는 5개 그대로다. */
+export const COMPETITION_SUB_POSITIONS = [...COMPETITION_POSITIONS, 'ALL'] as const;
+export type CompetitionSubPosition = (typeof COMPETITION_SUB_POSITIONS)[number];
+
 export const PRACTICE_LEVELS = ['NONE', 'RARE', 'MODERATE', 'OFTEN', 'ACTIVE'] as const;
 export type PracticeLevel = (typeof PRACTICE_LEVELS)[number];
 
@@ -110,7 +114,7 @@ export interface CompetitionApplicationItem extends Omit<CompetitionApplication,
 export interface CompetitionApplyInput {
   playerCode: string;
   mainPosition: CompetitionPosition;
-  subPositions?: CompetitionPosition[];
+  subPositions?: CompetitionSubPosition[];
   champions?: string[];
   availableTime?: string | null;
   captainAvailable: boolean;
@@ -122,7 +126,7 @@ export interface CompetitionApplyInput {
 export interface CompetitionApplicationUpdateInput {
   playerCode?: string;
   mainPosition?: CompetitionPosition;
-  subPositions?: CompetitionPosition[];
+  subPositions?: CompetitionSubPosition[];
   champions?: string[];
   availableTime?: string | null;
   captainAvailable?: boolean;
