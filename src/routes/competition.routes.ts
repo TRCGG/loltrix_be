@@ -465,7 +465,7 @@ router.post(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청'
-    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. mainPosition·practiceLevel·captainAvailable은 필수, subPositions는 mainPosition과 겹치거나 중복되면 400(sub-position-invalid)이고, TOP/JUG/MID/ADC/SUP 외에 ALL(전체 가능)을 보낼 수 있으나 ALL은 단독으로만 유효해 다른 값과 섞으면 400(sub-position-invalid)입니다. champions는 챔피언 영문명(champNameEng, Data Dragon 챔피언 id와 동일) 최대 3개로 등록되지 않은 이름이 있으면 400(champion-not-found), 같은 이름이 반복되면 400(champion-duplicate) — 저장·응답은 내부 id입니다. playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 모집중(RECRUITING) 대회만 신청을 받습니다 — 종료된 대회는 409(competition-closed), 진행중 대회는 409(competition-not-recruiting). 대회의 approvalRequired가 false면 신청이 바로 APPROVED로 저장됩니다.'
+    #swagger.description = '로그인한 사용자가 대회에 개인 신청합니다. 봇 요청은 403 — 신청자를 특정할 세션이 없습니다. mainPosition·practiceLevel·captainAvailable은 필수, subPositions는 mainPosition과 겹치거나 중복되면 400(sub-position-invalid)이고, TOP/JUG/MID/ADC/SUP 외에 ALL(전체 가능)을 보낼 수 있으나 ALL은 단독으로만 유효해 다른 값과 섞으면 400(sub-position-invalid)입니다. champions는 챔피언 영문명(champNameEng, Data Dragon 챔피언 id와 동일) 최대 3개로 등록되지 않은 이름이 있으면 400(champion-not-found), 같은 이름이 반복되면 400(champion-duplicate) — 저장은 내부 id, 응답의 champions는 영문명입니다. playerCode는 저장 시 본계정으로 정규화되며, 한 대회에 한 계정은 한 번만 신청할 수 있습니다(409 application-duplicate). 모집중(RECRUITING) 대회만 신청을 받습니다 — 종료된 대회는 409(competition-closed), 진행중 대회는 409(competition-not-recruiting). 대회의 approvalRequired가 false면 신청이 바로 APPROVED로 저장됩니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -504,7 +504,7 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '내 대회 신청 수정'
-    #swagger.description = '신청 필드 중 최소 하나가 필요합니다. playerCode를 바꾸면 본계정으로 다시 정규화되고, 그 계정이 이미 신청돼 있으면 409(application-duplicate). subPositions는 저장된 mainPosition과 합친 뒤 검사하고(400 sub-position-invalid), TOP/JUG/MID/ADC/SUP 외에 ALL(전체 가능)을 보낼 수 있으나 ALL은 단독으로만 유효해 다른 값과 섞으면 400(sub-position-invalid)입니다. champions는 보낸 배열로 통째로 대체됩니다(400 champion-not-found / champion-duplicate). champions는 챔피언 영문명(champNameEng, Data Dragon 챔피언 id와 동일) 최대 3개로 보내고 저장·응답은 내부 id이며, 빈 배열을 보내면 비웁니다. 수정해도 승인 상태(status)는 그대로입니다. 모집중 대회만 수정할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
+    #swagger.description = '신청 필드 중 최소 하나가 필요합니다. playerCode를 바꾸면 본계정으로 다시 정규화되고, 그 계정이 이미 신청돼 있으면 409(application-duplicate). subPositions는 저장된 mainPosition과 합친 뒤 검사하고(400 sub-position-invalid), TOP/JUG/MID/ADC/SUP 외에 ALL(전체 가능)을 보낼 수 있으나 ALL은 단독으로만 유효해 다른 값과 섞으면 400(sub-position-invalid)입니다. champions는 보낸 배열로 통째로 대체됩니다(400 champion-not-found / champion-duplicate). champions는 챔피언 영문명(champNameEng, Data Dragon 챔피언 id와 동일) 최대 3개로 보내고 저장은 내부 id, 응답의 champions는 영문명이며, 빈 배열을 보내면 비웁니다. 수정해도 승인 상태(status)는 그대로입니다. 모집중 대회만 수정할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -524,7 +524,7 @@ router.delete(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '내 대회 신청 취소'
-    #swagger.description = '조회·수정과 같은 신청 한 건을 삭제합니다(복구 없음). 모집중 대회만 취소할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
+    #swagger.description = '조회·수정과 같은 신청 한 건을 삭제합니다(복구 없음) — 지운 신청을 그대로 돌려주고 champions는 영문명입니다. 모집중 대회만 취소할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -563,7 +563,7 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청 일괄 결정'
-    #swagger.description = 'applicationIds(1~200개, 중복 불가)를 APPROVED/REJECTED/PENDING 중 하나로 한 번에 바꿉니다. 하나라도 이 대회 신청이 아니면 404(application-not-found, 메시지에 없는 id 나열)로 전체가 실패하고 아무것도 저장되지 않습니다. PENDING으로 되돌리면 decidedByMemberId·decidedDate가 지워지고, APPROVED/REJECTED면 채워집니다. 신청당 guild_audit_log(applicationDecide) 한 줄이 남습니다. 종료된 대회는 409(competition-closed). 승인은 로스터 등록의 전제가 아닙니다.'
+    #swagger.description = 'applicationIds(1~200개, 중복 불가)를 APPROVED/REJECTED/PENDING 중 하나로 한 번에 바꿉니다. 하나라도 이 대회 신청이 아니면 404(application-not-found, 메시지에 없는 id 나열)로 전체가 실패하고 아무것도 저장되지 않습니다. PENDING으로 되돌리면 decidedByMemberId·decidedDate가 지워지고, APPROVED/REJECTED면 채워집니다. 응답 각 행의 champions는 영문명입니다. 신청당 guild_audit_log(applicationDecide) 한 줄이 남습니다. 종료된 대회는 409(competition-closed). 승인은 로스터 등록의 전제가 아닙니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
