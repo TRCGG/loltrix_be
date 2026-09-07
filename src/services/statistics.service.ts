@@ -8,7 +8,7 @@ import {
   guildMember,
 } from '../database/schema.js';
 import { subAccountLink } from '../database/subAccountLink.js';
-import { competitionStatSql, EMPTY_COMPETITION_STATS } from '../database/competitionStats.js';
+import { competitionStatSql } from '../database/competitionStats.js';
 import { scopeConditions } from '../database/matchScope.js';
 import { periodCondition } from '../database/datePeriod.js';
 import { systemConfigService } from './systemConfig.service.js';
@@ -160,7 +160,7 @@ export class StatisticsService {
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       .$dynamic();
 
-    const rows = await (competitionStats?.joins ?? [])
+    const result = await (competitionStats?.joins ?? [])
       .reduce((query, join) => query.leftJoin(join.table, join.on), baseQuery)
       .where(whereCondition)
       .groupBy(...groupByColumns)
@@ -168,8 +168,6 @@ export class StatisticsService {
       .orderBy(orderCriteria)
       .limit(limit)
       .offset(offset);
-
-    const result = rows.map((row) => ({ ...EMPTY_COMPETITION_STATS, ...row }));
 
     const subQuery = db
       .select({

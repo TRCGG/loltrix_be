@@ -13,26 +13,29 @@ export interface RankingStats extends MatchStats {
   avgDpm: number;
 }
 
-/** 대회 범위(competitionId 지정) 조회에서만 값이 찬다 — 그 밖에서는 전부 null. */
+/** 대회 범위 랭킹에만 붙는 지표. 비율·평균은 numeric이라 드라이버가 문자열로 준다. */
 export interface CompetitionRankingStats {
   /** (킬+어시) / 팀 킬 × 100 */
-  killParticipation: number | null;
+  killParticipation: string;
   /** 챔피언 피해 / 팀 챔피언 피해 × 100 */
-  damageShare: number | null;
-  goldPerMin: number | null;
-  avgVisionScore: number | null;
-  damagePerDeath: number | null;
+  damageShare: string;
+  goldPerMin: string;
+  avgVisionScore: string;
+  damagePerDeath: string;
   /** 사망 시간 / 게임 시간 × 100 */
-  deadTimePct: number | null;
-  multiKills: { double: number; triple: number; quadra: number; penta: number } | null;
+  deadTimePct: string;
+  multiKills: { double: number; triple: number; quadra: number; penta: number };
 }
 
 // 유저별 게임 통계 결과 타입
-export interface UserGameStatistic extends RankingStats, CompetitionRankingStats {
+export interface UserGameStatistic extends RankingStats {
   riotName: string;
   riotNameTag: string;
   position?: string;
 }
+
+/** 대회 범위 유저 랭킹 — 일반 랭킹 항목에 대회 지표가 더 붙는다. */
+export interface CompetitionUserStat extends UserGameStatistic, CompetitionRankingStats {}
 
 // 챔피언별 게임 통계 결과 타입
 export interface ChampionStatistic extends RankingStats {
@@ -60,9 +63,8 @@ export interface StatisticsRequestQuery {
   season?: string;
   limit?: string;
   sortBy?: 'totalCount' | 'winRate';
-  /** '1' | '2' | '3' 또는 콤마 구분(예: '2,3'). 생략 시 일반내전(competitionId 있으면 2,3). */
+  /** '1' | '2' | '3' 또는 콤마 구분(예: '2,3'). 생략 시 일반내전. */
   gameType?: string;
-  competitionId?: number;
 }
 
 // 서비스 계층으로 전달하는 가공된 조회 옵션 타입

@@ -131,22 +131,14 @@ describe('유저 랭킹 — 대회 지표', () => {
     expect(metric).toContain('"mmr_participant_metric"');
   });
 
-  test('competitionId가 없으면 지표는 null이고 쿼리에 조인이 늘지 않는다', async () => {
+  test('competitionId가 없으면 지표를 select에도 결과에도 싣지 않는다', async () => {
     queue = [[baseRow], countRow];
 
     const { result } = await service.getUserGameStatistics(GUILD, {});
 
     expect(Object.keys(selects[0])).not.toEqual(expect.arrayContaining(COMPETITION_FIELDS));
     expect(joinedSql()).toEqual([]);
-    expect(result[0]).toMatchObject({
-      killParticipation: null,
-      damageShare: null,
-      goldPerMin: null,
-      avgVisionScore: null,
-      damagePerDeath: null,
-      deadTimePct: null,
-      multiKills: null,
-    });
+    expect(result[0]).toEqual(baseRow);
   });
 
   test('챔피언 랭킹은 대회 조회에서도 지표를 붙이지 않는다', async () => {

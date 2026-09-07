@@ -33,6 +33,10 @@ import {
   updateMyApplication,
   updateTeam,
 } from '../controllers/competition.controller.js';
+import {
+  getCompetitionChampionStats,
+  getCompetitionUserStats,
+} from '../controllers/competitionStatistics.controller.js';
 import { COMPETITION_STATUS_VALUES } from '../types/competition.js';
 import {
   COMPETITION_GAME_TYPES,
@@ -123,6 +127,20 @@ const mutateSchema = z.object({ params: competitionParams, body: actorBody });
 const deleteSchema = z.object({
   params: competitionParams,
   body: actorBody.unwrap().extend({ confirmName: competitionName }),
+});
+
+const statisticsSchema = z.object({
+  params: competitionParams,
+  query: z.object({
+    position: z.enum(['ALL', ...COMPETITION_POSITIONS]).optional(),
+    sortBy: z.enum(['totalCount', 'winRate']).optional(),
+    page: z.string().regex(/^\d+$/).optional(),
+    limit: z.string().regex(/^\d+$/).optional(),
+    gameType: z
+      .string()
+      .regex(/^[23](,[23])?$/, 'gameType must be 2|3 (comma separated)')
+      .optional(),
+  }),
 });
 
 const manager = requireGuildRole('guildManager', { from: 'params', key: 'guildId' });
@@ -855,6 +873,52 @@ router.get(
   decodeGuildIdMiddleware,
   validateRequest(headToHeadSchema),
   getTeamHeadToHead,
+);
+
+/**
+ * @route GET /api/competitions/:guildId/:competitionId/statistics/users
+ * @desc 대회 범위 유저 랭킹 (대회 지표 포함)
+ */
+router.get(
+  '/:guildId/:competitionId/statistics/users',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '대회 유저 랭킹'
+    #swagger.description = '이 대회의 경기만 모아 유저별 통계를 냅니다. 시즌·기간 조건은 무시하고(대회가 시즌 경계를 넘어도 반 토막 나지 않게), 승률 정렬의 최소 판수 하한도 두지 않으며, 대회 종료 후 길드를 떠난 사람도 그대로 남습니다. 각 항목에 대회 지표 7개가 함께 옵니다 — killParticipation은 (킬+어시) 합 ÷ 팀 킬 합 × 100(분모 0이면 0), damageShare는 챔피언 피해 합 ÷ 팀 챔피언 피해 합 × 100(분모 0이면 0), goldPerMin은 골드 합 ÷ (플레이 시간 합 ÷ 60), avgVisionScore는 시야 점수 평균, damagePerDeath는 챔피언 피해 합 ÷ 데스 합(데스가 0이면 피해 합), deadTimePct는 사망 시간 합 ÷ 게임 시간 합 × 100, multiKills는 { double, triple, quadra, penta } 합계입니다. 비율은 0~100이고 소수 둘째 자리에서 반올림합니다. 총 개수·페이지는 X-Total-Count·X-Page·X-Limit·X-Total-Pages 헤더로 옵니다. 대회가 이 길드 것이 아니면 404(competition-not-found).'
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.parameters['position'] = { in: 'query', description: '포지션 필터', type: 'string', enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP'] }
+    #swagger.parameters['sortBy'] = { in: 'query', description: '정렬 기준', type: 'string', enum: ['totalCount', 'winRate'] }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (기본 50)', type: 'integer' }
+    #swagger.parameters['gameType'] = { in: 'query', description: '2=스크림 / 3=본경기. 콤마 구분 가능(예: 2,3). 생략 시 둘 다', type: 'string' }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(statisticsSchema),
+  getCompetitionUserStats,
+);
+
+/**
+ * @route GET /api/competitions/:guildId/:competitionId/statistics/champions
+ * @desc 대회 범위 챔피언 통계
+ */
+router.get(
+  '/:guildId/:competitionId/statistics/champions',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '대회 챔피언 통계'
+    #swagger.description = '이 대회의 경기에서 플레이된 챔피언 통계입니다. 시즌·기간 조건은 무시하고, 승률 정렬의 최소 판수 하한도 두지 않으며, 대회 후 길드를 떠난 사람의 기록도 포함합니다. 대회 지표 7개는 유저 랭킹에만 붙습니다. 총 개수·페이지는 X-Total-Count·X-Page·X-Limit·X-Total-Pages 헤더로 옵니다. 대회가 이 길드 것이 아니면 404(competition-not-found).'
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.parameters['position'] = { in: 'query', description: '포지션 필터', type: 'string', enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP'] }
+    #swagger.parameters['sortBy'] = { in: 'query', description: '정렬 기준', type: 'string', enum: ['totalCount', 'winRate'] }
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (기본 20)', type: 'integer' }
+    #swagger.parameters['gameType'] = { in: 'query', description: '2=스크림 / 3=본경기. 콤마 구분 가능(예: 2,3). 생략 시 둘 다', type: 'string' }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(statisticsSchema),
+  getCompetitionChampionStats,
 );
 
 export default router;

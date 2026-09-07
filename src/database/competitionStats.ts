@@ -1,6 +1,5 @@
 import { and, eq, SQL, sql } from 'drizzle-orm';
 import { customMatch, matchParticipant, mmrParticipantMetric } from './schema.js';
-import { CompetitionRankingStats } from '../types/statistics.js';
 
 const TEAM_TOTALS = 'team_totals';
 
@@ -34,12 +33,12 @@ const teamTotalsTable = (guildId: string, competitionId: number): SQL => sql`(
 
 export interface CompetitionStatSql {
   columns: {
-    killParticipation: SQL<number>;
-    damageShare: SQL<number>;
-    goldPerMin: SQL<number>;
-    avgVisionScore: SQL<number>;
-    damagePerDeath: SQL<number>;
-    deadTimePct: SQL<number>;
+    killParticipation: SQL<string>;
+    damageShare: SQL<string>;
+    goldPerMin: SQL<string>;
+    avgVisionScore: SQL<string>;
+    damagePerDeath: SQL<string>;
+    deadTimePct: SQL<string>;
     multiKills: {
       double: SQL<number>;
       triple: SQL<number>;
@@ -57,7 +56,7 @@ export interface CompetitionStatSql {
 export function competitionStatSql(guildId: string, competitionId: number): CompetitionStatSql {
   return {
     columns: {
-      killParticipation: sql<number>`
+      killParticipation: sql<string>`
         CASE
           WHEN COALESCE(SUM(${teamKills}), 0) = 0 THEN 0
           ELSE ROUND(
@@ -67,7 +66,7 @@ export function competitionStatSql(guildId: string, competitionId: number): Comp
             2
           )
         END`,
-      damageShare: sql<number>`
+      damageShare: sql<string>`
         CASE
           WHEN COALESCE(SUM(${teamDamage}), 0) = 0 THEN 0
           ELSE ROUND(
@@ -76,7 +75,7 @@ export function competitionStatSql(guildId: string, competitionId: number): Comp
             2
           )
         END`,
-      goldPerMin: sql<number>`
+      goldPerMin: sql<string>`
         CASE
           WHEN COALESCE(SUM(${matchParticipant.timePlayed}), 0) = 0 THEN 0
           ELSE ROUND(
@@ -85,8 +84,8 @@ export function competitionStatSql(guildId: string, competitionId: number): Comp
             2
           )
         END`,
-      avgVisionScore: sql<number>`ROUND(COALESCE(AVG(${matchParticipant.visionScore}), 0), 2)`,
-      damagePerDeath: sql<number>`
+      avgVisionScore: sql<string>`ROUND(COALESCE(AVG(${matchParticipant.visionScore}), 0), 2)`,
+      damagePerDeath: sql<string>`
         CASE
           WHEN COALESCE(SUM(${matchParticipant.death}), 0) = 0
             THEN ROUND(COALESCE(SUM(${matchParticipant.totalDamageChampions}), 0)::numeric, 2)
@@ -97,7 +96,7 @@ export function competitionStatSql(guildId: string, competitionId: number): Comp
           )
         END`,
       // 게임별 비율의 평균이 아니라 합계끼리 나눈다 — 짧은 게임 한 판이 비율을 끌어올리지 않게.
-      deadTimePct: sql<number>`
+      deadTimePct: sql<string>`
         CASE
           WHEN COALESCE(SUM(${mmrParticipantMetric.gameDuration}), 0) = 0 THEN 0
           ELSE ROUND(
@@ -134,13 +133,3 @@ export function competitionStatSql(guildId: string, competitionId: number): Comp
     ],
   };
 }
-
-export const EMPTY_COMPETITION_STATS: CompetitionRankingStats = {
-  killParticipation: null,
-  damageShare: null,
-  goldPerMin: null,
-  avgVisionScore: null,
-  damagePerDeath: null,
-  deadTimePct: null,
-  multiKills: null,
-};

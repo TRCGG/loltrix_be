@@ -23,8 +23,18 @@ export const getUserGameStats = async (
 ) => {
   try {
     const { guildId } = req.params;
-    const { datePreset, fromMonth, toMonth, championName, position, season, sortBy, page, limit } =
-      req.query;
+    const {
+      datePreset,
+      fromMonth,
+      toMonth,
+      championName,
+      position,
+      season,
+      sortBy,
+      page,
+      limit,
+      gameType,
+    } = req.query;
 
     const { result, totalCount } = await statisticsService.getUserGameStatistics(guildId, {
       datePreset,
@@ -36,7 +46,7 @@ export const getUserGameStats = async (
       sortBy: (sortBy as 'totalCount' | 'winRate') || 'totalCount',
       page: Number(page) || 1,
       limit: Number(limit) || 50,
-      scope: scopeFromQuery(req.query),
+      scope: scopeFromQuery({ gameType }),
     });
 
     res.setHeader('X-Total-Count', totalCount.toString());
@@ -74,7 +84,8 @@ export const getChampionStats = async (
 ) => {
   try {
     const { guildId } = req.params;
-    const { datePreset, fromMonth, toMonth, position, season, sortBy, page, limit } = req.query;
+    const { datePreset, fromMonth, toMonth, position, season, sortBy, page, limit, gameType } =
+      req.query;
 
     const { result, totalCount } = await statisticsService.getChampionStatistics(guildId, {
       datePreset,
@@ -85,7 +96,7 @@ export const getChampionStats = async (
       sortBy: (sortBy as 'totalCount' | 'winRate') || 'totalCount',
       page: Number(page) || 1,
       limit: Number(limit) || 20,
-      scope: scopeFromQuery(req.query),
+      scope: scopeFromQuery({ gameType }),
     });
 
     res.setHeader('X-Total-Count', totalCount.toString());
