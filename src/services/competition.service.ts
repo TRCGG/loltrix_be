@@ -287,6 +287,21 @@ export class CompetitionService {
     return this.attachCounts(guildId, rows);
   }
 
+  /** 이 길드의 대회인지만 확인한다 — 대회에 딸린 조회가 남의 길드 대회를 읽지 않게. */
+  public async assertExists(guildId: string, id: number): Promise<void> {
+    const [row] = await db
+      .select({ id: competition.id })
+      .from(competition)
+      .where(and(eq(competition.id, id), eq(competition.guildId, guildId)))
+      .limit(1);
+    if (!row) {
+      throw new BusinessError('competition not found', 404, {
+        type: 'competition-not-found',
+        isLoggable: false,
+      });
+    }
+  }
+
   public async findById(guildId: string, id: number): Promise<CompetitionSummary | null> {
     const [row] = await db
       .select()
