@@ -542,7 +542,7 @@ router.delete(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '내 대회 신청 취소'
-    #swagger.description = '조회·수정과 같은 신청 한 건을 삭제합니다(복구 없음) — 지운 신청을 그대로 돌려주고 champions는 영문명입니다. 모집중 대회만 취소할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
+    #swagger.description = '조회·수정과 같은 신청 한 건을 삭제합니다(복구 없음) — 지운 신청을 그대로 돌려주고 champions는 영문명입니다. 취소하면 이 대회의 로스터에서도 빠지고, 팀장이었다면 팀장 자리는 비워집니다. 모집중 대회만 취소할 수 있습니다 — 진행중은 409(competition-not-recruiting), 종료는 409(competition-closed). 신청이 없으면 404(application-not-found), 봇 요청은 403.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -581,7 +581,7 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 신청 일괄 결정'
-    #swagger.description = 'applicationIds(1~200개, 중복 불가)를 APPROVED/REJECTED/PENDING 중 하나로 한 번에 바꿉니다. 하나라도 이 대회 신청이 아니면 404(application-not-found, 메시지에 없는 id 나열)로 전체가 실패하고 아무것도 저장되지 않습니다. PENDING으로 되돌리면 decidedByMemberId·decidedDate가 지워지고, APPROVED/REJECTED면 채워집니다. 응답 각 행의 champions는 영문명입니다. 신청당 guild_audit_log(applicationDecide) 한 줄이 남습니다. 종료된 대회는 409(competition-closed). 승인은 로스터 등록의 전제가 아닙니다.'
+    #swagger.description = 'applicationIds(1~200개, 중복 불가)를 APPROVED/REJECTED/PENDING 중 하나로 한 번에 바꿉니다. 하나라도 이 대회 신청이 아니면 404(application-not-found, 메시지에 없는 id 나열)로 전체가 실패하고 아무것도 저장되지 않습니다. PENDING으로 되돌리면 decidedByMemberId·decidedDate가 지워지고, APPROVED/REJECTED면 채워집니다. 응답 각 행의 champions는 영문명입니다. REJECTED로 결정된 신청자는 이 대회의 로스터에서도 빠집니다(팀장이면 팀장 자리 비움). APPROVED·PENDING은 로스터를 건드리지 않습니다. 신청당 guild_audit_log(applicationDecide) 한 줄이 남습니다. 종료된 대회는 409(competition-closed). 승인은 로스터 등록의 전제가 아닙니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }

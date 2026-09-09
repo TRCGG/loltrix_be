@@ -307,6 +307,7 @@ export class CompetitionTeamService {
         .where(eq(competitionApplication.id, current.id))
         .returning();
       if (!removed) throw this.applicationNotFound();
+      await this.removeFromRoster(tx, competitionId, [removed.playerCode]);
       return { ...removed, champions: await this.toChampionNames(removed.champions, tx) };
     });
   }
@@ -346,6 +347,14 @@ export class CompetitionTeamService {
           type: 'application-not-found',
           isLoggable: false,
         });
+      }
+
+      if (status === 'REJECTED') {
+        await this.removeFromRoster(
+          tx,
+          competitionId,
+          updated.map((row) => row.playerCode),
+        );
       }
 
       await tx.insert(guildAuditLog).values(
@@ -1260,6 +1269,33 @@ export class CompetitionTeamService {
     }
 
     return teams.map((team) => ({ ...team, roster: byTeam.get(team.id) ?? [] }));
+  }
+
+  /** 신청이 없어진 선수는 팀에 남겨두지 않는다 — 팀장이었으면 그 자리도 비운다. */
+  private async removeFromRoster(
+    tx: TransactionType,
+    competitionId: number,
+    playerCodes: string[],
+  ): Promise<void> {
+    if (playerCodes.length === 0) return;
+
+    await tx
+      .delete(competitionTeamMember)
+      .where(
+        and(
+          eq(competitionTeamMember.competitionId, competitionId),
+          inArray(competitionTeamMember.playerCode, playerCodes),
+        ),
+      );
+    await tx
+      .update(competitionTeam)
+      .set({ captainPlayerCode: null })
+      .where(
+        and(
+          eq(competitionTeam.competitionId, competitionId),
+          inArray(competitionTeam.captainPlayerCode, playerCodes),
+        ),
+      );
   }
 
   private async deleteTeams(tx: TransactionType, teamIds: number[]): Promise<void> {
