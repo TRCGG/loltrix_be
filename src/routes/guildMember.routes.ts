@@ -159,7 +159,7 @@ router.post(
   '/sub-account',
   /* #swagger.tags = ['GuildMember']
     #swagger.summary = '부계정 연결'
-    #swagger.description = '본계정에 부계정을 연결합니다.'
+    #swagger.description = '본계정에 부계정을 연결합니다. 모집중(RECRUITING)·진행중(IN_PROGRESS) 대회에 신청이나 로스터로 남아 있는 계정은 부계정으로 연결할 수 없습니다 — 409(account-in-competition)이며 메시지 끝에 해당 대회 이름이 붙습니다. 신청을 취소하거나 로스터에서 빼고 다시 시도하면 됩니다. 종료된(CLOSED) 대회는 막지 않습니다.'
     #swagger.parameters['body'] = {
       in: 'body',
       description: '연결할 계정 정보',
@@ -186,7 +186,7 @@ router.post(
       schema: { type: 'business-error', title: 'Business Error', status: 400, detail: 'Primary or Secondary Riot Account not found in DB.' }
     }
     #swagger.responses[409] = {
-      description: '부계정이 이미 다른 계정에 연결됨 / 본계정이 이미 다른 계정의 부계정(중첩 불가). 에러는 ProblemDetails 형식으로 응답합니다.',
+      description: '부계정이 이미 다른 계정에 연결됨 / 본계정이 이미 다른 계정의 부계정(중첩 불가) / 부계정으로 내리려는 계정이 모집중·진행중 대회에 신청·로스터로 남아 있음(account-in-competition). 에러는 ProblemDetails 형식으로 응답합니다.',
       schema: { type: 'business-error', title: 'Business Error', status: 409, detail: 'SubName is already linked as a sub-account.' }
     }
   */
