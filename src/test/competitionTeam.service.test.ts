@@ -1,4 +1,5 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import { getTableName } from 'drizzle-orm';
 import { CompetitionApplyInput, CompetitionPosition } from '../types/competition.js';
 
 /**
@@ -13,6 +14,19 @@ let written: unknown[] = [];
 let locks: unknown[] = [];
 /** select에 넘어간 필드 — 조회가 몇 번 도는지, 산식이 무엇인지 보려고 모은다. */
 let selects: unknown[] = [];
+/** delete/update가 어느 테이블에 어떤 값으로 좁혀 나갔는지. */
+let statements: { kind: string; table: string; where: unknown[] }[] = [];
+
+/** where 조건에 묶인 컬럼명과 파라미터 값을 나온 순서대로 편다. */
+const boundValues = (node: unknown): unknown[] => {
+  if (Array.isArray(node)) return node.flatMap(boundValues);
+  if (node === null || typeof node !== 'object') return [];
+  const chunk = node as { queryChunks?: unknown; encoder?: unknown; columnType?: unknown };
+  if (chunk.queryChunks !== undefined) return boundValues(chunk.queryChunks);
+  if (chunk.encoder !== undefined) return [(node as { value: unknown }).value];
+  if (chunk.columnType !== undefined) return [(node as { name: unknown }).name];
+  return [];
+};
 
 const CHAIN_METHODS = [
   'from',
@@ -27,11 +41,15 @@ const CHAIN_METHODS = [
   'onConflictDoNothing',
 ];
 
-const makeBuilder = (): Record<string, unknown> => {
+const makeBuilder = (statement?: { where: unknown[] }): Record<string, unknown> => {
   const builder: Record<string, unknown> = {};
   for (const method of CHAIN_METHODS) {
     builder[method] = () => builder;
   }
+  builder.where = (condition: unknown) => {
+    if (statement) statement.where.push(...boundValues(condition));
+    return builder;
+  };
   builder.values = (value: unknown) => {
     written.push(value);
     return builder;
@@ -53,6 +71,12 @@ const makeBuilder = (): Record<string, unknown> => {
   return builder;
 };
 
+const track = (kind: string, table: unknown) => {
+  const statement = { kind, table: getTableName(table as never), where: [] as unknown[] };
+  statements.push(statement);
+  return makeBuilder(statement);
+};
+
 const executor: Record<string, unknown> = {
   select: (fields: unknown) => {
     selects.push(fields);
@@ -60,8 +84,8 @@ const executor: Record<string, unknown> = {
   },
   selectDistinct: () => makeBuilder(),
   insert: () => makeBuilder(),
-  update: () => makeBuilder(),
-  delete: () => makeBuilder(),
+  update: (table: unknown) => track('update', table),
+  delete: (table: unknown) => track('delete', table),
   transaction: async (callback: (tx: unknown) => unknown) => callback(executor),
 };
 
@@ -123,6 +147,16 @@ beforeEach(() => {
   written = [];
   locks = [];
   selects = [];
+  statements = [];
+});
+
+const rosterCleanup = () => ({
+  removed: statements.find(
+    (statement) => statement.kind === 'delete' && statement.table === 'competition_team_member',
+  ),
+  captainCleared: statements.find(
+    (statement) => statement.kind === 'update' && statement.table === 'competition_team',
+  ),
 });
 
 describe('종료된 대회는 잠긴다 (409)', () => {
@@ -896,10 +930,43 @@ describe('본인 신청 수정·취소', () => {
   });
 
   test('취소 응답도 챔피언을 영문명으로 돌려준다', async () => {
-    const removed = { id: 12, competitionId: COMPETITION, champions: ['CHN_1'] };
-    queue = [recruitingCompetition, [removed], [removed], [aatrox]];
+    const removed = {
+      id: 12,
+      competitionId: COMPETITION,
+      playerCode: 'PLR_000002',
+      champions: ['CHN_1'],
+    };
+    queue = [recruitingCompetition, [removed], [removed], [], [], [aatrox]];
     const result = await service.deleteMyApplication(GUILD, COMPETITION, 'member-1');
     expect(result.champions).toEqual(['Aatrox']);
+  });
+
+  test('취소하면 이 대회 로스터에서도 빼고 팀장 자리를 비운다', async () => {
+    const removed = {
+      id: 12,
+      competitionId: COMPETITION,
+      playerCode: 'PLR_000002',
+      champions: [],
+    };
+    queue = [recruitingCompetition, [removed], [removed]];
+    await expect(service.deleteMyApplication(GUILD, COMPETITION, 'member-1')).resolves.toEqual(
+      removed,
+    );
+
+    const { removed: rosterDelete, captainCleared } = rosterCleanup();
+    expect(rosterDelete?.where).toEqual([
+      'competition_id',
+      COMPETITION,
+      'player_code',
+      'PLR_000002',
+    ]);
+    expect(captainCleared?.where).toEqual([
+      'competition_id',
+      COMPETITION,
+      'captain_player_code',
+      'PLR_000002',
+    ]);
+    expect(written).toContainEqual({ captainPlayerCode: null });
   });
 
   test('취소할 신청이 없으면 404', async () => {
@@ -966,6 +1033,45 @@ describe('신청 일괄 결정', () => {
         },
       },
     ]);
+  });
+
+  test('REJECTED는 결정된 신청자 전원을 로스터에서 한 번에 빼고 팀장 자리를 비운다', async () => {
+    queue = [
+      recruitingCompetition,
+      [
+        { id: 1, playerCode: 'PLR_000001', champions: [] },
+        { id: 2, playerCode: 'PLR_000002', champions: [] },
+      ],
+      [],
+      [],
+      [],
+    ];
+    await service.decideApplications(GUILD, COMPETITION, [1, 2], 'REJECTED', ACTOR);
+
+    const { removed, captainCleared } = rosterCleanup();
+    expect(removed?.where).toEqual([
+      'competition_id',
+      COMPETITION,
+      'player_code',
+      'PLR_000001',
+      'PLR_000002',
+    ]);
+    expect(captainCleared?.where).toEqual([
+      'competition_id',
+      COMPETITION,
+      'captain_player_code',
+      'PLR_000001',
+      'PLR_000002',
+    ]);
+  });
+
+  test.each(['APPROVED', 'PENDING'] as const)('%s는 로스터를 건드리지 않는다', async (status) => {
+    queue = [recruitingCompetition, [{ id: 1, playerCode: 'PLR_000001', champions: [] }], []];
+    await service.decideApplications(GUILD, COMPETITION, [1], status, ACTOR);
+
+    const { removed, captainCleared } = rosterCleanup();
+    expect(removed).toBeUndefined();
+    expect(captainCleared).toBeUndefined();
   });
 
   test('여러 건을 결정해도 챔피언 이름은 한 번만 조회해 붙인다', async () => {
