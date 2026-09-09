@@ -328,16 +328,38 @@ describe('중복 (409)', () => {
 });
 
 describe('본계정 정규화', () => {
-  test('부캐로 신청해도 본계정으로 저장된다', async () => {
-    const saved = { id: 1, competitionId: COMPETITION, playerCode: 'PLR_000100', champions: [] };
+  const mainAccountRow = [{ riotName: '본캐', riotNameTag: 'KR1' }];
+
+  test('부캐로는 신청할 수 없고, 어떤 계정으로 신청해야 하는지 알려준다', async () => {
     queue = [
       recruitingCompetition,
       [{ account: 'PLR_000200', mainAccount: 'PLR_000100' }],
-      [{ playerCode: 'PLR_000100' }],
-      [saved],
+      mainAccountRow,
     ];
     await expect(
       service.apply(GUILD, COMPETITION, applyInput({ playerCode: 'PLR_000200' }), 'member-1'),
+    ).rejects.toMatchObject({
+      status: 400,
+      type: 'sub-account-not-allowed',
+      message: 'sub accounts cannot apply; use the main account (main: 본캐#KR1)',
+    });
+    expect(written).toEqual([]);
+  });
+
+  test('본계정으로 신청하면 그대로 저장된다', async () => {
+    const saved = { id: 1, competitionId: COMPETITION, playerCode: 'PLR_000100', champions: [] };
+    queue = [recruitingCompetition, [], [saved]];
+    await expect(
+      service.apply(GUILD, COMPETITION, applyInput({ playerCode: 'PLR_000100' }), 'member-1'),
+    ).resolves.toEqual(saved);
+    expect(written).toEqual([expect.objectContaining({ playerCode: 'PLR_000100' })]);
+  });
+
+  test('자기 자신을 가리키는 링크는 부캐가 아니라 그대로 통과한다', async () => {
+    const saved = { id: 1, competitionId: COMPETITION, playerCode: 'PLR_000100', champions: [] };
+    queue = [recruitingCompetition, [{ account: 'PLR_000100', mainAccount: 'PLR_000100' }], [saved]];
+    await expect(
+      service.apply(GUILD, COMPETITION, applyInput({ playerCode: 'PLR_000100' }), 'member-1'),
     ).resolves.toEqual(saved);
     expect(written).toEqual([expect.objectContaining({ playerCode: 'PLR_000100' })]);
   });
@@ -899,16 +921,32 @@ describe('본인 신청 수정·취소', () => {
     });
   });
 
-  test('playerCode를 바꾸면 본계정으로 정규화하고, 그 계정이 이미 신청돼 있으면 409', async () => {
+  test('playerCode를 부캐로 바꿔도 거부한다 (400)', async () => {
     queue = [
       recruitingCompetition,
       [current],
       [{ account: 'PLR_000200', mainAccount: 'PLR_000100' }],
-      [{ playerCode: 'PLR_000100' }],
+      [{ riotName: '본캐', riotNameTag: 'KR1' }],
+    ];
+    await expect(
+      service.updateMyApplication(GUILD, COMPETITION, 'member-1', { playerCode: 'PLR_000200' }),
+    ).rejects.toMatchObject({
+      status: 400,
+      type: 'sub-account-not-allowed',
+      message: 'sub accounts cannot apply; use the main account (main: 본캐#KR1)',
+    });
+    expect(written).toEqual([]);
+  });
+
+  test('playerCode를 본계정으로 바꾸면 저장하고, 그 계정이 이미 신청돼 있으면 409', async () => {
+    queue = [
+      recruitingCompetition,
+      [current],
+      [],
       uniqueViolation('uq_competition_application'),
     ];
     await expectStatus(
-      service.updateMyApplication(GUILD, COMPETITION, 'member-1', { playerCode: 'PLR_000200' }),
+      service.updateMyApplication(GUILD, COMPETITION, 'member-1', { playerCode: 'PLR_000100' }),
       409,
       'application-duplicate',
     );

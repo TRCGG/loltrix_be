@@ -172,7 +172,7 @@ export class CompetitionTeamService {
           input.champions,
           tx,
         );
-        const playerCode = await this.toMainAccount(guildId, input.playerCode, tx);
+        const playerCode = await this.assertMainAccount(guildId, input.playerCode, tx);
 
         // 자동 승인에는 결정한 사람이 없어 decided_by_member_id를 비운다.
         const autoApproved = !target.approvalRequired;
@@ -263,7 +263,7 @@ export class CompetitionTeamService {
 
         const patch: Partial<InsertCompetitionApplication> = {};
         if (input.playerCode !== undefined) {
-          patch.playerCode = await this.toMainAccount(guildId, input.playerCode, tx);
+          patch.playerCode = await this.assertMainAccount(guildId, input.playerCode, tx);
         }
         if (input.mainPosition !== undefined) patch.mainPosition = input.mainPosition;
         if (input.subPositions !== undefined) patch.subPositions = input.subPositions;
@@ -1749,6 +1749,36 @@ export class CompetitionTeamService {
       });
     }
     return mainAccount;
+  }
+
+  /**
+   * 신청 경로 전용. 로스터는 운영진이 대신 넣는 자리라 부계정을 본계정으로 바꿔 저장하지만,
+   * 신청은 본인이 고른 계정이 그대로 화면에 남아야 해서 조용히 바꾸지 않고 되돌려 보낸다.
+   */
+  private async assertMainAccount(
+    guildId: string,
+    playerCode: string,
+    executor: DbOrTx,
+  ): Promise<string> {
+    const mainAccount = (await mainAccountMap(guildId, [playerCode], executor)).get(playerCode);
+    if (!mainAccount || mainAccount === playerCode) return playerCode;
+
+    const [found] = await executor
+      .select({ riotName: riotAccount.riotName, riotNameTag: riotAccount.riotNameTag })
+      .from(riotAccount)
+      .where(eq(riotAccount.playerCode, mainAccount))
+      .limit(1);
+    if (!found) {
+      throw new BusinessError('linked main account no longer exists', 400, {
+        type: 'main-account-not-found',
+        isLoggable: true,
+      });
+    }
+    throw new BusinessError(
+      `sub accounts cannot apply; use the main account (main: ${found.riotName}#${found.riotNameTag})`,
+      400,
+      { type: 'sub-account-not-allowed', isLoggable: false },
+    );
   }
 
   /** toMainAccount의 다건 판 — 로스터 전체 저장이 선수 수만큼 조회하지 않게. */
