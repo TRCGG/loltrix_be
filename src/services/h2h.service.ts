@@ -1,5 +1,5 @@
-import { and, eq, ne, sql, SQL } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { and, eq, gte, lte, ne, sql, SQL } from 'drizzle-orm';
+import { alias, AnyPgColumn } from 'drizzle-orm/pg-core';
 import { db } from '../database/connectionPool.js';
 import { mmrParticipantMetric, riotAccount, guildMember, champion } from '../database/schema.js';
 import { subAccountLink } from '../database/subAccountLink.js';
@@ -10,7 +10,6 @@ import {
   H2hProfile,
   H2hMetrics,
   H2hMatchup,
-  H2hInsight,
   H2hRecentItem,
   H2hRecentDetailSide,
   H2hAgainst,
@@ -18,12 +17,37 @@ import {
   H2hLaneCombo,
   H2hDuoChamp,
   H2hDetail,
+  H2hLane,
+  H2hPeriod,
+  H2H_LANES,
   LaneMatrix,
   LaneTopFaced,
   SeasonBreak,
 } from '../types/h2h.js';
+import {
+  H2H_RECENT_DAYS,
+  buildRecentAnalysis,
+  byPlayedDateDesc,
+  recentWindow,
+} from './h2hRecentAnalysis.js';
 
-const LANES = ['TOP', 'JUG', 'MID', 'ADC', 'SUP'] as const;
+const LANES = H2H_LANES;
+
+/** 상세 조회에 공통 적용되는 범위. window는 period='30d'일 때만, sameLaneOnly는 against에만 */
+interface DetailScope {
+  season: string | null;
+  gameTypes: GameType[];
+  window: { from: Date; to: Date } | null;
+  myPosition: H2hLane | null;
+  sameLaneOnly: boolean;
+}
+
+/** alias 컬럼은 tableName 리터럴이 달라 AnyPgColumn으로 받는다 (matchScope와 같은 이유) */
+const windowConditions = (
+  column: AnyPgColumn,
+  window: DetailScope['window'],
+): (SQL | undefined)[] =>
+  window ? [gte(column, window.from), lte(column, window.to)] : [undefined];
 
 /** numeric(string)·int → number|null */
 const num = (v: number | string | null | undefined): number | null => {
@@ -140,6 +164,7 @@ export class H2hService {
   /**
    * @desc me/oppo 상세 상대전적. season=null이면 전체 시즌.
    * 두 playerCode는 컨트롤러가 riotName 검색으로 해석해 넘긴다.
+   * 프로필(mostLane·seasonWR)은 개인 시즌 정보라 기간·포지션 필터를 받지 않는다.
    */
   public async getH2hDetail(
     guildId: string,
@@ -147,30 +172,69 @@ export class H2hService {
     oppoPlayerCode: string,
     opts: {
       season: string | null;
+      period: H2hPeriod;
+      myPosition: H2hLane | null;
+      sameLaneOnly: boolean;
       recentLimit: number;
       recentOffset: number;
       gameTypes?: GameType[];
     },
   ): Promise<H2hDetail> {
-    const { season, recentLimit, recentOffset, gameTypes = NORMAL_MATCH_SCOPE.gameTypes } = opts;
+    const {
+      season,
+      period,
+      myPosition,
+      sameLaneOnly,
+      recentLimit,
+      recentOffset,
+      gameTypes = NORMAL_MATCH_SCOPE.gameTypes,
+    } = opts;
 
-    const [me, oppo, meta, againstRows, togetherRows] = await Promise.all([
+    // 기준 시각은 한 번만 잡아 필터 창과 인사이트 창이 같은 NOW를 본다
+    const asOf = new Date();
+    const scope: DetailScope = {
+      season,
+      gameTypes,
+      window: period === '30d' ? recentWindow(asOf, H2H_RECENT_DAYS) : null,
+      myPosition,
+      sameLaneOnly,
+    };
+
+    const [me, oppo, againstRows, togetherRows] = await Promise.all([
       this.getProfile(guildId, mePlayerCode, season, gameTypes),
       this.getProfile(guildId, oppoPlayerCode, season, gameTypes),
-      this.getMeta(guildId, mePlayerCode, oppoPlayerCode, season, gameTypes),
-      this.queryAgainstRawRows(guildId, mePlayerCode, oppoPlayerCode, season, gameTypes),
-      this.queryTogetherRawRows(guildId, mePlayerCode, oppoPlayerCode, season, gameTypes),
+      this.queryAgainstRawRows(guildId, mePlayerCode, oppoPlayerCode, scope),
+      this.queryTogetherRawRows(guildId, mePlayerCode, oppoPlayerCode, scope),
     ]);
 
-    const against = this.buildAgainst(againstRows, me.seasonAvgKda, recentLimit, recentOffset);
+    const against = this.buildAgainst(
+      againstRows,
+      me.seasonAvgKda,
+      recentLimit,
+      recentOffset,
+      asOf,
+    );
     const together = this.buildTogether(togetherRows);
 
+    // 첫/마지막 만남·총 판수는 필터 범위 안에서 — 맞라인만은 함께한 기록에 안 걸리므로 together는 그대로 합친다.
+    // 총 판수는 경기 단위로 센다 (한 경기에 내 계정군이 둘 있으면 행이 2개)
+    const met = [...againstRows, ...togetherRows];
+    const metDates = met.map((r) => r.mePlayedDate.getTime());
+
     return {
+      filter: {
+        period,
+        from: scope.window?.from ?? null,
+        to: asOf,
+        myPosition,
+        sameLaneOnly,
+        season,
+      },
       me: me.profile,
       oppo: oppo.profile,
-      totalMet: meta.totalMet,
-      firstMet: meta.firstMet,
-      lastMet: meta.lastMet,
+      totalMet: new Set(met.map((r) => r.meCustomMatchId)).size,
+      firstMet: metDates.length ? new Date(Math.min(...metDates)) : null,
+      lastMet: metDates.length ? new Date(Math.max(...metDates)) : null,
       against,
       together,
     };
@@ -233,56 +297,12 @@ export class H2hService {
     };
   }
 
-  /** @desc 함께+맞붙은 총 게임 수·첫/마지막 만남 (팀 무관) */
-  private async getMeta(
-    guildId: string,
-    mePlayerCode: string,
-    oppoPlayerCode: string,
-    season: string | null,
-    gameTypes: GameType[],
-  ): Promise<{ totalMet: number; firstMet: Date | null; lastMet: Date | null }> {
-    const mp = alias(mmrParticipantMetric, 'mp_meta');
-    const op = alias(mmrParticipantMetric, 'op_meta');
-    // 나·상대 각각 effective player_code 로 해석 (TRC-243 A안)
-    const linkMe = subAccountLink('link_me', guildId, mp.playerCode);
-    const linkOp = subAccountLink('link_op', guildId, op.playerCode);
-
-    const [r] = await db
-      .select({
-        totalMet: sql<number>`COUNT(DISTINCT ${mp.customMatchId})::integer`,
-        firstMet: sql<Date | null>`MIN(${mp.playedDate})`,
-        lastMet: sql<Date | null>`MAX(${mp.playedDate})`,
-      })
-      .from(mp)
-      .innerJoin(op, eq(mp.customMatchId, op.customMatchId))
-      .leftJoin(linkMe.table, linkMe.on)
-      .leftJoin(linkOp.table, linkOp.on)
-      .where(
-        and(
-          eq(linkMe.effectivePlayerCode, mePlayerCode),
-          eq(linkOp.effectivePlayerCode, oppoPlayerCode),
-          eq(mp.guildId, guildId),
-          eq(mp.isDeleted, false),
-          eq(op.isDeleted, false),
-          ...metricScopeConditions(mp, gameTypes, season),
-        ),
-      );
-
-    // MIN/MAX 집계는 문자열로 올 수 있어 Date로 정규화 (JSON ISO 출력)
-    return {
-      totalMet: r?.totalMet ?? 0,
-      firstMet: r?.firstMet ? new Date(r.firstMet) : null,
-      lastMet: r?.lastMet ? new Date(r.lastMet) : null,
-    };
-  }
-
   /** @desc 맞붙은(다른 팀) 게임 raw 한 쌍씩 (me·oppo 컬럼). played_date ASC (스트릭용) */
   private async queryAgainstRawRows(
     guildId: string,
     mePlayerCode: string,
     oppoPlayerCode: string,
-    season: string | null,
-    gameTypes: GameType[],
+    scope: DetailScope,
   ) {
     const mp = alias(mmrParticipantMetric, 'mp_ag');
     const op = alias(mmrParticipantMetric, 'op_ag');
@@ -334,6 +354,8 @@ export class H2hService {
         meHeal: mp.healOnTeammates,
         meShield: mp.shieldOnTeammates,
         meMissPings: mp.enemyMissingPings,
+        meExp: mp.exp,
+        meDeadTime: mp.timeSpentDead,
         opPosition: op.position,
         opChampionId: op.championId,
         opChamp: cOp.champNameEng,
@@ -369,6 +391,8 @@ export class H2hService {
         opHeal: op.healOnTeammates,
         opShield: op.shieldOnTeammates,
         opMissPings: op.enemyMissingPings,
+        opExp: op.exp,
+        opDeadTime: op.timeSpentDead,
       })
       .from(mp)
       .innerJoin(op, eq(mp.customMatchId, op.customMatchId))
@@ -384,18 +408,22 @@ export class H2hService {
           ne(mp.gameTeam, op.gameTeam), // 맞붙은(다른 팀)
           eq(mp.isDeleted, false),
           eq(op.isDeleted, false),
-          ...metricScopeConditions(mp, gameTypes, season),
+          ...metricScopeConditions(mp, scope.gameTypes, scope.season),
+          ...windowConditions(mp.playedDate, scope.window),
+          scope.myPosition ? eq(mp.position, scope.myPosition) : undefined,
+          scope.sameLaneOnly ? eq(mp.position, op.position) : undefined,
         ),
       )
-      .orderBy(mp.playedDate);
+      .orderBy(mp.playedDate, mp.customMatchId);
   }
 
-  /** @desc raw 행 → against 블록 집계 (요약·스트릭·지표·매트릭스·매치업·인사이트·최근) */
+  /** @desc raw 행 → against 블록 집계 (요약·스트릭·지표·매트릭스·매치업·최근·인사이트 표본) */
   private buildAgainst(
     rows: Awaited<ReturnType<H2hService['queryAgainstRawRows']>>,
     meSeasonAvgKda: number | null,
     recentLimit: number,
     recentOffset: number,
+    asOf: Date,
   ): H2hAgainst {
     const games = rows.length;
     const wins = rows.filter((r) => r.meResult === 1).length;
@@ -447,9 +475,42 @@ export class H2hService {
       laneMatrix,
       topLane: H2hService.topSameLane(laneMatrix),
       matchups,
-      insights: H2hService.buildInsights(rows, matchups, streak, wins, games),
       recent: this.buildRecent(rows, recentLimit, recentOffset),
       recentTotal: games,
+      recentAnalysis: buildRecentAnalysis(
+        rows.map((r) => ({
+          matchId: r.meCustomMatchId,
+          playedDate: r.mePlayedDate,
+          myResult: r.meResult === 1 ? 'W' : 'L',
+          myLane: r.mePosition,
+          oppoLane: r.opPosition,
+          mine: H2hService.metricSource('me', r),
+          oppo: H2hService.metricSource('op', r),
+        })),
+        asOf,
+      ),
+    };
+  }
+
+  private static metricSource(
+    side: 'me' | 'op',
+    r: Awaited<ReturnType<H2hService['queryAgainstRawRows']>>[number],
+  ) {
+    const me = side === 'me';
+    return {
+      gameDuration: r.meGameLen,
+      minionsKilled: me ? r.meMinions : r.opMinions,
+      neutralMinionsKilled: me ? r.meNeutral : r.opNeutral,
+      damageToChampions: me ? r.meDmg : r.opDmg,
+      goldEarned: me ? r.meGold : r.opGold,
+      exp: me ? r.meExp : r.opExp,
+      visionScore: me ? r.meVision : r.opVision,
+      wardsKilled: me ? r.meWardsK : r.opWardsK,
+      timeSpentDead: me ? r.meDeadTime : r.opDeadTime,
+      takedownsBefore15Min: me ? r.meTd15 : r.opTd15,
+      jungleCsEnemy: me ? r.meJungleCsEnemy : r.opJungleCsEnemy,
+      healOnTeammates: me ? r.meHeal : r.opHeal,
+      shieldOnTeammates: me ? r.meShield : r.opShield,
     };
   }
 
@@ -546,7 +607,12 @@ export class H2hService {
     limit: number,
     offset: number,
   ): H2hRecentItem[] {
-    const sorted = [...rows].sort((a, b) => b.mePlayedDate.getTime() - a.mePlayedDate.getTime());
+    const sorted = [...rows].sort((a, b) =>
+      byPlayedDateDesc(
+        { playedDate: a.mePlayedDate, matchId: a.meCustomMatchId },
+        { playedDate: b.mePlayedDate, matchId: b.meCustomMatchId },
+      ),
+    );
     return sorted.slice(offset, offset + limit).map((r) => {
       const item: H2hRecentItem = {
         matchId: r.meCustomMatchId,
@@ -571,13 +637,12 @@ export class H2hService {
     });
   }
 
-  /** @desc 함께한(같은 팀) 게임 raw 한 쌍씩 (지표·detail 불필요해 컬럼 최소화) */
+  /** @desc 함께한(같은 팀) 게임 raw 한 쌍씩 (지표·detail 불필요해 컬럼 최소화). 맞라인만은 상대 팀 개념이라 안 건다 */
   private async queryTogetherRawRows(
     guildId: string,
     mePlayerCode: string,
     oppoPlayerCode: string,
-    season: string | null,
-    gameTypes: GameType[],
+    scope: DetailScope,
   ) {
     const mp = alias(mmrParticipantMetric, 'mp_wg');
     const op = alias(mmrParticipantMetric, 'op_wg');
@@ -620,10 +685,12 @@ export class H2hService {
           eq(mp.gameTeam, op.gameTeam), // 함께한(같은 팀)
           eq(mp.isDeleted, false),
           eq(op.isDeleted, false),
-          ...metricScopeConditions(mp, gameTypes, season),
+          ...metricScopeConditions(mp, scope.gameTypes, scope.season),
+          ...windowConditions(mp.playedDate, scope.window),
+          scope.myPosition ? eq(mp.position, scope.myPosition) : undefined,
         ),
       )
-      .orderBy(mp.playedDate);
+      .orderBy(mp.playedDate, mp.customMatchId);
   }
 
   /** @desc raw 행 → together 블록 (지표·매트릭스·인사이트 없음) */
@@ -704,7 +771,12 @@ export class H2hService {
 
     // 최근 함께한 8건 (detail 없음)
     const recent: H2hRecentItem[] = [...rows]
-      .sort((a, b) => b.mePlayedDate.getTime() - a.mePlayedDate.getTime())
+      .sort((a, b) =>
+        byPlayedDateDesc(
+          { playedDate: a.mePlayedDate, matchId: a.meCustomMatchId },
+          { playedDate: b.mePlayedDate, matchId: b.meCustomMatchId },
+        ),
+      )
       .slice(0, 8)
       .map((r) => ({
         matchId: r.meCustomMatchId,
@@ -730,161 +802,6 @@ export class H2hService {
       duoChamps,
       recent,
     };
-  }
-
-  /**
-   * @desc 인사이트 카드 A1~A5 (최대 4장, 우선순위순). 챔프는 영문 키 → 프론트가 한글 변환.
-   */
-  private static buildInsights(
-    rows: Awaited<ReturnType<H2hService['queryAgainstRawRows']>>,
-    matchups: H2hMatchup[],
-    streak: ('W' | 'L')[],
-    wins: number,
-    games: number,
-  ): H2hInsight[] {
-    const insights: H2hInsight[] = [];
-
-    const withWr = matchups.map((m) => ({
-      ...m,
-      wr: m.count === 0 ? 0 : Math.round((m.wins / m.count) * 1000) / 10,
-      losses: m.count - m.wins,
-      kdaDiffNum: parseFloat(m.kdaDiff) || 0,
-    }));
-
-    // A1 필승 카드 — count≥2 AND 승률≥60% (승률 → kdaDiff → count)
-    const bestCands = withWr.filter((m) => m.count >= 2 && m.wr >= 60);
-    if (bestCands.length) {
-      const best = [...bestCands].sort(
-        (a, b) => b.wr - a.wr || b.kdaDiffNum - a.kdaDiffNum || b.count - a.count,
-      )[0];
-      insights.push({
-        kind: 'best',
-        type: 'counterPick',
-        myChamp: best.myChamp,
-        oppoChamp: best.oppoChamp,
-        wins: best.wins,
-        losses: best.losses,
-        winRate: best.wr,
-        kdaDiff: best.kdaDiffNum,
-      });
-    }
-
-    // A2 천적 주의보 — count≥2 AND 승률≤40% (승률 → kdaDiff 낮은 쪽)
-    const worstCands = withWr.filter((m) => m.count >= 2 && m.wr <= 40);
-    if (worstCands.length) {
-      const worst = [...worstCands].sort((a, b) => a.wr - b.wr || a.kdaDiffNum - b.kdaDiffNum)[0];
-      insights.push({
-        kind: 'worst',
-        type: 'nemesis',
-        myChamp: worst.myChamp,
-        oppoChamp: worst.oppoChamp,
-        wins: worst.wins,
-        losses: worst.losses,
-        winRate: worst.wr,
-        kdaDiff: worst.kdaDiffNum,
-      });
-    }
-
-    // A3 라인전-결과 괴리 — 패배 중 라인골드 우위 / (반대) 승리 중 라인골드 열세
-    const lossRows = rows.filter((r) => r.meResult === 0);
-    const winRows = rows.filter((r) => r.meResult === 1);
-    const goldAdvLosses = lossRows.filter((r) => (num(r.meLaneGoldDiff) ?? 0) > 0).length;
-    const goldDisadvWins = winRows.filter((r) => (num(r.meLaneGoldDiff) ?? 0) < 0).length;
-    if (lossRows.length >= 3 && goldAdvLosses / lossRows.length >= 0.5) {
-      insights.push({
-        kind: 'counter',
-        type: 'laneVsResult',
-        direction: 'laneWinButLose',
-        total: lossRows.length, // 패배 수
-        laneCount: goldAdvLosses, // 그중 라인 골드 우위
-      });
-    } else if (winRows.length >= 3 && goldDisadvWins / winRows.length >= 0.5) {
-      insights.push({
-        kind: 'best',
-        type: 'laneVsResult',
-        direction: 'laneLoseButWin',
-        total: winRows.length, // 승리 수
-        laneCount: goldDisadvWins, // 그중 라인 골드 열세
-      });
-    }
-
-    // A4 요즘 기세 — 맞대결≥8 AND 통산 vs 최근5판 승률차 ≥ ±20%p
-    if (games >= 8) {
-      const careerWinRate = Math.round((wins / games) * 1000) / 10;
-      const last5 = streak.slice(-5);
-      const recentWins = last5.filter((s) => s === 'W').length;
-      const recentWinRate = Math.round((recentWins / last5.length) * 1000) / 10;
-      if (Math.abs(recentWinRate - careerWinRate) >= 20) {
-        insights.push({
-          kind: 'info',
-          type: 'momentum',
-          direction: recentWinRate > careerWinRate ? 'up' : 'down',
-          recentN: last5.length,
-          recentWins,
-          recentWinRate,
-          careerWinRate,
-        });
-      }
-    }
-
-    // A5 역대 기록 — A1~A4로 4장이 안 찼을 때만 (최장 연승/연패 ≥ 3)
-    if (insights.length < 4) {
-      const longest = H2hService.longestStreak(streak);
-      if (longest.len >= 3) {
-        const curr = H2hService.currentStreak(streak);
-        insights.push({
-          kind: longest.kind === 'W' ? 'best' : 'worst',
-          type: 'streak',
-          streakKind: longest.kind === 'W' ? 'win' : 'lose',
-          length: longest.len,
-          fromDate: rows[longest.startIdx]?.mePlayedDate ?? null,
-          toDate: rows[longest.endIdx]?.mePlayedDate ?? null,
-          currentLength: curr.len,
-        });
-      }
-    }
-
-    return insights.slice(0, 4);
-  }
-
-  /** @desc 최장 연승/연패 구간 (streak 배열 인덱스 포함, fromDate/toDate 추출용) */
-  private static longestStreak(streak: ('W' | 'L')[]): {
-    kind: 'W' | 'L';
-    len: number;
-    startIdx: number;
-    endIdx: number;
-  } {
-    let bestKind: 'W' | 'L' = 'W';
-    let bestLen = 0;
-    let bestStart = 0;
-    let curKind: 'W' | 'L' | null = null;
-    let curLen = 0;
-    let curStart = 0;
-    for (let i = 0; i < streak.length; i += 1) {
-      const s = streak[i];
-      if (s === curKind) {
-        curLen += 1;
-      } else {
-        curKind = s;
-        curLen = 1;
-        curStart = i;
-      }
-      if (curLen > bestLen) {
-        bestLen = curLen;
-        bestKind = s;
-        bestStart = curStart;
-      }
-    }
-    return { kind: bestKind, len: bestLen, startIdx: bestStart, endIdx: bestStart + bestLen - 1 };
-  }
-
-  /** @desc 현재(최신) 진행 중인 연승/연패 */
-  private static currentStreak(streak: ('W' | 'L')[]): { kind: 'W' | 'L'; len: number } {
-    if (streak.length === 0) return { kind: 'W', len: 0 };
-    const kind = streak[streak.length - 1];
-    let len = 0;
-    for (let i = streak.length - 1; i >= 0 && streak[i] === kind; i -= 1) len += 1;
-    return { kind, len };
   }
 
   /** @desc recent detail 한쪽 raw 지표 묶음. NULL은 0으로 (프론트 숫자 가정) */

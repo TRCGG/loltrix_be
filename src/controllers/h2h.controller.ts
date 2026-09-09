@@ -2,7 +2,13 @@ import { Request, Response } from 'express';
 import { h2hService } from '../services/h2h.service.js';
 import { guildMemberService } from '../services/guildMember.service.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
-import { H2hResponse, FrequentH2hItem, MemberCandidate, H2hDetail } from '../types/h2h.js';
+import {
+  H2hResponse,
+  FrequentH2hItem,
+  MemberCandidate,
+  H2hDetail,
+  H2hDetailQuery,
+} from '../types/h2h.js';
 import { scopeFromQuery } from '../types/matchScope.js';
 
 /**
@@ -113,16 +119,18 @@ export const getH2hDetail = async (
 ) => {
   try {
     const { guildId } = req.params;
-    const { riotName1, riotNameTag1, riotName2, riotNameTag2, season, recentLimit, recentOffset } =
-      req.query as {
-        riotName1: string;
-        riotNameTag1?: string;
-        riotName2: string;
-        riotNameTag2?: string;
-        season?: string;
-        recentLimit?: string;
-        recentOffset?: string;
-      };
+    const {
+      riotName1,
+      riotNameTag1,
+      riotName2,
+      riotNameTag2,
+      season,
+      period,
+      myPosition,
+      sameLaneOnly,
+      recentLimit,
+      recentOffset,
+    } = req.query as unknown as H2hDetailQuery;
 
     const [resultA, resultB] = await Promise.all([
       resolveSingleMember(guildId, riotName1, riotNameTag1),
@@ -163,6 +171,9 @@ export const getH2hDetail = async (
 
     const data = await h2hService.getH2hDetail(guildId, resultA.playerCode, resultB.playerCode, {
       season: seasonValue,
+      period: period ?? 'all',
+      myPosition: myPosition ?? null,
+      sameLaneOnly: sameLaneOnly === 'true',
       recentLimit: Number(recentLimit) || 6,
       recentOffset: Number(recentOffset) || 0,
       gameTypes: scopeFromQuery(req.query as { gameType?: string }).gameTypes,

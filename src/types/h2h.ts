@@ -82,57 +82,6 @@ export interface H2hMatchup {
 }
 
 /**
- * 인사이트 카드 — 백엔드는 kind(스타일)+type(종류)+raw 수치/영문 챔프 키만 전달.
- * 한국어 문구·조사는 프론트가 type별 템플릿으로 조립 (§3.6, 2026-06-16 개정).
- */
-export type H2hInsight =
-  | {
-      kind: 'best';
-      type: 'counterPick';
-      myChamp: string;
-      oppoChamp: string;
-      wins: number;
-      losses: number;
-      winRate: number;
-      kdaDiff: number;
-    }
-  | {
-      kind: 'worst';
-      type: 'nemesis';
-      myChamp: string;
-      oppoChamp: string;
-      wins: number;
-      losses: number;
-      winRate: number;
-      kdaDiff: number;
-    }
-  | {
-      kind: 'counter' | 'best';
-      type: 'laneVsResult';
-      direction: 'laneWinButLose' | 'laneLoseButWin';
-      total: number; // 해당 결과 버킷 총 게임 수 (방향 따라 패배 수 또는 승리 수)
-      laneCount: number; // 그중 라인 골드 상태가 어긋난 게임 수. 결과어·라인어는 프론트가 direction에서 파생
-    }
-  | {
-      kind: 'info';
-      type: 'momentum';
-      direction: 'up' | 'down';
-      recentN: number;
-      recentWins: number;
-      recentWinRate: number;
-      careerWinRate: number;
-    }
-  | {
-      kind: 'best' | 'worst';
-      type: 'streak';
-      streakKind: 'win' | 'lose';
-      length: number;
-      fromDate: Date | null;
-      toDate: Date | null;
-      currentLength: number;
-    };
-
-/**
  * 최근 맞대결 세부(맞라인 게임만) — 한쪽 단일 경기 raw 지표 묶음.
  * NULL은 0으로 내린다 (프론트가 숫자 가정 — toLocaleString 등). 합산도 COALESCE(0) 후.
  */
@@ -177,6 +126,80 @@ export interface H2hRecentItem {
   detail?: { mine: H2hRecentDetailSide; oppo: H2hRecentDetailSide };
 }
 
+export type H2hLane = 'TOP' | 'JUG' | 'MID' | 'ADC' | 'SUP';
+export const H2H_LANES: readonly H2hLane[] = ['TOP', 'JUG', 'MID', 'ADC', 'SUP'];
+
+/** 'all'=선택 시즌 전체, '30d'=요청 시각−30일 ~ 요청 시각(시즌과 AND) */
+export type H2hPeriod = 'all' | '30d';
+
+/**
+ * 요청에 적용된 필터 에코. from은 period='all'이면 null.
+ * 기간은 played_date 기준인데 이 값은 업로드 시각이다(원본 리플에 경기 시각 없음) — 실제 경기 시각으로 표시하지 않는다.
+ */
+export interface H2hFilter {
+  period: H2hPeriod;
+  from: Date | null;
+  to: Date;
+  myPosition: H2hLane | null;
+  sameLaneOnly: boolean;
+  season: string | null;
+}
+
+export type H2hMetricKey =
+  | 'csPerMin'
+  | 'dpm'
+  | 'goldPerMin'
+  | 'expPerMin'
+  | 'visionPerMin'
+  | 'wardsKilledPerMin'
+  | 'deadTimePct'
+  | 'takedownsBefore15'
+  | 'jungleCsEnemyPerMin'
+  | 'healShieldPerMin';
+
+/** 맞라인 경기 한 지표의 양측 비교. perGame은 lane.matchIds 순서·개수와 같다 */
+export interface H2hLaneMetric {
+  key: H2hMetricKey;
+  validGames: number; // 양측 값이 모두 유효한 경기 수
+  myAvg: number | null;
+  oppoAvg: number | null;
+  diff: number | null; // myAvg − oppoAvg
+  ahead: number; // 내가 유리한 경기 수 (deadTimePct는 낮은 쪽)
+  tie: number;
+  behind: number;
+  perGame: { matchId: string; mine: number | null; oppo: number | null }[];
+}
+
+/** 같은 포지션으로 맞붙은 경기 묶음 (포지션별) */
+export interface H2hLaneAnalysis {
+  lane: H2hLane;
+  games: number;
+  wins: number;
+  losses: number;
+  lastPlayedDate: Date;
+  matchIds: string[]; // 최신순 최대 sampleLimit — metrics 계산에 쓴 경기
+  metrics: H2hLaneMetric[];
+}
+
+/** 인사이트용 최근 표본 — period와 무관하게 항상 최근 days일 ∩ 선택 시즌. 포지션·맞라인 필터는 적용 */
+export interface H2hRecentAnalysis {
+  days: number;
+  from: Date;
+  to: Date;
+  games: number;
+  wins: number;
+  losses: number;
+  sampleLimit: number;
+  sample: {
+    matchId: string;
+    playedDate: Date;
+    myResult: 'W' | 'L';
+    myLane: string;
+    oppoLane: string;
+  }[]; // 최신순
+  lanes: H2hLaneAnalysis[]; // games DESC → lastPlayedDate DESC
+}
+
 /** 맞붙은(against) 블록 */
 export interface H2hAgainst {
   games: number;
@@ -190,9 +213,9 @@ export interface H2hAgainst {
   laneMatrix: LaneMatrix;
   topLane: LaneTopFaced | null; // 가장 많이 맞붙은 동일 라인 (없으면 null)
   matchups: H2hMatchup[];
-  insights: H2hInsight[];
   recent: H2hRecentItem[];
   recentTotal: number; // 페이지네이션용 전체 맞대결 수
+  recentAnalysis: H2hRecentAnalysis;
 }
 
 /** 라인 조합 분포 (함께한) */
@@ -230,6 +253,7 @@ export interface H2hTogether {
 
 /** 상대전적 상세 응답 */
 export interface H2hDetail {
+  filter: H2hFilter;
   me: H2hProfile;
   oppo: H2hProfile;
   totalMet: number; // 함께+맞붙은 총 게임 수
@@ -246,6 +270,9 @@ export interface H2hDetailQuery {
   riotName2: string;
   riotNameTag2?: string;
   season?: string; // 미입력 시 현재 시즌, 'all'이면 전체
+  period?: H2hPeriod;
+  myPosition?: H2hLane;
+  sameLaneOnly?: 'true' | 'false';
   recentLimit?: string;
   recentOffset?: string;
 }
