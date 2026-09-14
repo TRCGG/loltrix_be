@@ -34,6 +34,12 @@ export interface UserGameStatistic extends RankingStats {
   position?: string;
 }
 
+export type UserStatisticsSort = 'totalCount' | 'winRate' | 'wilsonScore';
+
+export interface UserLeaderboardStatistic extends UserGameStatistic {
+  wilsonScore: number;
+}
+
 /** 대회 범위 유저 랭킹 — 일반 랭킹 항목에 대회 지표가 더 붙는다. */
 export interface CompetitionUserStat extends UserGameStatistic, CompetitionRankingStats {}
 
@@ -42,6 +48,23 @@ export interface ChampionStatistic extends RankingStats {
   champName: string;
   champNameEng: string;
   position?: string;
+}
+
+export type ChampionStatisticsSort = 'totalCount' | 'winRate' | 'pickRate' | 'wilsonScore';
+
+export interface ChampionLeaderboardStatistic extends ChampionStatistic {
+  matchCount: number;
+  totalMatches: number;
+  pickRate: number;
+  wilsonScore: number;
+}
+
+export interface ChampionStatisticsRequestQuery extends Omit<StatisticsRequestQuery, 'sortBy'> {
+  sortBy?: ChampionStatisticsSort;
+}
+
+export interface ChampionStatisticsServiceOptions extends Omit<StatisticsServiceOptions, 'sortBy'> {
+  sortBy?: ChampionStatisticsSort;
 }
 
 // API 응답 타입
@@ -62,7 +85,7 @@ export interface StatisticsRequestQuery {
   page?: string;
   season?: string;
   limit?: string;
-  sortBy?: 'totalCount' | 'winRate';
+  sortBy?: UserStatisticsSort;
   /** '1' | '2' | '3' 또는 콤마 구분(예: '2,3'). 생략 시 일반내전. */
   gameType?: string;
 }
@@ -74,7 +97,7 @@ export interface StatisticsServiceOptions
     StatisticsRequestQuery,
     'datePreset' | 'fromMonth' | 'toMonth' | 'championName' | 'position' | 'season'
   > {
-  sortBy?: 'totalCount' | 'winRate';
+  sortBy?: UserStatisticsSort;
   page?: number;
   limit?: number;
   scope?: MatchScope;
