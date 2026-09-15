@@ -1,8 +1,17 @@
-import { eq, desc, sql, and, or, inArray } from 'drizzle-orm';
+import { eq, desc, sql, and, or, inArray, isNotNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, TransactionType } from '../database/connectionPool.js';
-import { guildMember, InsertGuildMember, riotAccount, RiotAccount } from '../database/schema.js';
+import {
+  competition,
+  competitionApplication,
+  competitionTeamMember,
+  guildMember,
+  InsertGuildMember,
+  riotAccount,
+  RiotAccount,
+} from '../database/schema.js';
 import { GetGuildMemberQuery, LinkSubAccountRequest } from '../types/guildMember.js';
+import { COMPETITION_STATUS } from '../types/competition.js';
 import { BusinessError, SystemError } from '../types/error.js';
 import { riotAccountService } from '../services/riotAccount.service.js';
 
@@ -258,6 +267,47 @@ export class GuildMemberService {
           `${priRiot.riotName} is already a sub-account. (Cannot nest accounts)`,
           409,
           { isLoggable: false },
+        );
+      }
+
+      // 신청·로스터의 player_code는 항상 본계정이라는 전제가 있다. 아직 끝나지 않은 대회에
+      // 남아 있는 계정을 부계정으로 내리면 그 행들만 전제를 벗어난 채 남는다.
+      const activeCompetitions = await tx
+        .selectDistinct({ name: competition.name })
+        .from(competition)
+        .leftJoin(
+          competitionApplication,
+          and(
+            eq(competitionApplication.competitionId, competition.id),
+            eq(competitionApplication.playerCode, secRiot.playerCode),
+            ne(competitionApplication.status, 'REJECTED'),
+          ),
+        )
+        .leftJoin(
+          competitionTeamMember,
+          and(
+            eq(competitionTeamMember.competitionId, competition.id),
+            eq(competitionTeamMember.playerCode, secRiot.playerCode),
+          ),
+        )
+        .where(
+          and(
+            eq(competition.guildId, guildId),
+            inArray(competition.status, [
+              COMPETITION_STATUS.RECRUITING,
+              COMPETITION_STATUS.IN_PROGRESS,
+            ]),
+            or(isNotNull(competitionApplication.id), isNotNull(competitionTeamMember.id)),
+          ),
+        )
+        .orderBy(competition.name);
+
+      if (activeCompetitions.length > 0) {
+        const names = activeCompetitions.map((row) => row.name).join(', ');
+        throw new BusinessError(
+          `account has an active competition application or roster entry; cancel it first: ${names}`,
+          409,
+          { type: 'account-in-competition', isLoggable: false },
         );
       }
 

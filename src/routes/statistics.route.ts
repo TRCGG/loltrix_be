@@ -26,7 +26,6 @@ const filterSchema = z.object({
       limit: z.string().regex(/^\d+$/).transform(Number).optional(),
       sortBy: z.enum(['totalCount', 'winRate']).optional(),
       gameType: z.string().regex(/^[123](,[123])*$/, 'gameType must be 1|2|3 (comma separated)').optional(),
-      competitionId: z.string().regex(/^\d+$/).transform(Number).optional(),
     })
     .superRefine(rangeRequiresMonths),
 });
@@ -40,7 +39,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Statistics']
     #swagger.summary = '유저별 게임 통계'
-    #swagger.description = '특정 길드 내 유저들의 게임 통계를 조회합니다. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위 검색을 지원합니다.'
+    #swagger.description = '특정 길드 내 유저들의 게임 통계를 조회합니다. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위 검색을 지원합니다. gameType에 1이 없으면(대회 유형 합산) 시즌·기간 조건을 무시합니다. 대회 하나의 유저 랭킹은 GET /api/competitions/{guildId}/{competitionId}/statistics/users 로 조회합니다.'
 
     #swagger.parameters['guildId'] = {
       in: 'path',
@@ -96,6 +95,11 @@ router.get(
       description: '페이지당 개수',
       type: 'integer'
     }
+    #swagger.parameters['gameType'] = {
+      in: 'query',
+      description: '1=일반내전 / 2=스크림 / 3=본경기. 콤마 구분 가능(예: 2,3). 생략 시 1',
+      type: 'string'
+    }
   */
   decodeGuildIdMiddleware,
   validateRequest(filterSchema),
@@ -111,7 +115,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Statistics']
     #swagger.summary = '챔피언별 통계'
-    #swagger.description = '길드 내에서 플레이된 챔피언 통계를 조회합니다. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위 검색을 지원합니다.'
+    #swagger.description = '길드 내에서 플레이된 챔피언 통계를 조회합니다. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위 검색을 지원합니다. gameType에 1이 없으면(대회 유형 합산) 시즌·기간 조건을 무시합니다. 대회 하나의 챔피언 통계는 GET /api/competitions/{guildId}/{competitionId}/statistics/champions 로 조회합니다.'
 
     #swagger.parameters['guildId'] = {
       in: 'path',

@@ -736,22 +736,6 @@ export class ReplayService {
 
     return { result, totalCount };
   }
-
-  /**
-   * @desc 리플레이 코드를 사용하여 리플레이를 논리적으로 삭제
-   */
-  public async softDeleteReplayByCode(replayCode: string, tx: TransactionType) {
-    const result = await tx
-      .update(replay)
-      .set({
-        isDeleted: true,
-        updateDate: new Date(),
-      })
-      .where(and(eq(replay.replayCode, replayCode), eq(replay.isDeleted, false)))
-      .returning();
-
-    return result[0];
-  }
 }
 
 export const replayService = new ReplayService();

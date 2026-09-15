@@ -46,7 +46,8 @@ export const message = pgTable('message', {
 
 /**
  * 대회: 클랜 안에서 여는 이벤트 단위(멸망전 1회 등). 스크림(2)·본경기(3) 경기가 어느 대회 것인지 잇는다.
- * 길드당 OPEN은 하나 — 리플 태깅 시 대회명 없이 OPEN 한 건으로 자동 해석하기 위한 전제.
+ * 모집중은 길드에 여러 개 둘 수 있고, 길드당 IN_PROGRESS는 하나 —
+ * 리플 태깅 시 대회명 없이 진행중 한 건으로 자동 해석하기 위한 전제.
  */
 export const competition = pgTable(
   'competition',
@@ -55,15 +56,17 @@ export const competition = pgTable(
     guildId: varchar('guild_id', { length: 128 }).notNull(),
     name: varchar('name', { length: 64 }).notNull(),
     season: varchar('season', { length: 32 }).notNull(),
-    status: varchar('status', { length: 16 }).notNull().default('OPEN'), // OPEN / CLOSED
+    status: varchar('status', { length: 16 }).notNull().default('RECRUITING'), // RECRUITING / IN_PROGRESS / CLOSED
+    // false면 신청이 들어오는 즉시 APPROVED로 저장된다 (승인 단계를 건너뛰는 대회)
+    approvalRequired: boolean('approval_required').notNull().default(true),
     createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
     closeDate: timestamp('close_date', { withTimezone: true }),
   },
   (t) => [
     unique('uq_competition_guild_name').on(t.guildId, t.name),
-    uniqueIndex('uq_competition_guild_open')
+    uniqueIndex('uq_competition_guild_in_progress')
       .on(t.guildId)
-      .where(sql`${t.status} = 'OPEN'`),
+      .where(sql`${t.status} = 'IN_PROGRESS'`),
   ],
 );
 
@@ -230,10 +233,121 @@ export const customMatch = pgTable(
 export type CustomMatch = typeof customMatch.$inferSelect;
 export type InsertCustomMatch = typeof customMatch.$inferInsert;
 
+/**
+ * 대회 개인 신청. 승인은 로스터 등록의 전제가 아니다 — 운영진이 로스터에 직접 넣을 수 있고,
+ * 팀에서 빼도 신청 상태는 그대로다.
+ */
+export const competitionApplication = pgTable(
+  'competition_application',
+  {
+    id: serial('id').primaryKey(),
+    competitionId: integer('competition_id')
+      .notNull()
+      .references(() => competition.id, { onDelete: 'cascade' }),
+    playerCode: varchar('player_code', { length: 64 })
+      .notNull()
+      .references(() => riotAccount.playerCode),
+    appliedByMemberId: varchar('applied_by_member_id', { length: 64 }).notNull(),
+    mainPosition: varchar('main_position', { length: 8 }).notNull(), // TOP/JUG/MID/ADC/SUP
+    subPositions: varchar('sub_positions', { length: 8 }).array().notNull().default([]),
+    /** champion.id 최대 3개 */
+    champions: varchar('champions', { length: 16 }).array().notNull().default([]),
+    availableTime: varchar('available_time', { length: 128 }),
+    captainAvailable: boolean('captain_available').notNull().default(false),
+    practiceLevel: varchar('practice_level', { length: 16 }).notNull(), // NONE/RARE/MODERATE/OFTEN/ACTIVE
+    comment: varchar('comment', { length: 100 }),
+    status: varchar('status', { length: 16 }).notNull().default('PENDING'), // PENDING / APPROVED / REJECTED
+    decidedByMemberId: varchar('decided_by_member_id', { length: 64 }),
+    decidedDate: timestamp('decided_date', { withTimezone: true }),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+    updateDate: timestamp('update_date', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [unique('uq_competition_application').on(t.competitionId, t.playerCode)],
+);
+
+export type CompetitionApplication = typeof competitionApplication.$inferSelect;
+export type InsertCompetitionApplication = typeof competitionApplication.$inferInsert;
+
+export const competitionTeam = pgTable(
+  'competition_team',
+  {
+    id: serial('id').primaryKey(),
+    competitionId: integer('competition_id')
+      .notNull()
+      .references(() => competition.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 64 }).notNull(),
+    captainPlayerCode: varchar('captain_player_code', { length: 64 }).references(
+      () => riotAccount.playerCode,
+    ),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('uq_competition_team_name').on(t.competitionId, t.name)],
+);
+
+export type CompetitionTeam = typeof competitionTeam.$inferSelect;
+export type InsertCompetitionTeam = typeof competitionTeam.$inferInsert;
+
+/** competitionId는 teamId로 유도 가능하지만, "한 대회에서 한 팀만"을 유니크로 걸려면 컬럼이 필요하다. */
+export const competitionTeamMember = pgTable(
+  'competition_team_member',
+  {
+    id: serial('id').primaryKey(),
+    competitionId: integer('competition_id')
+      .notNull()
+      .references(() => competition.id, { onDelete: 'cascade' }),
+    teamId: integer('team_id')
+      .notNull()
+      .references(() => competitionTeam.id, { onDelete: 'cascade' }),
+    playerCode: varchar('player_code', { length: 64 })
+      .notNull()
+      .references(() => riotAccount.playerCode),
+    position: varchar('position', { length: 8 }).notNull(), // TOP/JUG/MID/ADC/SUP
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('uq_competition_team_member_player').on(t.competitionId, t.playerCode),
+    unique('uq_competition_team_member_position').on(t.teamId, t.position),
+    index('idx_competition_team_member_team').on(t.teamId),
+  ],
+);
+
+export type CompetitionTeamMember = typeof competitionTeamMember.$inferSelect;
+export type InsertCompetitionTeamMember = typeof competitionTeamMember.$inferInsert;
+
+/**
+ * 경기의 팀 귀속. 로스터에서 역산하지 않고 명시 저장한다 — 교체·용병 시점과 경기 시점이
+ * 어긋나도 전적이 흔들리지 않게. teamId NULL은 용병전이며 팀 전적에서 빠진다.
+ */
+export const competitionMatchTeam = pgTable(
+  'competition_match_team',
+  {
+    id: serial('id').primaryKey(),
+    customMatchId: varchar('custom_match_id', { length: 255 })
+      .notNull()
+      .references(() => customMatch.id, { onDelete: 'cascade' }),
+    gameTeam: varchar('game_team', { length: 8 }).notNull(), // blue / red
+    teamId: integer('team_id').references(() => competitionTeam.id, { onDelete: 'cascade' }),
+    createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('uq_competition_match_team').on(t.customMatchId, t.gameTeam),
+    index('idx_competition_match_team_team')
+      .on(t.teamId)
+      .where(sql`${t.teamId} IS NOT NULL`),
+  ],
+);
+
+export type CompetitionMatchTeam = typeof competitionMatchTeam.$inferSelect;
+export type InsertCompetitionMatchTeam = typeof competitionMatchTeam.$inferInsert;
+
 export const champion = pgTable('champion', {
   id: varchar('id', { length: 16 }).primaryKey(),
   champName: varchar('champ_name', { length: 128 }).notNull(),
   champNameEng: varchar('champ_name_eng', { length: 128 }).notNull(),
+  riotKey: integer('riot_key'),
   createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   updateDate: timestamp('update_date', { withTimezone: true })
     .notNull()
@@ -367,6 +481,53 @@ export const riotAccountRelations = relations(riotAccount, ({ many }) => ({
   guildMembers: many(guildMember),
 }));
 
+export const competitionRelations = relations(competition, ({ many }) => ({
+  applications: many(competitionApplication),
+  teams: many(competitionTeam),
+}));
+
+export const competitionApplicationRelations = relations(competitionApplication, ({ one }) => ({
+  competition: one(competition, {
+    fields: [competitionApplication.competitionId],
+    references: [competition.id],
+  }),
+  riotAccount: one(riotAccount, {
+    fields: [competitionApplication.playerCode],
+    references: [riotAccount.playerCode],
+  }),
+}));
+
+export const competitionTeamRelations = relations(competitionTeam, ({ one, many }) => ({
+  competition: one(competition, {
+    fields: [competitionTeam.competitionId],
+    references: [competition.id],
+  }),
+  members: many(competitionTeamMember),
+  matches: many(competitionMatchTeam),
+}));
+
+export const competitionTeamMemberRelations = relations(competitionTeamMember, ({ one }) => ({
+  team: one(competitionTeam, {
+    fields: [competitionTeamMember.teamId],
+    references: [competitionTeam.id],
+  }),
+  riotAccount: one(riotAccount, {
+    fields: [competitionTeamMember.playerCode],
+    references: [riotAccount.playerCode],
+  }),
+}));
+
+export const competitionMatchTeamRelations = relations(competitionMatchTeam, ({ one }) => ({
+  customMatch: one(customMatch, {
+    fields: [competitionMatchTeam.customMatchId],
+    references: [customMatch.id],
+  }),
+  team: one(competitionTeam, {
+    fields: [competitionMatchTeam.teamId],
+    references: [competitionTeam.id],
+  }),
+}));
+
 /**
  * 멤버 권한 테이블
  * - adminNormal, adminSuper는 guild_id가 null (전역 권한)
@@ -431,8 +592,54 @@ export type GuildAuditLogDetail =
   // eventType 'roleChange' — source 생략 시 웹 수동 부여/회수
   | { fromRole: string; toRole: string; source?: 'discordPermission' }
   | { gameId: string; source: 'web' | 'bot' } // eventType 'replayDelete'
-  // eventType 'competitionOpen' | 'competitionClose' | 'competitionDelete' — 하드 삭제 뒤에도 읽히도록 name 포함
-  | { competitionId: number; name: string; source: 'web' | 'bot' };
+  // eventType 'competitionOpen' | 'competitionClose' — 대회가 나중에 하드 삭제돼도 읽히도록 name 포함
+  | { competitionId: number; name: string; source: 'web' | 'bot' }
+  // eventType 'competitionDelete' — 동반 삭제된 경기의 id는 대회 참조가 끊겨 여기에만 남는다
+  | {
+      competitionId: number;
+      name: string;
+      deletedMatchIds: string[];
+      deletedMatchCount: number;
+      source: 'web' | 'bot';
+    }
+  // eventType 'competitionStatusChange' — 종료(CLOSED)로 가는 전이만 'competitionClose'로 남는다
+  | { competitionId: number; name: string; from: string; to: string; source: 'web' | 'bot' }
+  // eventType 'competitionUpdate'
+  | {
+      competitionId: number;
+      name: string;
+      changes: {
+        name?: { from: string; to: string };
+        approvalRequired?: { from: boolean; to: boolean };
+      };
+      source: 'web' | 'bot';
+    }
+  // eventType 'applicationDecide'
+  | {
+      competitionId: number;
+      applicationId: number;
+      playerCode: string;
+      status: 'APPROVED' | 'REJECTED' | 'PENDING';
+      source: 'web' | 'bot';
+    }
+  // eventType 'matchTeamAssign' — 정정 이력을 읽으려면 바꾸기 전 귀속도 있어야 한다
+  | {
+      competitionId: number;
+      customMatchId: string;
+      blueTeamId: number | null;
+      redTeamId: number | null;
+      prevBlueTeamId: number | null;
+      prevRedTeamId: number | null;
+      source: 'web' | 'bot';
+    }
+  // eventType 'matchGameTypeChange' — 경기 하나당 한 줄
+  | {
+      competitionId: number;
+      customMatchId: string;
+      from: string;
+      to: string;
+      source: 'web' | 'bot';
+    };
 
 /**
  * 길드 관리 행위 통합 감사 로그 (append-only)
@@ -447,7 +654,7 @@ export const guildAuditLog = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
-    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete' | 'competitionOpen' | 'competitionClose' | 'competitionDelete'
+    eventType: varchar('event_type', { length: 32 }).notNull(), // 'roleChange' | 'replayDelete' | 'competitionOpen' | 'competitionClose' | 'competitionStatusChange' | 'competitionUpdate' | 'competitionDelete' | 'applicationDecide' | 'matchTeamAssign' | 'matchGameTypeChange'
     actorMemberId: text('actor_member_id').notNull(), // 행위자 Discord id (미상이면 'bot')
     targetMemberId: text('target_member_id'), // 대상 멤버 (roleChange), 없으면 NULL
     detail: jsonb('detail').$type<GuildAuditLogDetail>().notNull(),

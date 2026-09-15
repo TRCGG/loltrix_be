@@ -4,11 +4,15 @@ type FetchResult = { ok: boolean; status?: number; json: () => Promise<unknown> 
 
 const fetchWithTimeout = jest.fn<(...args: unknown[]) => Promise<FetchResult>>();
 const updateTokenRow = jest.fn(async () => undefined);
+const setRow = jest.fn<(values: unknown) => { where: typeof updateTokenRow }>(() => ({
+  where: updateTokenRow,
+}));
+const updateTable = jest.fn<(table: unknown) => { set: typeof setRow }>(() => ({ set: setRow }));
 
 // 소스가 ESM 이라 jest.mock 호이스팅이 동작하지 않는다.
 // unstable_mockModule 로 등록한 뒤 대상 모듈을 동적 import 해야 목이 적용된다.
 jest.unstable_mockModule('../database/connectionPool.js', () => ({
-  db: { update: () => ({ set: () => ({ where: updateTokenRow }) }) },
+  db: { update: updateTable },
 }));
 jest.unstable_mockModule('../services/systemConfig.service.js', () => ({
   systemConfigService: {
@@ -21,6 +25,7 @@ jest.unstable_mockModule('../utils/fetchWithTimeout.js', () => ({ fetchWithTimeo
 
 const { DiscordAuthService } = await import('../services/discordAuth.service.js');
 const { BusinessError, SystemError } = await import('../types/error.js');
+const { discordMember } = await import('../database/schema.js');
 
 const service = new DiscordAuthService();
 
@@ -58,6 +63,12 @@ describe('fetchUser 프로필 캐시', () => {
     const second = await service.fetchUser('access-b', '100');
 
     expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+    expect(updateTable).toHaveBeenCalledTimes(1);
+    expect(updateTable).toHaveBeenCalledWith(discordMember);
+    expect(setRow).toHaveBeenCalledWith({
+      avatarUrl: 'https://cdn.discordapp.com/avatars/100/abc123.png',
+      updateDate: expect.any(Date),
+    });
     expect(second).toEqual(first);
     expect(first).toEqual({
       id: '100',
@@ -90,6 +101,55 @@ describe('fetchUser 프로필 캐시', () => {
 
     expect(await first).toEqual(await second);
     expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+    expect(updateTokenRow).toHaveBeenCalledTimes(1);
+  });
+
+  test('캐시 만료 후 변경된 아바타를 DB에 동기화한다', async () => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    fetchWithTimeout
+      .mockResolvedValueOnce(userResponse('210'))
+      .mockResolvedValueOnce(userResponse('210', { avatar: 'newhash' }));
+
+    await service.fetchUser('access', '210');
+    clock.mockReturnValue(now + 60 * 60 * 1000);
+    const profile = await service.fetchUser('access', '210');
+
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(2);
+    expect(updateTokenRow).toHaveBeenCalledTimes(2);
+    expect(setRow).toHaveBeenLastCalledWith({
+      avatarUrl: 'https://cdn.discordapp.com/avatars/210/newhash.png',
+      updateDate: expect.any(Date),
+    });
+    expect(profile.avatar).toBe('https://cdn.discordapp.com/avatars/210/newhash.png');
+  });
+
+  test('삭제된 아바타는 DB에도 null로 반영한다', async () => {
+    fetchWithTimeout.mockResolvedValueOnce(userResponse('220', { avatar: null }));
+
+    const profile = await service.fetchUser('access', '220');
+
+    expect(setRow).toHaveBeenCalledWith({ avatarUrl: null, updateDate: expect.any(Date) });
+    expect(profile.avatar).toBeNull();
+  });
+
+  test('DB 동기화가 실패해도 프로필을 반환하고 다음 캐시 만료 시 다시 동기화한다', async () => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const error = new Error('DB unavailable');
+    updateTokenRow.mockRejectedValueOnce(error);
+    fetchWithTimeout.mockResolvedValue(userResponse('230'));
+
+    const profile = await service.fetchUser('access', '230');
+    expect(profile.id).toBe('230');
+    expect(consoleError).toHaveBeenCalledWith('Failed to sync Discord member avatar', error);
+    expect(await service.fetchUser('access', '230')).toEqual(profile);
+    expect(updateTokenRow).toHaveBeenCalledTimes(1);
+
+    clock.mockReturnValue(now + 60 * 60 * 1000);
+    await service.fetchUser('access', '230');
+    expect(updateTokenRow).toHaveBeenCalledTimes(2);
   });
 
   test('실패는 캐시하지 않아 다음 요청이 다시 조회한다', async () => {
@@ -97,6 +157,7 @@ describe('fetchUser 프로필 캐시', () => {
     fetchWithTimeout.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
 
     await expect(service.fetchUser('access', '300')).rejects.toBeInstanceOf(SystemError);
+    expect(updateTable).not.toHaveBeenCalled();
 
     fetchWithTimeout.mockResolvedValueOnce(userResponse('300'));
     const profile = await service.fetchUser('access', '300');

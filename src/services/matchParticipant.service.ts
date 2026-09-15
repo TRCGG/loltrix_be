@@ -5,7 +5,6 @@ import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
 import {
   InsertMatchParticipant,
   matchParticipant,
-  mmrParticipantMetric,
   champion,
   riotAccount,
   customMatch,
@@ -14,12 +13,20 @@ import {
   perks,
   guildAuditLog,
   competition,
+  competitionMatchTeam,
+  competitionTeam,
 } from '../database/schema.js'; // 스키마 import 추가
 import { subAccountLink } from '../database/subAccountLink.js';
 import { scopeConditions } from '../database/matchScope.js';
 import { SystemError } from '../types/error.js';
-import { MatchScope, NORMAL_MATCH_SCOPE, isCompetitionScope } from '../types/matchScope.js';
-import { replayService } from './replay.service.js';
+import {
+  MatchScope,
+  NORMAL_MATCH_SCOPE,
+  competitionTeamNames,
+  ignoresPeriod,
+  isCompetitionScope,
+} from '../types/matchScope.js';
+import { softDeleteMatches } from './matchSoftDelete.js';
 
 const MatchparticipantSchema = z.object({
   PUUID: z.string().max(64),
@@ -101,6 +108,17 @@ const mapPosition = (position: string): string => {
       return position;
   }
 };
+
+/** 분당 챔피언 피해량 = 총 피해 / 총 플레이 분. time_played는 초 — 통계 랭킹과 같은 산식. */
+const avgDpmSql = () => sql<number>`
+  CASE
+    WHEN COALESCE(SUM(${matchParticipant.timePlayed}), 0) = 0 THEN 0
+    ELSE ROUND(
+      COALESCE(SUM(${matchParticipant.totalDamageChampions}), 0)::numeric
+      / (SUM(${matchParticipant.timePlayed})::numeric / 60),
+      0
+    )
+  END`;
 
 /**
  * @desc 내전 참여자 서비스
@@ -271,7 +289,7 @@ export class MatchParticipantService {
     scope: MatchScope = NORMAL_MATCH_SCOPE,
   ) {
     // 통계 쿼리 실행
-    const statColumns = this.getStatSqlChunks();
+    const statColumns = { ...this.getStatSqlChunks(), avgDpm: avgDpmSql() };
     // 부캐 전적 포함: effective player_code = 조회 대상 (TRC-243 A안)
     const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
@@ -288,21 +306,13 @@ export class MatchParticipantService {
           eq(customMatch.isDeleted, false),
           ...scopeConditions(customMatch, scope),
           // 대회 요약은 "이번 달"이 아니라 대회 전체
-          isCompetitionScope(scope)
+          ignoresPeriod(scope)
             ? undefined
             : sql`TO_CHAR(${customMatch.createDate}, 'YYYY-MM') = TO_CHAR(NOW(), 'YYYY-MM')`,
         ),
       );
 
-    return (
-      result || {
-        totalCount: 0,
-        winCount: 0,
-        loseCount: 0,
-        winRate: 0,
-        kda: 0,
-      }
-    );
+    return result || { totalCount: 0, win: 0, lose: 0, winRate: 0, kda: 0, avgDpm: 0 };
   }
 
   /**
@@ -436,6 +446,11 @@ export class MatchParticipantService {
     // riotAccount도 effective 기준으로 조인해 본캐 계정명으로 노출한다 (기존 응답 유지).
     const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
+    const mySide = alias(competitionMatchTeam, 'cmt_me');
+    const opponentSide = alias(competitionMatchTeam, 'cmt_opp');
+    const myTeam = alias(competitionTeam, 'ct_me');
+    const opponentTeam = alias(competitionTeam, 'ct_opp');
+
     const whereCondition = and(
       eq(link.effectivePlayerCode, playerCode),
       eq(matchParticipant.isDeleted, false),
@@ -499,6 +514,9 @@ export class MatchParticipantService {
         keystoneName: keystone.name,
         substyleIcon: substyle.icon,
         substyleName: substyle.name,
+
+        teamName: myTeam.name,
+        opponentTeamName: opponentTeam.name,
       })
       .from(matchParticipant)
       // Standard Joins
@@ -512,6 +530,23 @@ export class MatchParticipantService {
       .leftJoin(sp2, eq(matchParticipant.summonerSpell2, sp2.id))
       .leftJoin(keystone, eq(matchParticipant.keyStoneId, keystone.id))
       .leftJoin(substyle, eq(matchParticipant.perkSubStyle, substyle.id))
+      // 귀속 행은 경기당 진영마다 하나뿐이라 반대 진영도 한 건으로 정해진다
+      .leftJoin(
+        mySide,
+        and(
+          eq(mySide.customMatchId, matchParticipant.customMatchId),
+          eq(mySide.gameTeam, matchParticipant.gameTeam),
+        ),
+      )
+      .leftJoin(
+        opponentSide,
+        and(
+          eq(opponentSide.customMatchId, matchParticipant.customMatchId),
+          ne(opponentSide.gameTeam, matchParticipant.gameTeam),
+        ),
+      )
+      .leftJoin(myTeam, eq(myTeam.id, mySide.teamId))
+      .leftJoin(opponentTeam, eq(opponentTeam.id, opponentSide.teamId))
       // Conditions
       .where(whereCondition)
       .orderBy(desc(customMatch.createDate))
@@ -528,7 +563,10 @@ export class MatchParticipantService {
     const [games, countResult] = await Promise.all([gamesQuery, countQuery]);
     const totalCount = countResult[0]?.count || 0;
 
-    return { games, totalCount };
+    return {
+      games: games.map((game) => ({ ...game, ...competitionTeamNames(scope, game) })),
+      totalCount,
+    };
   }
 
   /**
@@ -708,7 +746,6 @@ export class MatchParticipantService {
 
   /**
    * @desc 게임 기록 소프트 삭제
-   * customMatch와 연관된 matchParticipant를 모두 isDeleted = true 처리
    * @param actor 삭제 수행자 — guild_audit_log에 감사 기록 (웹 세션 memberId 또는 봇 !drop 사용자)
    */
   public async deleteMatch(
@@ -717,56 +754,11 @@ export class MatchParticipantService {
     actor: { memberId: string; source: 'web' | 'bot' },
   ) {
     return db.transaction(async (tx) => {
-      // 1. CustomMatch 삭제
-      const [deletedMatch] = await tx
-        .update(customMatch)
-        .set({
-          isDeleted: true,
-          updateDate: new Date(),
-        })
-        .where(
-          and(
-            eq(customMatch.id, gameId),
-            eq(customMatch.guildId, guildId),
-            eq(customMatch.isDeleted, false),
-          ),
-        )
-        .returning();
-
-      // 해당 게임이 없거나 이미 삭제된 경우 null 반환
+      const [deletedMatch] = await softDeleteMatches([gameId], tx, guildId);
       if (!deletedMatch) {
         return null;
       }
 
-      // 2. 연관된 MatchParticipant 일괄 삭제
-      await tx
-        .update(matchParticipant)
-        .set({
-          isDeleted: true,
-          updateDate: new Date(),
-        })
-        .where(
-          and(eq(matchParticipant.customMatchId, gameId), eq(matchParticipant.isDeleted, false)),
-        );
-
-      // 2-1. mmr_participant_metric도 동일 soft delete (H2H가 삭제 경기 제외하도록)
-      await tx
-        .update(mmrParticipantMetric)
-        .set({
-          isDeleted: true,
-          updateDate: new Date(),
-        })
-        .where(
-          and(
-            eq(mmrParticipantMetric.customMatchId, gameId),
-            eq(mmrParticipantMetric.isDeleted, false),
-          ),
-        );
-
-      // 3. 연관된 replays 삭제
-      await replayService.softDeleteReplayByCode(gameId, tx);
-
-      // 4. 삭제 감사 로그 (append-only) — 누가 어느 게임을 지웠는지
       await tx.insert(guildAuditLog).values({
         guildId,
         eventType: 'replayDelete',

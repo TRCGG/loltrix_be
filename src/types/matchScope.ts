@@ -4,8 +4,8 @@ import { DatePreset } from '../database/datePeriod.js';
 export type GameType = '1' | '2' | '3';
 
 /**
- * 전적 조회 범위. competitionId가 있으면 season·기간 조건은 무시한다 —
- * 대회가 시즌 경계를 넘어도 반 토막 나지 않게.
+ * 전적 조회 범위. competitionId가 있거나 gameTypes에 일반내전(1)이 없으면 season·기간 조건은 무시한다 —
+ * 대회가 시즌 경계를 넘어도 반 토막 나지 않게. 판정은 ignoresPeriod.
  */
 export interface MatchScope {
   gameTypes: GameType[];
@@ -19,6 +19,24 @@ export interface MatchScope {
 export const NORMAL_MATCH_SCOPE: MatchScope = { gameTypes: ['1'] };
 
 export const isCompetitionScope = (scope: MatchScope): boolean => scope.competitionId != null;
+
+/**
+ * 시즌·기간 조건을 버려야 하는 범위인가. 대회를 특정했을 때뿐 아니라 대회 유형만 조회할 때도
+ * 버린다 — 전적 페이지의 "대회 합산"은 시즌 경계를 넘어 모든 대회를 가로질러 읽는다.
+ * 판수 하한·길드 가입 상태 같은 다른 완화는 여전히 isCompetitionScope가 정한다.
+ */
+export const ignoresPeriod = (scope: MatchScope): boolean =>
+  isCompetitionScope(scope) || !scope.gameTypes.includes('1');
+
+/**
+ * 경기 목록의 팀 이름 칸. 대회를 특정하지 않은 조회는 여러 대회가 섞여 어느 대회의 팀인지
+ * 말할 수 없으므로 비운다 — 칸 자체는 항상 있어야 화면이 분기하지 않는다.
+ */
+export const competitionTeamNames = (
+  scope: MatchScope,
+  names: { teamName: string | null; opponentTeamName: string | null },
+): { teamName: string | null; opponentTeamName: string | null } =>
+  isCompetitionScope(scope) ? names : { teamName: null, opponentTeamName: null };
 
 const GAME_TYPES = new Set<string>(['1', '2', '3']);
 

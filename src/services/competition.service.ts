@@ -1,17 +1,33 @@
 import { and, desc, eq, ilike, inArray, sql } from 'drizzle-orm';
 import { db, DbOrTx, TransactionType } from '../database/connectionPool.js';
-import { competition, customMatch, guildAuditLog, replay, Competition } from '../database/schema.js';
+import {
+  competition,
+  competitionApplication,
+  competitionMatchTeam,
+  competitionTeam,
+  competitionTeamMember,
+  customMatch,
+  guildAuditLog,
+  replay,
+  Competition,
+  GuildAuditLogDetail,
+  InsertCompetition,
+} from '../database/schema.js';
 import { BusinessError } from '../types/error.js';
 import {
+  COMPETITION_STATUS,
   CompetitionActor,
+  CompetitionCreateInput,
   CompetitionDetail,
+  CompetitionRemoveResult,
   CompetitionResolveResult,
   CompetitionStatus,
   CompetitionSummary,
+  CompetitionUpdateInput,
 } from '../types/competition.js';
+import { canTransition, closeDateFor } from './competitionLifecycle.js';
+import { softDeleteMatches } from './matchSoftDelete.js';
 import { systemConfigService } from './systemConfig.service.js';
-
-export const COMPETITION_STATUS = { OPEN: 'OPEN', CLOSED: 'CLOSED' } as const;
 
 export interface CompetitionRef {
   id: number;
@@ -29,14 +45,18 @@ const violatedConstraint = (error: unknown): string | null => {
 };
 
 export class CompetitionService {
-  /** trim + 연속 공백 축약. "멸망전 1회"와 "멸망전  1회"가 다른 대회로 생기지 않게. */
+  /**
+   * trim + 연속 공백 축약. "멸망전 1회"와 "멸망전  1회"가 다른 대회로 생기지 않게.
+   * 제어문자도 공백으로 바꾼다 — 로스터 일괄 저장이 팀 이름을 U+0001 자리표로 잠시 비켜 두므로,
+   * 사용자 이름에 제어문자가 남으면 그 자리표와 부딪힌다.
+   */
   public static normalizeName(name: string): string {
-    return name.trim().replace(/\s+/g, ' ');
+    return name.replace(/\p{Cc}/gu, ' ').trim().replace(/\s+/g, ' ');
   }
 
   /**
    * 리플이 붙을 대회를 확정한다. 일반내전(1)은 대회 없음.
-   * 스크림·본경기는 competitionId가 없으면 길드의 OPEN 대회로 해석한다.
+   * 스크림·본경기는 competitionId가 없으면 길드의 진행중 대회로 해석한다.
    *
    * lock=true(저장 트랜잭션 안): FOR SHARE로 잡아 트랜잭션이 끝날 때까지 종료(UPDATE)가 못 끼어들게 한다.
    * 봇이 첨부 여러 개를 수십 초에 걸쳐 순차 저장하는 동안 !대회종료가 오면, 잠금이 없을 때
@@ -63,7 +83,10 @@ export class CompetitionService {
     const condition =
       competitionId != null
         ? and(eq(competition.id, competitionId), eq(competition.guildId, guildId))
-        : and(eq(competition.guildId, guildId), eq(competition.status, COMPETITION_STATUS.OPEN));
+        : and(
+            eq(competition.guildId, guildId),
+            eq(competition.status, COMPETITION_STATUS.IN_PROGRESS),
+          );
 
     const query = executor
       .select({ id: competition.id, name: competition.name, status: competition.status })
@@ -79,13 +102,14 @@ export class CompetitionService {
           isLoggable: false,
         });
       }
-      throw new BusinessError('no open competition', 400, {
+      // 봇이 읽는 에러 타입이라 상태 이름이 바뀌어도 그대로 둔다.
+      throw new BusinessError('no competition in progress', 400, {
         type: 'no-open-competition',
         isLoggable: false,
       });
     }
-    if (row.status !== COMPETITION_STATUS.OPEN) {
-      throw new BusinessError('competition is closed', 400, {
+    if (row.status !== COMPETITION_STATUS.IN_PROGRESS) {
+      throw new BusinessError('competition is not in progress', 400, {
         type: 'competition-not-open',
         isLoggable: false,
       });
@@ -93,9 +117,13 @@ export class CompetitionService {
     return { id: row.id, name: row.name };
   }
 
-  /** 개설. 길드당 OPEN 하나·이름 중복은 DB 유니크가 막고 409로 돌려준다. */
-  public async create(guildId: string, rawName: string, actor: CompetitionActor): Promise<Competition> {
-    const name = CompetitionService.normalizeName(rawName);
+  /** 개설. 길드당 진행중 하나·이름 중복은 DB 유니크가 막고 409로 돌려준다. */
+  public async create(
+    guildId: string,
+    input: CompetitionCreateInput,
+    actor: CompetitionActor,
+  ): Promise<Competition> {
+    const name = CompetitionService.normalizeName(input.name);
     if (!name) {
       throw new BusinessError('competition name is required', 400, { isLoggable: false });
     }
@@ -105,26 +133,139 @@ export class CompetitionService {
       return await db.transaction(async (tx) => {
         const [created] = await tx
           .insert(competition)
-          .values({ guildId, name, season, status: COMPETITION_STATUS.OPEN })
+          .values({
+            guildId,
+            name,
+            season,
+            status: input.status ?? COMPETITION_STATUS.RECRUITING,
+            approvalRequired: input.approvalRequired ?? true,
+          })
           .returning();
         await this.writeAudit(tx, guildId, 'competitionOpen', created, actor);
         return created;
       });
     } catch (error) {
-      const constraint = violatedConstraint(error);
-      if (constraint === 'uq_competition_guild_open') {
-        throw new BusinessError('an open competition already exists', 409, {
-          type: 'competition-open-exists',
-          isLoggable: false,
-        });
+      this.rethrowUnique(error);
+    }
+  }
+
+  public async update(
+    guildId: string,
+    id: number,
+    input: CompetitionUpdateInput,
+    actor: CompetitionActor,
+  ): Promise<Competition> {
+    const patch: Partial<InsertCompetition> = {};
+    if (input.name !== undefined) {
+      const name = CompetitionService.normalizeName(input.name);
+      if (!name) {
+        throw new BusinessError('competition name is required', 400, { isLoggable: false });
       }
-      if (constraint === 'uq_competition_guild_name') {
-        throw new BusinessError('competition name already exists', 409, {
-          type: 'competition-name-exists',
-          isLoggable: false,
+      patch.name = name;
+    }
+    if (input.approvalRequired !== undefined) {
+      patch.approvalRequired = input.approvalRequired;
+    }
+    if (Object.keys(patch).length === 0) {
+      throw new BusinessError('name or approvalRequired is required', 400, {
+        type: 'competition-update-empty',
+        isLoggable: false,
+      });
+    }
+
+    try {
+      return await db.transaction(async (tx) => {
+        const target = await this.lockCompetition(tx, guildId, id);
+        const changes = {
+          ...(patch.name !== undefined && patch.name !== target.name
+            ? { name: { from: target.name, to: patch.name } }
+            : {}),
+          ...(patch.approvalRequired !== undefined &&
+          patch.approvalRequired !== target.approvalRequired
+            ? {
+                approvalRequired: {
+                  from: target.approvalRequired,
+                  to: patch.approvalRequired,
+                },
+              }
+            : {}),
+        };
+        // 빈 changes만 남은 감사 로그가 쌓이면 실제 수정 이력이 그 사이에 묻힌다.
+        if (Object.keys(changes).length === 0) {
+          return target;
+        }
+
+        const [updated] = await tx
+          .update(competition)
+          .set(patch)
+          .where(eq(competition.id, id))
+          .returning();
+
+        await tx.insert(guildAuditLog).values({
+          guildId,
+          eventType: 'competitionUpdate',
+          actorMemberId: actor.memberId,
+          detail: {
+            competitionId: updated.id,
+            name: updated.name,
+            changes,
+            source: actor.source,
+          },
         });
-      }
-      throw error;
+        return updated;
+      });
+    } catch (error) {
+      this.rethrowUnique(error);
+    }
+  }
+
+  /**
+   * 상태 전이. 행을 FOR UPDATE로 잡고 검사한다 — 잠금 없이 읽으면 두 요청이 같은 현재 상태를 보고
+   * 각자 유효한 전이라고 판정한다(예: 종료 되돌리기 두 건).
+   */
+  public async changeStatus(
+    guildId: string,
+    id: number,
+    to: CompetitionStatus,
+    actor: CompetitionActor,
+  ): Promise<Competition> {
+    try {
+      return await db.transaction(async (tx) => {
+        const target = await this.lockCompetition(tx, guildId, id);
+        if (!canTransition(target.status, to)) {
+          throw new BusinessError(`cannot change status from ${target.status} to ${to}`, 409, {
+            type: 'competition-invalid-transition',
+            isLoggable: false,
+          });
+        }
+
+        const [updated] = await tx
+          .update(competition)
+          .set({ status: to, closeDate: closeDateFor(to) })
+          .where(eq(competition.id, id))
+          .returning();
+
+        // 종료만 기존 이벤트 타입을 유지한다 — 봇·프론트가 competitionClose를 읽고 있다.
+        if (to === COMPETITION_STATUS.CLOSED) {
+          await this.writeAudit(tx, guildId, 'competitionClose', updated, actor);
+        } else {
+          await tx.insert(guildAuditLog).values({
+            guildId,
+            eventType: 'competitionStatusChange',
+            actorMemberId: actor.memberId,
+            detail: {
+              competitionId: updated.id,
+              name: updated.name,
+              from: target.status,
+              to,
+              source: actor.source,
+            },
+          });
+        }
+        return updated;
+      });
+    } catch (error) {
+      this.rethrowUnique(error);
     }
   }
 
@@ -146,6 +287,21 @@ export class CompetitionService {
     return this.attachCounts(guildId, rows);
   }
 
+  /** 이 길드의 대회인지만 확인한다 — 대회에 딸린 조회가 남의 길드 대회를 읽지 않게. */
+  public async assertExists(guildId: string, id: number): Promise<void> {
+    const [row] = await db
+      .select({ id: competition.id })
+      .from(competition)
+      .where(and(eq(competition.id, id), eq(competition.guildId, guildId)))
+      .limit(1);
+    if (!row) {
+      throw new BusinessError('competition not found', 404, {
+        type: 'competition-not-found',
+        isLoggable: false,
+      });
+    }
+  }
+
   public async findById(guildId: string, id: number): Promise<CompetitionSummary | null> {
     const [row] = await db
       .select()
@@ -158,20 +314,25 @@ export class CompetitionService {
   }
 
   /**
-   * 대회명 해석. name 없음 → OPEN, 없으면 최근 종료(close_date DESC, id DESC).
+   * 대회명 해석. name 없음 → 진행중, 없으면 최근 종료(close_date DESC, id DESC).
    * name 있음 → 정확 일치 1건 → 없으면 부분일치가 정확히 1건일 때만 확정 → 2건 이상이면 candidates.
    */
   public async resolveByName(guildId: string, rawName?: string): Promise<CompetitionResolveResult> {
     const name = rawName ? CompetitionService.normalizeName(rawName) : '';
 
     if (!name) {
-      const [open] = await db
+      const [inProgress] = await db
         .select()
         .from(competition)
-        .where(and(eq(competition.guildId, guildId), eq(competition.status, COMPETITION_STATUS.OPEN)))
+        .where(
+          and(
+            eq(competition.guildId, guildId),
+            eq(competition.status, COMPETITION_STATUS.IN_PROGRESS),
+          ),
+        )
         .limit(1);
-      const [latest] = open
-        ? [open]
+      const [latest] = inProgress
+        ? [inProgress]
         : await db
             .select()
             .from(competition)
@@ -225,64 +386,66 @@ export class CompetitionService {
   }
 
   public async close(guildId: string, id: number, actor: CompetitionActor): Promise<Competition> {
-    return db.transaction(async (tx) => {
-      const [closed] = await tx
-        .update(competition)
-        .set({ status: COMPETITION_STATUS.CLOSED, closeDate: new Date() })
-        .where(
-          and(
-            eq(competition.id, id),
-            eq(competition.guildId, guildId),
-            eq(competition.status, COMPETITION_STATUS.OPEN),
-          ),
-        )
-        .returning();
-      if (!closed) {
-        throw new BusinessError('open competition not found', 404, {
-          type: 'competition-not-open',
-          isLoggable: false,
-        });
-      }
-      await this.writeAudit(tx, guildId, 'competitionClose', closed, actor);
-      return closed;
-    });
+    return this.changeStatus(guildId, id, COMPETITION_STATUS.CLOSED, actor);
   }
 
   /**
-   * 삭제. 활성 경기가 있으면 거부. soft-delete된 경기(!drop)는 competition_id를 NULL로 끊고 하드 삭제한다 —
-   * 지운 경기에 대회 정보를 남길 이유가 없고, 남기면 FK 때문에 대회를 못 지운다.
+   * 삭제. 활성 경기는 !drop과 같은 캐스케이드로 함께 soft-delete하고, 이미 지워진 경기까지 포함해
+   * competition_id를 NULL로 끊은 뒤 대회를 하드 삭제한다 — 참조가 남으면 FK 때문에 못 지운다.
+   *
+   * confirmName은 잠금 뒤에 대조한다. 먼저 읽고 비교하면 그 사이 이름이 바뀐 대회를
+   * 옛 이름으로 지울 수 있다.
    */
-  public async remove(guildId: string, id: number, actor: CompetitionActor): Promise<Competition> {
+  public async remove(
+    guildId: string,
+    id: number,
+    confirmName: string,
+    actor: CompetitionActor,
+  ): Promise<CompetitionRemoveResult> {
     return db.transaction(async (tx) => {
-      const [target] = await tx
-        .select()
-        .from(competition)
-        .where(and(eq(competition.id, id), eq(competition.guildId, guildId)))
-        .limit(1)
-        .for('update');
-      if (!target) {
-        throw new BusinessError('competition not found', 404, {
-          type: 'competition-not-found',
+      const target = await this.lockCompetition(tx, guildId, id);
+      if (CompetitionService.normalizeName(confirmName) !== target.name) {
+        throw new BusinessError('confirmName must match the competition name', 400, {
+          type: 'competition-name-mismatch',
           isLoggable: false,
         });
       }
 
-      const [{ active }] = await tx
-        .select({ active: sql<number>`count(*)::integer` })
+      const activeMatches = await tx
+        .select({ id: customMatch.id })
         .from(customMatch)
-        .where(and(eq(customMatch.competitionId, id), eq(customMatch.isDeleted, false)));
-      if (active > 0) {
-        throw new BusinessError('competition has matches', 409, {
-          type: 'competition-has-matches',
-          isLoggable: false,
-        });
-      }
+        .where(
+          and(
+            eq(customMatch.competitionId, id),
+            eq(customMatch.guildId, guildId),
+            eq(customMatch.isDeleted, false),
+          ),
+        );
+
+      // custom_match를 따로 잠그지 않는다 — 대회 잠금이 이 대회로 오는 업로드를 막고 있어 목록이
+      // 도중에 늘지 않고, 같은 경기에 !drop이 동시에 들어와도 is_deleted=false 조건에 걸려 한쪽만
+      // 뒤집는다. 그래서 감사 로그와 응답 수는 select 목록이 아니라 실제로 뒤집힌 행에서 뽑는다.
+      const deleted = await softDeleteMatches(
+        activeMatches.map((row) => row.id),
+        tx,
+        guildId,
+      );
+      const deletedMatchIds = deleted.map((match) => match.id);
+
+      // 옛 경로·롤백으로 이미 soft-delete된 경기의 귀속 행은 위 캐스케이드가 닿지 않는다 — 대회 참조를
+      // 끊고 나면 어느 읽기 경로에도 안 걸린 채 남는다.
+      await tx.delete(competitionMatchTeam).where(
+        inArray(
+          competitionMatchTeam.customMatchId,
+          tx.select({ id: customMatch.id }).from(customMatch).where(eq(customMatch.competitionId, id)),
+        ),
+      );
 
       await tx.update(customMatch).set({ competitionId: null }).where(eq(customMatch.competitionId, id));
       await tx.update(replay).set({ competitionId: null }).where(eq(replay.competitionId, id));
       await tx.delete(competition).where(eq(competition.id, id));
-      await this.writeAudit(tx, guildId, 'competitionDelete', target, actor);
-      return target;
+      await this.writeAudit(tx, guildId, 'competitionDelete', target, actor, deletedMatchIds);
+      return { ...target, deletedMatchCount: deletedMatchIds.length };
     });
   }
 
@@ -291,31 +454,121 @@ export class CompetitionService {
   private async attachCounts(guildId: string, rows: Competition[]): Promise<CompetitionSummary[]> {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
-    const counts = await db
-      .select({
-        competitionId: customMatch.competitionId,
-        gameType: customMatch.gameType,
-        count: sql<number>`count(*)::integer`,
-      })
-      .from(customMatch)
-      .where(
-        and(
-          eq(customMatch.guildId, guildId),
-          inArray(customMatch.competitionId, ids),
-          eq(customMatch.isDeleted, false),
-        ),
-      )
-      .groupBy(customMatch.competitionId, customMatch.gameType);
 
-    const byId = new Map<number, { scrimCount: number; mainCount: number }>();
-    for (const c of counts) {
-      if (c.competitionId == null) continue;
-      const acc = byId.get(c.competitionId) ?? { scrimCount: 0, mainCount: 0 };
-      if (c.gameType === '2') acc.scrimCount += c.count;
-      if (c.gameType === '3') acc.mainCount += c.count;
-      byId.set(c.competitionId, acc);
+    const [matches, applications, teams, participants] = await Promise.all([
+      db
+        .select({
+          competitionId: customMatch.competitionId,
+          gameType: customMatch.gameType,
+          count: sql<number>`count(*)::integer`,
+        })
+        .from(customMatch)
+        .where(
+          and(
+            eq(customMatch.guildId, guildId),
+            inArray(customMatch.competitionId, ids),
+            eq(customMatch.isDeleted, false),
+          ),
+        )
+        .groupBy(customMatch.competitionId, customMatch.gameType),
+      db
+        .select({
+          competitionId: competitionApplication.competitionId,
+          status: competitionApplication.status,
+          count: sql<number>`count(*)::integer`,
+        })
+        .from(competitionApplication)
+        .where(inArray(competitionApplication.competitionId, ids))
+        .groupBy(competitionApplication.competitionId, competitionApplication.status),
+      db
+        .select({
+          competitionId: competitionTeam.competitionId,
+          count: sql<number>`count(*)::integer`,
+        })
+        .from(competitionTeam)
+        .where(inArray(competitionTeam.competitionId, ids))
+        .groupBy(competitionTeam.competitionId),
+      db
+        .select({
+          competitionId: competitionTeamMember.competitionId,
+          count: sql<number>`count(*)::integer`,
+        })
+        .from(competitionTeamMember)
+        .where(inArray(competitionTeamMember.competitionId, ids))
+        .groupBy(competitionTeamMember.competitionId),
+    ]);
+
+    const empty = () => ({
+      scrimCount: 0,
+      mainCount: 0,
+      applicationCount: 0,
+      pendingCount: 0,
+      teamCount: 0,
+      participantCount: 0,
+    });
+    const byId = new Map<number, ReturnType<typeof empty>>(ids.map((id) => [id, empty()]));
+    const accOf = (competitionId: number | null) =>
+      competitionId == null ? undefined : byId.get(competitionId);
+
+    for (const row of matches) {
+      const acc = accOf(row.competitionId);
+      if (!acc) continue;
+      if (row.gameType === '2') acc.scrimCount += row.count;
+      if (row.gameType === '3') acc.mainCount += row.count;
     }
-    return rows.map((r) => ({ ...r, ...(byId.get(r.id) ?? { scrimCount: 0, mainCount: 0 }) }));
+    for (const row of applications) {
+      const acc = accOf(row.competitionId);
+      if (!acc) continue;
+      acc.applicationCount += row.count;
+      if (row.status === 'PENDING') acc.pendingCount += row.count;
+    }
+    for (const row of teams) {
+      const acc = accOf(row.competitionId);
+      if (acc) acc.teamCount += row.count;
+    }
+    for (const row of participants) {
+      const acc = accOf(row.competitionId);
+      if (acc) acc.participantCount += row.count;
+    }
+
+    return rows.map((r) => ({ ...r, ...(byId.get(r.id) ?? empty()) }));
+  }
+
+  private async lockCompetition(
+    tx: TransactionType,
+    guildId: string,
+    id: number,
+  ): Promise<Competition> {
+    const [row] = await tx
+      .select()
+      .from(competition)
+      .where(and(eq(competition.id, id), eq(competition.guildId, guildId)))
+      .limit(1)
+      .for('update');
+    if (!row) {
+      throw new BusinessError('competition not found', 404, {
+        type: 'competition-not-found',
+        isLoggable: false,
+      });
+    }
+    return row;
+  }
+
+  private rethrowUnique(error: unknown): never {
+    const constraint = violatedConstraint(error);
+    if (constraint === 'uq_competition_guild_in_progress') {
+      throw new BusinessError('a competition is already in progress', 409, {
+        type: 'competition-in-progress-exists',
+        isLoggable: false,
+      });
+    }
+    if (constraint === 'uq_competition_guild_name') {
+      throw new BusinessError('competition name already exists', 409, {
+        type: 'competition-name-exists',
+        isLoggable: false,
+      });
+    }
+    throw error;
   }
 
   private async writeAudit(
@@ -324,13 +577,24 @@ export class CompetitionService {
     eventType: 'competitionOpen' | 'competitionClose' | 'competitionDelete',
     target: Competition,
     actor: CompetitionActor,
+    deletedMatchIds?: string[],
   ) {
     // 하드 삭제 뒤에도 로그가 읽히도록 이름을 같이 남긴다.
+    const detail: GuildAuditLogDetail = deletedMatchIds
+      ? {
+          competitionId: target.id,
+          name: target.name,
+          deletedMatchIds,
+          deletedMatchCount: deletedMatchIds.length,
+          source: actor.source,
+        }
+      : { competitionId: target.id, name: target.name, source: actor.source };
+
     await tx.insert(guildAuditLog).values({
       guildId,
       eventType,
       actorMemberId: actor.memberId,
-      detail: { competitionId: target.id, name: target.name, source: actor.source },
+      detail,
     });
   }
 }

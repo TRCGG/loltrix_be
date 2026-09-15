@@ -1,5 +1,6 @@
-import { and, eq, sql, SQL } from 'drizzle-orm';
+import { and, eq, inArray, sql, SQL } from 'drizzle-orm';
 import { AnyPgColumn, alias } from 'drizzle-orm/pg-core';
+import { db, DbOrTx } from './connectionPool.js';
 import { guildMember } from './schema.js';
 
 /**
@@ -31,4 +32,34 @@ export function subAccountLink(aliasName: string, guildId: string, playerCode: A
   ) as SQL;
   const effectivePlayerCode = sql<string>`COALESCE(${table.mainAccount}, ${playerCode})`;
   return { table, on, effectivePlayerCode };
+}
+
+/**
+ * 조인이 아니라 행 단위로 본계정을 해석한다 (대회 로스터·신청 저장, 자동 배정 집계용).
+ * subAccountLink와 같은 길드 스코프 규칙 — 링크되지 않은 코드는 자기 자신으로 매핑된다.
+ */
+export async function mainAccountMap(
+  guildId: string,
+  playerCodes: string[],
+  executor: DbOrTx = db,
+): Promise<Map<string, string>> {
+  const map = new Map(playerCodes.map((code) => [code, code]));
+  if (playerCodes.length === 0) return map;
+
+  const rows = await executor
+    .select({ account: guildMember.account, mainAccount: guildMember.mainAccount })
+    .from(guildMember)
+    .where(
+      and(
+        eq(guildMember.guildId, guildId),
+        inArray(guildMember.account, [...new Set(playerCodes)]),
+        eq(guildMember.isMain, false),
+        eq(guildMember.isDeleted, false),
+      ),
+    );
+
+  for (const row of rows) {
+    if (row.mainAccount) map.set(row.account, row.mainAccount);
+  }
+  return map;
 }

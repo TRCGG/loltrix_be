@@ -1,16 +1,21 @@
 import { Guild, Replay } from '../database/schema.js';
+import { TeamAssignmentResult } from './competition.js';
 
 export interface ReplayFileRequest {
   fileName: string;
   fileUrl: string;
   gameType?: string;
-  /** 스크림·본경기용. 생략 시 길드의 OPEN 대회로 해석된다. */
+  /** 스크림·본경기용. 생략 시 길드의 진행중 대회로 해석된다. */
   competitionId?: number;
   createUser: string;
   guild: Guild;
 }
 
-export type ReplaySaveResult = Omit<Replay, 'rawData'> & { competitionName: string | null };
+export type ReplaySaveResult = Omit<Replay, 'rawData'> & {
+  competitionName: string | null;
+  /** 자동 팀 귀속 결과. 대회 경기가 아니면 null. */
+  teamAssignment?: TeamAssignmentResult | null;
+};
 
 export interface ReplayResponse {
   status: 'success' | 'error';
@@ -19,9 +24,12 @@ export interface ReplayResponse {
 }
 
 export interface WebUploadResult {
-  succeeded: Array<{ fileName: string; replayCode: string }>;
+  succeeded: Array<{
+    fileName: string;
+    replayCode: string;
+    teamAssignment: TeamAssignmentResult | null;
+  }>;
   failed: Array<{ fileName: string; reason: string }>;
-
 }
 
 export interface WebUploadResponse {

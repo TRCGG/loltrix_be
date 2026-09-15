@@ -8,11 +8,12 @@ import {
   guildMember,
 } from '../database/schema.js';
 import { subAccountLink } from '../database/subAccountLink.js';
+import { competitionStatSql } from '../database/competitionStats.js';
 import { scopeConditions } from '../database/matchScope.js';
 import { periodCondition } from '../database/datePeriod.js';
 import { systemConfigService } from './systemConfig.service.js';
 import { StatisticsDatePreset, StatisticsServiceOptions } from '../types/statistics.js';
-import { NORMAL_MATCH_SCOPE, isCompetitionScope } from '../types/matchScope.js';
+import { NORMAL_MATCH_SCOPE, ignoresPeriod, isCompetitionScope } from '../types/matchScope.js';
 
 export class StatisticsService {
   /**
@@ -95,14 +96,15 @@ export class StatisticsService {
     const statColumns = this.getStatSqlChunks();
     const competitionScope = isCompetitionScope(scope);
 
-    const dateCondition = competitionScope
+    const noPeriod = ignoresPeriod(scope);
+    const dateCondition = noPeriod
       ? undefined
       : this.buildDateCondition(datePreset, fromMonth, toMonth);
     const shouldGroupByPosition = !!position;
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
-    const seasonCondition = competitionScope ? undefined : await this.buildSeasonCondition(season);
+    const seasonCondition = noPeriod ? undefined : await this.buildSeasonCondition(season);
 
     // 대회는 판수가 적어 최소 판수 조건을 두지 않는다.
     const statsMinGameCount = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
@@ -113,6 +115,10 @@ export class StatisticsService {
 
     // 부캐 전적은 본캐(effective player_code)로 합산 (TRC-243 A안)
     const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
+
+    const { competitionId } = scope;
+    const competitionStats =
+      competitionId != null ? competitionStatSql(guildId, competitionId) : null;
 
     const whereCondition = and(
       eq(guildMember.guildId, guildId),
@@ -137,13 +143,14 @@ export class StatisticsService {
       ...(shouldGroupByPosition ? [matchParticipant.position] : []),
     ];
 
-    const result = await db
+    const baseQuery = db
       .select({
         playerCode: riotAccount.playerCode,
         riotName: riotAccount.riotName,
         riotNameTag: riotAccount.riotNameTag,
         ...(shouldGroupByPosition ? { position: matchParticipant.position } : {}),
         ...statColumns,
+        ...(competitionStats ? competitionStats.columns : {}),
       })
       .from(matchParticipant)
       .leftJoin(link.table, link.on)
@@ -151,6 +158,10 @@ export class StatisticsService {
       .innerJoin(guildMember, eq(riotAccount.playerCode, guildMember.account))
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
+      .$dynamic();
+
+    const result = await (competitionStats?.joins ?? [])
+      .reduce((query, join) => query.leftJoin(join.table, join.on), baseQuery)
       .where(whereCondition)
       .groupBy(...groupByColumns)
       .having(havingCondition)
@@ -197,13 +208,14 @@ export class StatisticsService {
     const statColumns = this.getStatSqlChunks();
     const competitionScope = isCompetitionScope(scope);
 
-    const dateCondition = competitionScope
+    const noPeriod = ignoresPeriod(scope);
+    const dateCondition = noPeriod
       ? undefined
       : this.buildDateCondition(datePreset, fromMonth, toMonth);
     const shouldGroupByPosition = !!position;
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
-    const seasonCondition = competitionScope ? undefined : await this.buildSeasonCondition(season);
+    const seasonCondition = noPeriod ? undefined : await this.buildSeasonCondition(season);
 
     const statsMinGameCount = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
     const minGameCount = sortBy === 'winRate' && !competitionScope ? statsMinGameCount : 0;

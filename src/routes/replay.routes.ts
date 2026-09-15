@@ -153,7 +153,7 @@ router.post(
   '/web',
   /* #swagger.tags = ['Replays']
     #swagger.summary = '웹 리플레이 업로드'
-    #swagger.description = '웹에서 .rofl 파일을 직접 업로드하여 리플레이를 저장합니다. 최대 10개 파일, 파일당 50MB 제한. 인증 필요 + 업로드 권한 필요 (allowAllUploads=true인 길드는 인증만으로 가능).'
+    #swagger.description = '웹에서 .rofl 파일을 직접 업로드하여 리플레이를 저장합니다. 최대 10개 파일, 파일당 50MB 제한. 인증 필요 + 업로드 권한 필요 (allowAllUploads=true인 길드는 인증만으로 가능). ▶ succeeded 항목의 teamAssignment는 대회 경기의 자동 팀 귀속 결과입니다 — 일반내전(gameType=1)이면 null, assigned면 양 진영이 팀에 붙었고, mercenary면 한쪽만 팀(용병전)이며, unassigned면 자동 판정이 안 돼 운영진이 PUT /api/competitions/{guildId}/{competitionId}/matches/{customMatchId}/teams로 직접 지정해야 합니다.'
     #swagger.autoBody = false
     #swagger.requestBody = {
       required: true,
@@ -194,7 +194,7 @@ router.post(
         status: 'success',
         message: 'Web replay upload completed',
         data: {
-          succeeded: [{ fileName: 'game1.rofl', replayCode: 'RPY-260310-game1-1' }],
+          succeeded: [{ fileName: 'game1.rofl', replayCode: 'RPY-260310-game1-1', teamAssignment: { status: 'assigned', blueTeamId: 1, redTeamId: 2 } }],
           failed: [{ fileName: 'bad.txt', reason: 'invalid_extension' }]
         }
       }

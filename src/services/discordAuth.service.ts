@@ -280,7 +280,23 @@ export class DiscordAuthService {
     const cached = profileCache.get(discordMemberId);
     if (cached && cached.expiresAt > Date.now()) return cached.promise;
 
-    const promise = requestDiscordUser(accessToken);
+    const promise = requestDiscordUser(accessToken).then(async (profile) => {
+      try {
+        await db
+          .update(discordMember)
+          .set({ avatarUrl: profile.avatar, updateDate: new Date() })
+          .where(
+            and(
+              eq(discordMember.id, profile.id),
+              sql`${discordMember.avatarUrl} IS DISTINCT FROM ${profile.avatar}`,
+            ),
+          );
+      } catch (error) {
+        // 아바타 동기화 실패가 정상적인 Discord 프로필 조회를 막지 않도록 한다.
+        console.error('Failed to sync Discord member avatar', error);
+      }
+      return profile;
+    });
     cacheProfile(discordMemberId, promise);
 
     return promise;

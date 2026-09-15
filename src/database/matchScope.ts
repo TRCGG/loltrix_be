@@ -1,6 +1,6 @@
 import { eq, inArray, SQL } from 'drizzle-orm';
 import { AnyPgColumn } from 'drizzle-orm/pg-core';
-import { GameType, MatchScope } from '../types/matchScope.js';
+import { GameType, MatchScope, ignoresPeriod } from '../types/matchScope.js';
 import { periodCondition } from './datePeriod.js';
 
 /** alias는 tableName 리터럴이 달라져 구체 컬럼 타입으로는 못 받는다. */
@@ -16,7 +16,7 @@ const gameTypeCondition = (column: AnyPgColumn, gameTypes: GameType[]): SQL =>
 
 /**
  * custom_match용 scope → WHERE 조각. and(...)에 펼쳐 넣는다.
- * season은 competitionId가 없을 때만 적용되고, null/undefined면 시즌 조건 없음(전체).
+ * 시즌·기간은 ignoresPeriod가 false일 때만 적용되고, season이 null/undefined면 시즌 조건 없음(전체).
  */
 export function scopeConditions(
   t: ScopeColumns,
@@ -27,6 +27,7 @@ export function scopeConditions(
   if (scope.competitionId != null) {
     return [typeCondition, eq(t.competitionId, scope.competitionId)];
   }
+  if (ignoresPeriod(scope)) return [typeCondition];
 
   const conditions: (SQL | undefined)[] = [
     typeCondition,

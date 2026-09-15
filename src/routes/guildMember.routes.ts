@@ -14,6 +14,7 @@ import {
   getGuildAuditLogs,
 } from '../controllers/guildMember.controller.js';
 import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
+import { GUILD_AUDIT_LOG_TYPES } from '../types/guildMember.js';
 
 const router: Router = Router();
 
@@ -115,9 +116,7 @@ const getAuditLogsSchema = z.object({
     guildId: z.string().min(1, 'Guild ID is required').max(128),
   }),
   query: z.object({
-    type: z
-      .enum(['all', 'roleChange', 'replayDelete', 'competitionOpen', 'competitionClose', 'competitionDelete'])
-      .optional(),
+    type: z.enum(['all', ...GUILD_AUDIT_LOG_TYPES] as [string, ...string[]]).optional(),
     page: z
       .string()
       .regex(/^\d+$/, 'Page must be a positive number')
@@ -160,7 +159,7 @@ router.post(
   '/sub-account',
   /* #swagger.tags = ['GuildMember']
     #swagger.summary = '부계정 연결'
-    #swagger.description = '본계정에 부계정을 연결합니다.'
+    #swagger.description = '본계정에 부계정을 연결합니다. 모집중(RECRUITING)·진행중(IN_PROGRESS) 대회에 신청이나 로스터로 남아 있는 계정은 부계정으로 연결할 수 없습니다 — 409(account-in-competition)이며 메시지 끝에 해당 대회 이름이 붙습니다. 신청을 취소하거나 로스터에서 빼고 다시 시도하면 됩니다. 종료된(CLOSED) 대회는 막지 않습니다.'
     #swagger.parameters['body'] = {
       in: 'body',
       description: '연결할 계정 정보',
@@ -187,7 +186,7 @@ router.post(
       schema: { type: 'business-error', title: 'Business Error', status: 400, detail: 'Primary or Secondary Riot Account not found in DB.' }
     }
     #swagger.responses[409] = {
-      description: '부계정이 이미 다른 계정에 연결됨 / 본계정이 이미 다른 계정의 부계정(중첩 불가). 에러는 ProblemDetails 형식으로 응답합니다.',
+      description: '부계정이 이미 다른 계정에 연결됨 / 본계정이 이미 다른 계정의 부계정(중첩 불가) / 부계정으로 내리려는 계정이 모집중·진행중 대회에 신청·로스터로 남아 있음(account-in-competition). 에러는 ProblemDetails 형식으로 응답합니다.',
       schema: { type: 'business-error', title: 'Business Error', status: 409, detail: 'SubName is already linked as a sub-account.' }
     }
   */
@@ -306,11 +305,11 @@ router.get(
   '/:guildId/audit-logs',
   /* #swagger.auto = false
     #swagger.tags = ['GuildMember']
-    #swagger.summary = '관리 로그 조회 (역할 변경 + 리플 삭제)'
-    #swagger.description = '[클랜관리 화면] 관리 로그 목록용. 역할 부여/회수 이력과 리플(게임 기록) 삭제 이력을 하나의 시간순(최신순) 피드로 반환합니다. ▶ 항목의 type으로 구분: roleChange(역할 변경 — targetMemberId/fromRole/toRole 사용), replayDelete(리플 삭제 — gameId/source 사용, 나머지는 null). ▶ source는 삭제 경로: web(웹 화면) / bot(디스코드 !drop). ▶ actorDisplayName/targetDisplayName은 길드 별명 ?? 전역 별명 ?? discord_id로 해석된 표시명이며, 웹 로그인 이력이 없는 봇 명령 사용자는 discord_id 그대로 나올 수 있습니다. actorMemberId가 \\'bot\\'이면 구버전 봇 요청이라 삭제자 미상입니다. ▶ 페이지네이션은 응답 헤더 X-Total-Count / X-Page / X-Limit / X-Total-Pages. ▶ type 쿼리로 필터 가능(all 기본). ▶ guildId는 Base64. ▶ 세션 로그인(guildManager 이상) 필요.'
+    #swagger.summary = '관리 로그 조회 (역할 변경·리플 삭제·대회 관리)'
+    #swagger.description = '[클랜관리 화면] 관리 로그 목록용. 역할 부여/회수, 리플(게임 기록) 삭제, 대회 개설·상태 변경·수정·삭제, 신청 승인·거절, 경기 팀 귀속·경기 유형 변경 이력을 하나의 시간순(최신순) 피드로 반환합니다. ▶ 항목의 type으로 구분: roleChange(targetMemberId/fromRole/toRole), replayDelete(gameId/source), competitionOpen·Close·Delete(competitionId/competitionName), competitionStatusChange(+fromStatus/toStatus), competitionUpdate, applicationDecide(playerCode/applicationStatus), matchTeamAssign(gameId/blueTeamId/redTeamId), matchGameTypeChange(gameId/fromGameType/toGameType — 2=스크림/3=본경기). 해당 없는 필드는 null. ▶ source는 삭제 경로: web(웹 화면) / bot(디스코드 !drop). ▶ actorDisplayName/targetDisplayName은 길드 별명 ?? 전역 별명 ?? discord_id로 해석된 표시명이며, 웹 로그인 이력이 없는 봇 명령 사용자는 discord_id 그대로 나올 수 있습니다. actorMemberId가 \\'bot\\'이면 구버전 봇 요청이라 삭제자 미상입니다. ▶ 페이지네이션은 응답 헤더 X-Total-Count / X-Page / X-Limit / X-Total-Pages. ▶ type 쿼리로 필터 가능(all 기본). ▶ guildId는 Base64. ▶ 세션 로그인(guildManager 이상) 필요.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
-    #swagger.parameters['type'] = { in: 'query', description: '로그 종류 필터 (all 기본)', type: 'string', enum: ['all', 'roleChange', 'replayDelete'] }
+    #swagger.parameters['type'] = { in: 'query', description: '로그 종류 필터 (all 기본)', type: 'string', enum: ['all', 'roleChange', 'replayDelete', 'competitionOpen', 'competitionClose', 'competitionStatusChange', 'competitionUpdate', 'competitionDelete', 'applicationDecide', 'matchTeamAssign', 'matchGameTypeChange'] }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (1~100000, 기본값 1)', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수 (1~100, 기본값 50)', type: 'integer' }
     #swagger.responses[200] = {
