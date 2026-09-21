@@ -13,7 +13,7 @@ const scopeQuery = {
   gameType: z.string().regex(/^[123](,[123])*$/).optional(),
 };
 
-const frequentSchema = z.object({
+export const frequentSchema = z.object({
   params: z.object({
     guildId: z.string().min(1).max(128),
   }),
@@ -32,7 +32,7 @@ const frequentSchema = z.object({
   }),
 });
 
-const detailSchema = z.object({
+export const detailSchema = z.object({
   params: z.object({
     guildId: z.string().min(1).max(128),
   }),
@@ -47,26 +47,6 @@ const detailSchema = z.object({
     ...scopeQuery,
   }),
 });
-
-export const frequentOpponentsReadHandlers: readonly [
-  typeof decodeGuildIdMiddleware,
-  ReturnType<typeof validateRequest>,
-  typeof getFrequentOpponents,
-] = [
-  decodeGuildIdMiddleware,
-  validateRequest(frequentSchema),
-  getFrequentOpponents,
-];
-
-export const h2hDetailReadHandlers: readonly [
-  typeof decodeGuildIdMiddleware,
-  ReturnType<typeof validateRequest>,
-  typeof getH2hDetail,
-] = [
-  decodeGuildIdMiddleware,
-  validateRequest(detailSchema),
-  getH2hDetail,
-];
 
 // --- Routes ---
 
@@ -88,7 +68,9 @@ router.get(
     #swagger.parameters['season'] = { in: 'query', description: '시즌 (미입력 현재시즌, all 전체)', type: 'string' }
     #swagger.parameters['limit'] = { in: 'query', description: '개수 (기본 10, 최대 50)', type: 'integer' }
   */
-  ...frequentOpponentsReadHandlers,
+  decodeGuildIdMiddleware,
+  validateRequest(frequentSchema),
+  getFrequentOpponents,
 );
 
 /**
@@ -111,7 +93,9 @@ router.get(
     #swagger.parameters['recentLimit'] = { in: 'query', description: '최근 맞대결 개수 (기본 6)', type: 'integer' }
     #swagger.parameters['recentOffset'] = { in: 'query', description: '최근 맞대결 offset', type: 'integer' }
   */
-  ...h2hDetailReadHandlers,
+  decodeGuildIdMiddleware,
+  validateRequest(detailSchema),
+  getH2hDetail,
 );
 
 export default router;
