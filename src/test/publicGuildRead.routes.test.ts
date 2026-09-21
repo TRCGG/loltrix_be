@@ -1,5 +1,4 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
-import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 
 type TerminalRequest = Request & { params: Record<string, string> };
@@ -12,26 +11,34 @@ jest.unstable_mockModule('../services/guild.service.js', () => ({
   guildService: { isPublicGuild },
 }));
 
-jest.unstable_mockModule('../routes/guildMember.routes.js', () => ({
-  default: Router(),
-  searchGuildMembersReadHandlers: [terminalHandler],
+jest.unstable_mockModule('../controllers/guildMember.controller.js', () => ({
+  searchGuildMembers: terminalHandler,
+  linkSubAccount: jest.fn(),
+  getSubAccounts: jest.fn(),
+  removeSubAccount: jest.fn(),
+  updateMemberStatus: jest.fn(),
+  getMembers: jest.fn(),
+  getGuildDiscordMembers: jest.fn(),
+  updateGuildMemberRole: jest.fn(),
+  getGuildAuditLogs: jest.fn(),
 }));
-jest.unstable_mockModule('../routes/matchParticipant.routes.js', () => ({
-  default: Router(),
-  recentGamesReadHandlers: [terminalHandler],
-  matchDashboardReadHandlers: [terminalHandler],
-  mostPicksReadHandlers: [terminalHandler],
-  gameDetailReadHandlers: [terminalHandler],
+jest.unstable_mockModule('../controllers/matchParticipant.controller.js', () => ({
+  getRecentGames: terminalHandler,
+  getMatchDashboard: terminalHandler,
+  getMostPicks: terminalHandler,
+  getGameDetail: terminalHandler,
+  deleteMatch: jest.fn(),
 }));
-jest.unstable_mockModule('../routes/statistics.route.js', () => ({
-  default: Router(),
-  userStatisticsReadHandlers: [terminalHandler],
-  championStatisticsReadHandlers: [terminalHandler],
+jest.unstable_mockModule('../controllers/statistics.controller.js', () => ({
+  getUserGameStats: terminalHandler,
+  getChampionStats: terminalHandler,
 }));
-jest.unstable_mockModule('../routes/h2h.routes.js', () => ({
-  default: Router(),
-  frequentOpponentsReadHandlers: [terminalHandler],
-  h2hDetailReadHandlers: [terminalHandler],
+jest.unstable_mockModule('../controllers/h2h.controller.js', () => ({
+  getFrequentOpponents: terminalHandler,
+  getH2hDetail: terminalHandler,
+}));
+jest.unstable_mockModule('../services/discordMemberRole.service.js', () => ({
+  discordMemberRoleService: {},
 }));
 
 const {
@@ -45,6 +52,7 @@ const ENCODED_GUILD_ID = Buffer.from(GUILD_ID).toString('base64');
 
 type RunResult = {
   fallback: boolean;
+  status: number;
   headers: Record<string, string>;
   body?: string;
 };
@@ -59,7 +67,16 @@ const runRouter = (method: string, url: string, headers: Record<string, string> 
         resolve(result);
       }
     };
-    const req = { method, url, originalUrl: url, headers } as Request;
+    const parsedUrl = new URL(url, 'http://localhost');
+    const req = {
+      method,
+      url,
+      originalUrl: url,
+      headers,
+      query: Object.fromEntries(parsedUrl.searchParams.entries()),
+      body: {},
+    } as Request;
+    let statusCode = 200;
     const res = {
       setHeader(name: string, value: string) {
         responseHeaders[name] = String(value);
@@ -67,8 +84,25 @@ const runRouter = (method: string, url: string, headers: Record<string, string> 
       getHeader(name: string) {
         return responseHeaders[name];
       },
+      set(name: string, value: string) {
+        responseHeaders[name] = value;
+        return res;
+      },
+      status(code: number) {
+        statusCode = code;
+        return res;
+      },
+      json(body: unknown) {
+        finish({
+          fallback: false,
+          status: statusCode,
+          headers: responseHeaders,
+          body: JSON.stringify(body),
+        });
+        return res;
+      },
       end(body?: string) {
-        finish({ fallback: false, headers: responseHeaders, body });
+        finish({ fallback: false, status: statusCode, headers: responseHeaders, body });
       },
     } as unknown as Response;
 
@@ -77,7 +111,7 @@ const runRouter = (method: string, url: string, headers: Record<string, string> 
     };
     router.handle(req, res, (error?: unknown) => {
       if (error) reject(error);
-      else finish({ fallback: true, headers: responseHeaders });
+      else finish({ fallback: true, status: statusCode, headers: responseHeaders });
     });
   });
 
@@ -95,16 +129,18 @@ describe('공개 길드 조회 라우터 경계', () => {
     `/matches/${ENCODED_GUILD_ID}/games/KR_1234`,
     `/statistics/${ENCODED_GUILD_ID}/users`,
     `/statistics/${ENCODED_GUILD_ID}/champions`,
-    `/h2h/${ENCODED_GUILD_ID}`,
-    `/h2h/${ENCODED_GUILD_ID}/frequent`,
+    `/h2h/${ENCODED_GUILD_ID}?riotName1=Alice&riotName2=Bob`,
+    `/h2h/${ENCODED_GUILD_ID}/frequent?riotName=Alice`,
   ];
 
   test.each(approvedPaths)('공개 길드는 세션 없이 승인된 GET을 처리한다: %s', async (path) => {
     const result = await runRouter('GET', path);
 
     expect(result.fallback).toBe(false);
+    expect(result.status).toBe(200);
     expect(result.headers['Cache-Control']).toBe('no-store');
     expect(isPublicGuild).toHaveBeenCalledWith(GUILD_ID);
+    expect(terminalHandler).toHaveBeenCalledTimes(1);
   });
 
   test('잘못된 세션 쿠키나 멤버 식별정보가 없어도 공개 조회 결과는 같다', async () => {
@@ -119,7 +155,7 @@ describe('공개 길드 조회 라우터 경계', () => {
   });
 
   test('HEAD만 GET과 함께 허용하고 다른 메서드는 인증 라우터로 넘긴다', async () => {
-    const path = `/h2h/${ENCODED_GUILD_ID}`;
+    const path = `/h2h/${ENCODED_GUILD_ID}?riotName1=Alice&riotName2=Bob`;
 
     expect((await runRouter('HEAD', path)).fallback).toBe(false);
     expect((await runRouter('POST', path)).fallback).toBe(true);
@@ -129,7 +165,7 @@ describe('공개 길드 조회 라우터 경계', () => {
 
   test('비공개·없는·삭제된 길드는 매 요청마다 확인하고 인증 라우터로 넘긴다', async () => {
     isPublicGuild.mockResolvedValueOnce(true).mockResolvedValueOnce(false).mockResolvedValue(false);
-    const path = `/h2h/${ENCODED_GUILD_ID}`;
+    const path = `/h2h/${ENCODED_GUILD_ID}?riotName1=Alice&riotName2=Bob`;
 
     expect((await runRouter('GET', path)).fallback).toBe(false);
     expect((await runRouter('GET', path)).fallback).toBe(true);

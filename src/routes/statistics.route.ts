@@ -7,7 +7,7 @@ import { monthSchema, rangeRequiresMonths } from './monthQuery.js';
 
 const router: Router = Router();
 
-const filterSchema = z.object({
+export const filterSchema = z.object({
   params: z.object({
     guildId: z
       .string()
@@ -29,26 +29,6 @@ const filterSchema = z.object({
     })
     .superRefine(rangeRequiresMonths),
 });
-
-export const userStatisticsReadHandlers: readonly [
-  typeof decodeGuildIdMiddleware,
-  ReturnType<typeof validateRequest>,
-  typeof getUserGameStats,
-] = [
-  decodeGuildIdMiddleware,
-  validateRequest(filterSchema),
-  getUserGameStats,
-];
-
-export const championStatisticsReadHandlers: readonly [
-  typeof decodeGuildIdMiddleware,
-  ReturnType<typeof validateRequest>,
-  typeof getChampionStats,
-] = [
-  decodeGuildIdMiddleware,
-  validateRequest(filterSchema),
-  getChampionStats,
-];
 
 /**
  * @route GET /api/statistics/:guildId/users
@@ -121,7 +101,9 @@ router.get(
       type: 'string'
     }
   */
-  ...userStatisticsReadHandlers,
+  decodeGuildIdMiddleware,
+  validateRequest(filterSchema),
+  getUserGameStats,
 );
 
 /**
@@ -185,7 +167,9 @@ router.get(
       type: 'integer'
     }
   */
-  ...championStatisticsReadHandlers,
+  decodeGuildIdMiddleware,
+  validateRequest(filterSchema),
+  getChampionStats,
 );
 
 export default router;

@@ -1,14 +1,25 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { guildService } from '../services/guild.service.js';
-import { searchGuildMembersReadHandlers } from './guildMember.routes.js';
+import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
+import { validateRequest } from '../middlewares/validateRequest.js';
+import { searchGuildMembers } from '../controllers/guildMember.controller.js';
 import {
-  gameDetailReadHandlers,
-  matchDashboardReadHandlers,
-  mostPicksReadHandlers,
-  recentGamesReadHandlers,
+  getRecentGames,
+  getMatchDashboard,
+  getMostPicks,
+  getGameDetail,
+} from '../controllers/matchParticipant.controller.js';
+import { getUserGameStats, getChampionStats } from '../controllers/statistics.controller.js';
+import { getFrequentOpponents, getH2hDetail } from '../controllers/h2h.controller.js';
+import { searchGuildMembersSchema } from './guildMember.routes.js';
+import {
+  gameDetailSchema,
+  matchDashboardSchema,
+  mostPickSchema,
+  matchListSchema,
 } from './matchParticipant.routes.js';
-import { championStatisticsReadHandlers, userStatisticsReadHandlers } from './statistics.route.js';
-import { frequentOpponentsReadHandlers, h2hDetailReadHandlers } from './h2h.routes.js';
+import { filterSchema } from './statistics.route.js';
+import { frequentSchema, detailSchema } from './h2h.routes.js';
 
 const router: Router = Router();
 const MAX_ENCODED_GUILD_ID_SIZE = 2048;
@@ -87,22 +98,68 @@ router.get(
   '/guildMember/:guildId/:riotName',
   rejectGuildMemberManagementPath,
   requirePublicGuild,
-  ...searchGuildMembersReadHandlers,
+  decodeGuildIdMiddleware,
+  validateRequest(searchGuildMembersSchema),
+  searchGuildMembers,
 );
 
-router.get('/matches/:guildId/:riotName/games', requirePublicGuild, ...recentGamesReadHandlers);
+router.get(
+  '/matches/:guildId/:riotName/games',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(matchListSchema),
+  getRecentGames,
+);
 router.get(
   '/matches/:guildId/:riotName/dashboard',
   requirePublicGuild,
-  ...matchDashboardReadHandlers,
+  decodeGuildIdMiddleware,
+  validateRequest(matchDashboardSchema),
+  getMatchDashboard,
 );
-router.get('/matches/:guildId/:riotName/most-picks', requirePublicGuild, ...mostPicksReadHandlers);
-router.get('/matches/:guildId/games/:gameId', requirePublicGuild, ...gameDetailReadHandlers);
+router.get(
+  '/matches/:guildId/:riotName/most-picks',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(mostPickSchema),
+  getMostPicks,
+);
+router.get(
+  '/matches/:guildId/games/:gameId',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(gameDetailSchema),
+  getGameDetail,
+);
 
-router.get('/statistics/:guildId/users', requirePublicGuild, ...userStatisticsReadHandlers);
-router.get('/statistics/:guildId/champions', requirePublicGuild, ...championStatisticsReadHandlers);
+router.get(
+  '/statistics/:guildId/users',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(filterSchema),
+  getUserGameStats,
+);
+router.get(
+  '/statistics/:guildId/champions',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(filterSchema),
+  getChampionStats,
+);
 
-router.get('/h2h/:guildId/frequent', requirePublicGuild, ...frequentOpponentsReadHandlers);
-router.get('/h2h/:guildId', requirePublicGuild, ...h2hDetailReadHandlers);
+router.get(
+  '/h2h/:guildId/frequent',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(frequentSchema),
+  getFrequentOpponents,
+);
+router.get(
+  '/h2h/:guildId',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(detailSchema),
+  getH2hDetail,
+);
 
 export default router;

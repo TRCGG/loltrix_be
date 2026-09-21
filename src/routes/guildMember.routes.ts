@@ -20,7 +20,7 @@ const router: Router = Router();
 
 // --- Define Zod schemas for validation ---
 
-const searchGuildMembersSchema = z.object({
+export const searchGuildMembersSchema = z.object({
   params: z.object({
     guildId: z
       .string()
@@ -148,16 +148,6 @@ const updateMemberStatusSchema = z.object({
     }),
   }),
 });
-
-export const searchGuildMembersReadHandlers: readonly [
-  typeof decodeGuildIdMiddleware,
-  ReturnType<typeof validateRequest>,
-  typeof searchGuildMembers,
-] = [
-  decodeGuildIdMiddleware,
-  validateRequest(searchGuildMembersSchema),
-  searchGuildMembers,
-];
 
 // --- Define Routes ---
 
@@ -419,7 +409,9 @@ router.get(
     }
     #swagger.responses[404] = { description: '검색 결과 없음', schema: { status: 'error', message: 'Guild members not found', data: null } }
   */
-  ...searchGuildMembersReadHandlers,
+  decodeGuildIdMiddleware,
+  validateRequest(searchGuildMembersSchema),
+  searchGuildMembers,
 );
 
 /**
