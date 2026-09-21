@@ -149,6 +149,12 @@ const updateMemberStatusSchema = z.object({
   }),
 });
 
+export const searchGuildMembersReadHandlers = [
+  decodeGuildIdMiddleware,
+  validateRequest(searchGuildMembersSchema),
+  searchGuildMembers,
+] as const;
+
 // --- Define Routes ---
 
 /**
@@ -409,9 +415,7 @@ router.get(
     }
     #swagger.responses[404] = { description: '검색 결과 없음', schema: { status: 'error', message: 'Guild members not found', data: null } }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(searchGuildMembersSchema),
-  searchGuildMembers,
+  ...searchGuildMembersReadHandlers,
 );
 
 /**

@@ -23,6 +23,7 @@ export const guild = pgTable('guild', {
   name: varchar('name', { length: 128 }).notNull(),
   languageCode: varchar('language_code', { length: 10 }).notNull().default('ko'),
   allowAllUploads: boolean('allow_all_uploads').notNull().default(false),
+  isPublic: boolean('is_public').notNull().default(false),
   createDate: timestamp('create_date').notNull().defaultNow(),
   updateDate: timestamp('update_date')
     .defaultNow()

@@ -30,6 +30,18 @@ const filterSchema = z.object({
     .superRefine(rangeRequiresMonths),
 });
 
+export const userStatisticsReadHandlers = [
+  decodeGuildIdMiddleware,
+  validateRequest(filterSchema),
+  getUserGameStats,
+] as const;
+
+export const championStatisticsReadHandlers = [
+  decodeGuildIdMiddleware,
+  validateRequest(filterSchema),
+  getChampionStats,
+] as const;
+
 /**
  * @route GET /api/statistics/:guildId/users
  * @desc 유저별 게임 통계 조회
@@ -101,9 +113,7 @@ router.get(
       type: 'string'
     }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(filterSchema),
-  getUserGameStats,
+  ...userStatisticsReadHandlers,
 );
 
 /**
@@ -167,9 +177,7 @@ router.get(
       type: 'integer'
     }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(filterSchema),
-  getChampionStats,
+  ...championStatisticsReadHandlers,
 );
 
 export default router;

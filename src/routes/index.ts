@@ -14,6 +14,7 @@ import riotCallbackRoutes from './riotCallback.routes.js';
 import tournamentRoutes from './tournament.routes.js';
 import competitionRoutes from './competition.routes.js';
 import championRoutes from './champion.routes.js';
+import publicGuildReadRouter from './publicGuildRead.routes.js';
 
 const router: Router = Router();
 
@@ -26,8 +27,13 @@ router.use('/auth', authRouter);
 // Riot 토너먼트 콜백 — 세션 없는 외부 호출. 경로 시크릿으로 자체 인증하므로 인증 체인보다 위.
 router.use('/callback', riotCallbackRoutes);
 
+router.use(restrictBotToLocalhost);
+
+// 공개 길드의 승인된 조회만 기존 URL에서 세션 없이 처리한다.
+router.use(publicGuildReadRouter);
+
 // --- 아래 API 부터는 모두 세션 검증 ---
-router.use(restrictBotToLocalhost, verifyAuth);
+router.use(verifyAuth);
 
 // 토너먼트 코드 발급/조회 — 봇 전용(localhost 제한). 인증 체인 아래.
 router.use('/tournament', tournamentRoutes);
