@@ -149,11 +149,15 @@ const updateMemberStatusSchema = z.object({
   }),
 });
 
-export const searchGuildMembersReadHandlers = [
+export const searchGuildMembersReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof searchGuildMembers,
+] = [
   decodeGuildIdMiddleware,
   validateRequest(searchGuildMembersSchema),
   searchGuildMembers,
-] as const;
+];
 
 // --- Define Routes ---
 

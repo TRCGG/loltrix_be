@@ -48,17 +48,25 @@ const detailSchema = z.object({
   }),
 });
 
-export const frequentOpponentsReadHandlers = [
+export const frequentOpponentsReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getFrequentOpponents,
+] = [
   decodeGuildIdMiddleware,
   validateRequest(frequentSchema),
   getFrequentOpponents,
-] as const;
+];
 
-export const h2hDetailReadHandlers = [
+export const h2hDetailReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getH2hDetail,
+] = [
   decodeGuildIdMiddleware,
   validateRequest(detailSchema),
   getH2hDetail,
-] as const;
+];
 
 // --- Routes ---
 
