@@ -102,6 +102,46 @@ const deleteMatchSchema = z.object({
     .optional(),
 });
 
+export const recentGamesReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getRecentGames,
+] = [
+  decodeGuildIdMiddleware,
+  validateRequest(matchListSchema),
+  getRecentGames,
+];
+
+export const matchDashboardReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getMatchDashboard,
+] = [
+  decodeGuildIdMiddleware,
+  validateRequest(matchDashboardSchema),
+  getMatchDashboard,
+];
+
+export const mostPicksReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getMostPicks,
+] = [
+  decodeGuildIdMiddleware,
+  validateRequest(mostPickSchema),
+  getMostPicks,
+];
+
+export const gameDetailReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getGameDetail,
+] = [
+  decodeGuildIdMiddleware,
+  validateRequest(gameDetailSchema),
+  getGameDetail,
+];
+
 // --- Routes ---
 
 /**
@@ -134,9 +174,7 @@ router.get(
     #swagger.parameters['gameType'] = { in: 'query', description: "1=일반내전/2=스크림/3=본경기 (콤마 구분, 예: '2,3')", type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'query', description: '대회 ID', type: 'integer' }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(matchListSchema),
-  getRecentGames,
+  ...recentGamesReadHandlers,
 );
 
 /**
@@ -167,9 +205,7 @@ router.get(
     #swagger.parameters['gameType'] = { in: 'query', description: "1=일반내전/2=스크림/3=본경기 (콤마 구분, 예: '2,3')", type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'query', description: '대회 ID', type: 'integer' }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(matchDashboardSchema),
-  getMatchDashboard,
+  ...matchDashboardReadHandlers,
 );
 
 /**
@@ -213,9 +249,7 @@ router.get(
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(mostPickSchema),
-  getMostPicks,
+  ...mostPicksReadHandlers,
 );
 
 /**
@@ -242,9 +276,7 @@ router.get(
       type: 'string'
     }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(gameDetailSchema),
-  getGameDetail,
+  ...gameDetailReadHandlers,
 );
 
 /**

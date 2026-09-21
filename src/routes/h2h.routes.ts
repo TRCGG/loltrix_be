@@ -48,6 +48,26 @@ const detailSchema = z.object({
   }),
 });
 
+export const frequentOpponentsReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getFrequentOpponents,
+] = [
+  decodeGuildIdMiddleware,
+  validateRequest(frequentSchema),
+  getFrequentOpponents,
+];
+
+export const h2hDetailReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getH2hDetail,
+] = [
+  decodeGuildIdMiddleware,
+  validateRequest(detailSchema),
+  getH2hDetail,
+];
+
 // --- Routes ---
 
 /**
@@ -68,9 +88,7 @@ router.get(
     #swagger.parameters['season'] = { in: 'query', description: '시즌 (미입력 현재시즌, all 전체)', type: 'string' }
     #swagger.parameters['limit'] = { in: 'query', description: '개수 (기본 10, 최대 50)', type: 'integer' }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(frequentSchema),
-  getFrequentOpponents,
+  ...frequentOpponentsReadHandlers,
 );
 
 /**
@@ -93,9 +111,7 @@ router.get(
     #swagger.parameters['recentLimit'] = { in: 'query', description: '최근 맞대결 개수 (기본 6)', type: 'integer' }
     #swagger.parameters['recentOffset'] = { in: 'query', description: '최근 맞대결 offset', type: 'integer' }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(detailSchema),
-  getH2hDetail,
+  ...h2hDetailReadHandlers,
 );
 
 export default router;
