@@ -217,6 +217,21 @@ describe('실제 API 라우터의 공개 길드 인증 경계', () => {
     );
   });
 
+  test('공개·비공개 통계 조회는 같은 schema로 잘못된 query를 동일하게 거부한다', async () => {
+    const invalidUrl = `/api/statistics/${ENCODED_GUILD_ID}/users?page=invalid`;
+    const publicResponse = await inject(invalidUrl);
+
+    isPublicGuild.mockResolvedValue(false);
+    const privateResponse = await inject(invalidUrl, {
+      headers: { cookie: `session_uid=${VALID_SESSION}` },
+    });
+
+    expect(publicResponse.status).toBe(400);
+    expect(privateResponse.status).toBe(400);
+    expect(publicResponse.json).toEqual(privateResponse.json);
+    expect(getUserGameStatistics).not.toHaveBeenCalled();
+  });
+
   test('공개 설정을 끄면 다음 익명 요청부터 즉시 401이다', async () => {
     isPublicGuild.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
