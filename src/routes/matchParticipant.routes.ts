@@ -102,29 +102,45 @@ const deleteMatchSchema = z.object({
     .optional(),
 });
 
-export const recentGamesReadHandlers = [
+export const recentGamesReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getRecentGames,
+] = [
   decodeGuildIdMiddleware,
   validateRequest(matchListSchema),
   getRecentGames,
-] as const;
+];
 
-export const matchDashboardReadHandlers = [
+export const matchDashboardReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getMatchDashboard,
+] = [
   decodeGuildIdMiddleware,
   validateRequest(matchDashboardSchema),
   getMatchDashboard,
-] as const;
+];
 
-export const mostPicksReadHandlers = [
+export const mostPicksReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getMostPicks,
+] = [
   decodeGuildIdMiddleware,
   validateRequest(mostPickSchema),
   getMostPicks,
-] as const;
+];
 
-export const gameDetailReadHandlers = [
+export const gameDetailReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getGameDetail,
+] = [
   decodeGuildIdMiddleware,
   validateRequest(gameDetailSchema),
   getGameDetail,
-] as const;
+];
 
 // --- Routes ---
 

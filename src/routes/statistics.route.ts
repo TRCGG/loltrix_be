@@ -30,17 +30,25 @@ const filterSchema = z.object({
     .superRefine(rangeRequiresMonths),
 });
 
-export const userStatisticsReadHandlers = [
+export const userStatisticsReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getUserGameStats,
+] = [
   decodeGuildIdMiddleware,
   validateRequest(filterSchema),
   getUserGameStats,
-] as const;
+];
 
-export const championStatisticsReadHandlers = [
+export const championStatisticsReadHandlers: readonly [
+  typeof decodeGuildIdMiddleware,
+  ReturnType<typeof validateRequest>,
+  typeof getChampionStats,
+] = [
   decodeGuildIdMiddleware,
   validateRequest(filterSchema),
   getChampionStats,
-] as const;
+];
 
 /**
  * @route GET /api/statistics/:guildId/users
