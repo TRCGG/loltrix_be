@@ -9,6 +9,7 @@ export interface CreateGuildRequest {
 export interface UpdateGuildRequest {
   guildName?: string;
   languageCode?: string;
+  isPublic?: boolean;
   isDeleted?: boolean;
 }
 

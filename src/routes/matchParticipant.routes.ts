@@ -102,6 +102,30 @@ const deleteMatchSchema = z.object({
     .optional(),
 });
 
+export const recentGamesReadHandlers = [
+  decodeGuildIdMiddleware,
+  validateRequest(matchListSchema),
+  getRecentGames,
+] as const;
+
+export const matchDashboardReadHandlers = [
+  decodeGuildIdMiddleware,
+  validateRequest(matchDashboardSchema),
+  getMatchDashboard,
+] as const;
+
+export const mostPicksReadHandlers = [
+  decodeGuildIdMiddleware,
+  validateRequest(mostPickSchema),
+  getMostPicks,
+] as const;
+
+export const gameDetailReadHandlers = [
+  decodeGuildIdMiddleware,
+  validateRequest(gameDetailSchema),
+  getGameDetail,
+] as const;
+
 // --- Routes ---
 
 /**
@@ -134,9 +158,7 @@ router.get(
     #swagger.parameters['gameType'] = { in: 'query', description: "1=일반내전/2=스크림/3=본경기 (콤마 구분, 예: '2,3')", type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'query', description: '대회 ID', type: 'integer' }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(matchListSchema),
-  getRecentGames,
+  ...recentGamesReadHandlers,
 );
 
 /**
@@ -167,9 +189,7 @@ router.get(
     #swagger.parameters['gameType'] = { in: 'query', description: "1=일반내전/2=스크림/3=본경기 (콤마 구분, 예: '2,3')", type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'query', description: '대회 ID', type: 'integer' }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(matchDashboardSchema),
-  getMatchDashboard,
+  ...matchDashboardReadHandlers,
 );
 
 /**
@@ -213,9 +233,7 @@ router.get(
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(mostPickSchema),
-  getMostPicks,
+  ...mostPicksReadHandlers,
 );
 
 /**
@@ -242,9 +260,7 @@ router.get(
       type: 'string'
     }
   */
-  decodeGuildIdMiddleware,
-  validateRequest(gameDetailSchema),
-  getGameDetail,
+  ...gameDetailReadHandlers,
 );
 
 /**

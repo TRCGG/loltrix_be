@@ -10,6 +10,7 @@ let queue: unknown[] = [];
 let selects: Record<string, unknown>[] = [];
 /** leftJoin 대상 — 대회 범위 밖에서 조인이 늘지 않는지 보려고 모은다. */
 let joins: unknown[] = [];
+let wheres: unknown[] = [];
 
 const CHAIN_METHODS = [
   'from',
@@ -27,7 +28,13 @@ const CHAIN_METHODS = [
 const makeBuilder = (): Record<string, unknown> => {
   const builder: Record<string, unknown> = {};
   for (const method of CHAIN_METHODS) {
-    builder[method] = () => builder;
+    builder[method] =
+      method === 'where'
+        ? (condition: unknown) => {
+            wheres.push(condition);
+            return builder;
+          }
+        : () => builder;
   }
   builder.leftJoin = (table: unknown) => {
     joins.push(table);
@@ -108,6 +115,7 @@ beforeEach(() => {
   queue = [];
   selects = [];
   joins = [];
+  wheres = [];
 });
 
 describe('유저 랭킹 — 대회 지표', () => {
@@ -129,6 +137,17 @@ describe('유저 랭킹 — 대회 지표', () => {
     expect(teamTotals).toContain('"team_totals"');
     expect(teamTotals).toContain('"custom_match"."competition_id"');
     expect(metric).toContain('"mmr_participant_metric"');
+
+    const whereQuery = dialect.sqlToQuery(wheres[0] as SQL);
+    expect(whereQuery.sql).toContain('"guild_member"."guild_id" = $1');
+    expect(whereQuery.sql).toContain('"custom_match"."guild_id" = $2');
+    expect(whereQuery.params.slice(0, 2)).toEqual([GUILD, GUILD]);
+
+    const competitionPlaceholder = whereQuery.sql.match(
+      /"custom_match"\."competition_id" = \$(\d+)/,
+    );
+    expect(competitionPlaceholder).not.toBeNull();
+    expect(whereQuery.params[Number(competitionPlaceholder?.[1]) - 1]).toBe(COMPETITION);
   });
 
   test('competitionId가 없으면 지표를 select에도 결과에도 싣지 않는다', async () => {

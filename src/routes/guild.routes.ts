@@ -37,6 +37,7 @@ const updateGuildSchema = z.object({
       .max(128, 'Guild name must be less than 128 characters')
       .optional(),
     languageCode: z.string().max(10, 'Language code must be less than 10 characters').optional(),
+    isPublic: z.boolean().optional(),
     isDeleted: z.boolean().optional(),
   }),
   params: z.object({
@@ -147,7 +148,7 @@ router.put(
   '/:id',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '길드 정보 수정'
-    #swagger.description = '길드 이름, 언어 코드, 삭제 여부 등을 수정합니다. (adminNormal 이상 권한 필요)'
+    #swagger.description = '길드 이름, 언어 코드, 공개 여부, 삭제 여부 등을 수정합니다. (adminNormal 이상 권한 필요)'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['id'] = { description: '수정할 Guild ID' }
     #swagger.parameters['body'] = {
@@ -156,6 +157,7 @@ router.put(
       schema: {
         guildName: 'Updated Name',
         languageCode: 'en',
+        isPublic: false,
         isDeleted: false
       }
     }
