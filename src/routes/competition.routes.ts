@@ -16,6 +16,7 @@ import {
   deleteCompetition,
   deleteMyApplication,
   deleteTeam,
+  exportApplicationsCsv,
   getCompetitionDetail,
   getMyApplication,
   getStandings,
@@ -569,6 +570,28 @@ router.get(
   decodeGuildIdMiddleware,
   validateRequest(listApplicationsSchema),
   listApplications,
+);
+
+/**
+ * @route GET /api/competitions/:guildId/:competitionId/applications/export.csv
+ * @desc 대회 신청자 명단 CSV 다운로드
+ * @access guildManager 이상
+ */
+router.get(
+  '/:guildId/:competitionId/applications/export.csv',
+  /* #swagger.auto = false
+    #swagger.tags = ['Competition']
+    #swagger.summary = '대회 신청자 명단 CSV 다운로드'
+    #swagger.description = '운영진이 해당 대회의 전체 신청자를 CSV로 내려받습니다. 라이엇 이름·태그, 한글 포지션·챔피언명·연습량, 가능 시간, 팀장 가능 여부, 한마디를 포함합니다. UTF-8 BOM을 붙이며 신청 상태와 내부 식별자는 포함하지 않습니다.'
+    #swagger.security = [{ "session": [] }]
+    #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
+    #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
+    #swagger.produces = ['text/csv']
+  */
+  decodeGuildIdMiddleware,
+  manager,
+  validateRequest(applicationMeSchema),
+  exportApplicationsCsv,
 );
 
 /**
