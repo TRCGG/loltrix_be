@@ -229,4 +229,38 @@ describe('buildRecentAnalysis — 지표 유효성·방향', () => {
       oppo: 2,
     });
   });
+
+  test('15분 전 킬 관여도 양측 경기 시간이 양수일 때만 비교하고 실제 0은 유지한다', () => {
+    const rows = [
+      row('valid-zero', at('2026-09-01T10:00:00'), {
+        mine: source({ takedownsBefore15Min: 0 }),
+      }),
+      row('mine-zero-duration', at('2026-09-02T10:00:00'), {
+        mine: source({ gameDuration: 0 }),
+      }),
+      row('oppo-null-duration', at('2026-09-03T10:00:00'), {
+        oppo: source({ gameDuration: null }),
+      }),
+      row('oppo-negative-duration', at('2026-09-04T10:00:00'), {
+        oppo: source({ gameDuration: -1 }),
+      }),
+      row('mine-null-value', at('2026-09-05T10:00:00'), {
+        mine: source({ takedownsBefore15Min: null }),
+      }),
+    ];
+    const out = analyze(rows);
+    const lane = out.lanes[0];
+    const td = lane.metrics.find((m) => m.key === 'takedownsBefore15')!;
+    expect(out).toMatchObject({ games: 5, wins: 5, losses: 0 });
+    expect(lane).toMatchObject({ games: 5, wins: 5, losses: 0 });
+    expect(td).toMatchObject({ validGames: 1, myAvg: 0, oppoAvg: 2, diff: -2 });
+    expect(td.perGame).toEqual([
+      { matchId: 'mine-null-value', mine: null, oppo: 2 },
+      { matchId: 'oppo-negative-duration', mine: 2, oppo: null },
+      { matchId: 'oppo-null-duration', mine: 2, oppo: null },
+      { matchId: 'mine-zero-duration', mine: null, oppo: 2 },
+      { matchId: 'valid-zero', mine: 0, oppo: 2 },
+    ]);
+    expect(lane.matchIds).toEqual(td.perGame.map((g) => g.matchId));
+  });
 });

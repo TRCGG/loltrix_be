@@ -362,6 +362,7 @@ export class H2hService {
         opKills: op.kills,
         opDeaths: op.deaths,
         opAssists: op.assists,
+        opGameLen: op.gameDuration,
         opKda: op.kda,
         opDpm: op.dpm,
         opLaneGoldDiff: op.laneGoldDiff,
@@ -498,7 +499,7 @@ export class H2hService {
   ) {
     const me = side === 'me';
     return {
-      gameDuration: r.meGameLen,
+      gameDuration: me ? r.meGameLen : r.opGameLen,
       minionsKilled: me ? r.meMinions : r.opMinions,
       neutralMinionsKilled: me ? r.meNeutral : r.opNeutral,
       damageToChampions: me ? r.meDmg : r.opDmg,

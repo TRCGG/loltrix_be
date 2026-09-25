@@ -77,7 +77,10 @@ const METRICS: readonly MetricDef[] = [
         ? null
         : (s.timeSpentDead * 100) / s.gameDuration,
   },
-  { key: 'takedownsBefore15', value: (s) => s.takedownsBefore15Min },
+  {
+    key: 'takedownsBefore15',
+    value: (s) => (s.gameDuration === null || s.gameDuration <= 0 ? null : s.takedownsBefore15Min),
+  },
   {
     key: 'jungleCsEnemyPerMin',
     lanes: ['JUG'],
