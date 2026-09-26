@@ -55,6 +55,19 @@ export class GuildService {
   }
 
   /**
+   * @desc 삭제되지 않은 공개 길드인지 매 요청마다 조회합니다.
+   * 캐시하지 않아 공개 해제가 다음 요청부터 적용됩니다.
+   */
+  public async isPublicGuild(id: string) {
+    const result = await db
+      .select({ id: guild.id })
+      .from(guild)
+      .where(and(eq(guild.id, id), eq(guild.isPublic, true), eq(guild.isDeleted, false)))
+      .limit(1);
+    return result.length > 0;
+  }
+
+  /**
    * @desc 모든 길드를 페이지네이션 및 검색 조건에 따라 조회
    */
   public async findAllGuilds({ page = 1, limit = 10, search }: GetGuildsQuery) {

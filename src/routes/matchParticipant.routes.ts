@@ -26,7 +26,7 @@ const scopeQuery = {
 };
 
 // 최근 게임 목록 및 모스트 픽 조회용 스키마
-const matchListSchema = z.object({
+export const matchListSchema = z.object({
   params: z.object({
     guildId: z
       .string()
@@ -55,7 +55,7 @@ const matchListSchema = z.object({
   }),
 });
 
-const mostPickSchema = matchListSchema.extend({
+export const mostPickSchema = matchListSchema.extend({
   query: matchListSchema.shape.query
     .extend({
       position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
@@ -66,7 +66,7 @@ const mostPickSchema = matchListSchema.extend({
     .superRefine(rangeRequiresMonths),
 });
 
-const matchDashboardSchema = z.object({
+export const matchDashboardSchema = z.object({
   params: z.object({
     guildId: z
       .string()
@@ -85,7 +85,7 @@ const matchDashboardSchema = z.object({
 });
 
 // 게임 상세 조회용 스키마
-const gameDetailSchema = z.object({
+export const gameDetailSchema = z.object({
   params: z.object({
     guildId: z.string().min(1).max(128),
     gameId: z.string().min(1).max(255), // Game ID 길이 넉넉하게

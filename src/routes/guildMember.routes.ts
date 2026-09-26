@@ -20,7 +20,7 @@ const router: Router = Router();
 
 // --- Define Zod schemas for validation ---
 
-const searchGuildMembersSchema = z.object({
+export const searchGuildMembersSchema = z.object({
   params: z.object({
     guildId: z
       .string()

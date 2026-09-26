@@ -17,7 +17,7 @@ import {
 
 const router: Router = Router();
 
-const filterSchema = z.object({
+export const filterSchema = z.object({
   params: z.object({
     guildId: z
       .string()

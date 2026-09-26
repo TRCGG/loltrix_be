@@ -13,7 +13,7 @@ const scopeQuery = {
   gameType: z.string().regex(/^[123](,[123])*$/).optional(),
 };
 
-const frequentSchema = z.object({
+export const frequentSchema = z.object({
   params: z.object({
     guildId: z.string().min(1).max(128),
   }),
@@ -32,7 +32,7 @@ const frequentSchema = z.object({
   }),
 });
 
-const detailSchema = z.object({
+export const detailSchema = z.object({
   params: z.object({
     guildId: z.string().min(1).max(128),
   }),
