@@ -18,7 +18,7 @@ import {
   mostPickSchema,
   matchListSchema,
 } from './matchParticipant.routes.js';
-import { filterSchema } from './statistics.route.js';
+import { userFilterSchema, championFilterSchema } from './statistics.route.js';
 import { frequentSchema, detailSchema } from './h2h.routes.js';
 
 const router: Router = Router();
@@ -136,14 +136,14 @@ router.get(
   '/statistics/:guildId/users',
   requirePublicGuild,
   decodeGuildIdMiddleware,
-  validateRequest(filterSchema),
+  validateRequest(userFilterSchema),
   getUserGameStats,
 );
 router.get(
   '/statistics/:guildId/champions',
   requirePublicGuild,
   decodeGuildIdMiddleware,
-  validateRequest(filterSchema),
+  validateRequest(championFilterSchema),
   getChampionStats,
 );
 

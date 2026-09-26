@@ -30,13 +30,7 @@ const CHAIN_METHODS = [
 const makeBuilder = (): Record<string, unknown> => {
   const builder: Record<string, unknown> = {};
   for (const method of CHAIN_METHODS) {
-    builder[method] =
-      method === 'where'
-        ? (condition: unknown) => {
-            wheres.push(condition);
-            return builder;
-          }
-        : () => builder;
+    builder[method] = () => builder;
   }
   builder.leftJoin = (table: unknown) => {
     joins.push(table);
