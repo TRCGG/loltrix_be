@@ -14,6 +14,16 @@ const getUserGameStatistics =
       options: Record<string, unknown>,
     ) => Promise<{ result: unknown[]; totalCount: number }>
   >();
+const getChampionStatistics =
+  jest.fn<
+    (
+      guildId: string,
+      options: Record<string, unknown>,
+    ) => Promise<{ result: unknown[]; totalCount: number }>
+  >();
+const getRisingStars = jest.fn<(_guildId: string, _season?: string) => Promise<unknown[]>>();
+const getHighlights = jest.fn<(_guildId: string, _season?: string) => Promise<unknown>>();
+const getWinStreaks = jest.fn<(_guildId: string, _season?: string) => Promise<unknown[]>>();
 const findAuthSessionByUid =
   jest.fn<(sessionUid: string) => Promise<{ discordMemberId: string } | undefined>>();
 const getValidAccessToken = jest.fn<(memberId: string) => Promise<string>>();
@@ -50,8 +60,11 @@ jest.unstable_mockModule('../services/guild.service.js', () => ({
 jest.unstable_mockModule('../services/statistics.service.js', () => ({
   statisticsService: {
     getUserGameStatistics,
-    getChampionStatistics: jest.fn(async () => ({ result: [], totalCount: 0 })),
+    getChampionStatistics,
   },
+}));
+jest.unstable_mockModule('../services/clanLeaderboardMetrics.service.js', () => ({
+  clanLeaderboardMetricsService: { getRisingStars, getHighlights, getWinStreaks },
 }));
 jest.unstable_mockModule('../services/discordAuth.service.js', () => ({
   DiscordAuthService: class {
@@ -165,6 +178,10 @@ beforeEach(() => {
   isPublicGuild.mockReset().mockResolvedValue(true);
   updateGuild.mockReset().mockImplementation(async (id, data) => ({ id, ...data }));
   getUserGameStatistics.mockReset().mockResolvedValue({ result: [], totalCount: 0 });
+  getChampionStatistics.mockReset().mockResolvedValue({ result: [], totalCount: 0 });
+  getRisingStars.mockReset().mockResolvedValue([]);
+  getHighlights.mockReset().mockResolvedValue({ kills: { value: null, entries: [] } });
+  getWinStreaks.mockReset().mockResolvedValue([]);
   findAuthSessionByUid.mockReset().mockResolvedValue({ discordMemberId: 'member-1' });
   getValidAccessToken.mockReset().mockResolvedValue('access-token');
   getActiveRoles.mockReset().mockResolvedValue([{ role: 'userNormal' }]);
@@ -176,7 +193,91 @@ afterEach(() => {
 });
 
 describe('실제 API 라우터의 공개 길드 인증 경계', () => {
+  test.each([
+    { resource: 'rising-stars', service: getRisingStars },
+    { resource: 'highlights', service: getHighlights },
+    { resource: 'win-streaks', service: getWinStreaks },
+  ])('새 $resource 경로는 공개 길드에서도 세션 인증을 요구한다', async ({
+    resource,
+    service,
+  }) => {
+    const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?season=2025`;
+    expect((await inject(url)).status).toBe(401);
+    expect(service).not.toHaveBeenCalled();
+    expect(
+      (await inject(url, { headers: { cookie: `session_uid=${VALID_SESSION}` } })).status,
+    ).toBe(200);
+    expect(service).toHaveBeenCalledWith(GUILD_ID, '2025');
+  });
+
   const statisticsUrl = `/api/statistics/${ENCODED_GUILD_ID}/users?page=2&limit=5`;
+  const leaderboardModes = [
+    { resource: 'users', sortBy: 'wilsonScore', service: getUserGameStatistics },
+    { resource: 'champions', sortBy: 'pickRate', service: getChampionStatistics },
+    { resource: 'champions', sortBy: 'wilsonScore', service: getChampionStatistics },
+  ] as const;
+
+  test.each(leaderboardModes)(
+    '공개·비공개 $resource $sortBy는 recent30을 같은 서비스 옵션으로 전달한다',
+    async ({ resource, sortBy, service }) => {
+      const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?sortBy=${sortBy}&datePreset=recent30`;
+      expect((await inject(url)).status).toBe(200);
+      isPublicGuild.mockResolvedValue(false);
+      expect(
+        (await inject(url, { headers: { cookie: `session_uid=${VALID_SESSION}` } })).status,
+      ).toBe(200);
+      expect(service).toHaveBeenCalledTimes(2);
+      expect(service).toHaveBeenCalledWith(
+        GUILD_ID,
+        expect.objectContaining({ datePreset: 'recent30', sortBy }),
+      );
+    },
+  );
+
+  test.each(leaderboardModes)(
+    '공개 $resource $sortBy는 익명과 세션 요청 모두 새 정렬과 기본 5개를 전달한다',
+    async ({ resource, sortBy, service }) => {
+      const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?sortBy=${sortBy}`;
+
+      const anonymous = await inject(url);
+      const authenticated = await inject(url, {
+        headers: { cookie: `session_uid=${VALID_SESSION}` },
+      });
+
+      expect(anonymous.status).toBe(200);
+      expect(authenticated.status).toBe(200);
+      expect(anonymous.headers['x-limit']).toBe('5');
+      expect(authenticated.headers['x-limit']).toBe('5');
+      expect(service).toHaveBeenCalledTimes(2);
+      expect(service).toHaveBeenCalledWith(
+        GUILD_ID,
+        expect.objectContaining({ sortBy, page: 1, limit: 5 }),
+      );
+      expect(findAuthSessionByUid).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(leaderboardModes)(
+    '비공개 $resource $sortBy는 익명 401, 유효 세션 조회를 유지한다',
+    async ({ resource, sortBy, service }) => {
+      isPublicGuild.mockResolvedValue(false);
+      const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?sortBy=${sortBy}`;
+
+      expect((await inject(url)).status).toBe(401);
+      expect(service).not.toHaveBeenCalled();
+
+      const authenticated = await inject(url, {
+        headers: { cookie: `session_uid=${VALID_SESSION}` },
+      });
+      expect(authenticated.status).toBe(200);
+      expect(authenticated.headers['x-limit']).toBe('5');
+      expect(findAuthSessionByUid).toHaveBeenCalledWith(VALID_SESSION);
+      expect(service).toHaveBeenCalledWith(
+        GUILD_ID,
+        expect.objectContaining({ sortBy, page: 1, limit: 5 }),
+      );
+    },
+  );
 
   test('공개 통계는 익명 요청을 처리하고 decode와 숫자 transform 결과를 한 번 전달한다', async () => {
     const response = await inject(statisticsUrl);
@@ -230,6 +331,50 @@ describe('실제 API 라우터의 공개 길드 인증 경계', () => {
     expect(privateResponse.status).toBe(400);
     expect(publicResponse.json).toEqual(privateResponse.json);
     expect(getUserGameStatistics).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { resource: 'users', sortBy: 'winRate', service: getUserGameStatistics },
+    { resource: 'champions', sortBy: 'totalCount', service: getChampionStatistics },
+  ])('기존 $resource $sortBy 정렬은 공개와 비공개 세션에서 동작한다', async ({
+    resource,
+    sortBy,
+    service,
+  }) => {
+    const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?sortBy=${sortBy}`;
+    expect((await inject(url)).status).toBe(200);
+
+    isPublicGuild.mockResolvedValue(false);
+    expect(
+      (await inject(url, { headers: { cookie: `session_uid=${VALID_SESSION}` } })).status,
+    ).toBe(200);
+    expect(service).toHaveBeenCalledTimes(2);
+    expect(service).toHaveBeenCalledWith(GUILD_ID, expect.objectContaining({ sortBy }));
+  });
+
+  test.each([
+    { resource: 'users', query: 'sortBy=pickRate' },
+    { resource: 'champions', query: 'sortBy=unknown' },
+    { resource: 'users', query: 'sortBy=wilsonScore&page=0' },
+    { resource: 'champions', query: 'sortBy=pickRate&limit=101' },
+    { resource: 'champions', query: 'sortBy=wilsonScore&page=0' },
+  ])('공개·비공개 $resource의 $query 오류는 같은 400 응답이다', async ({
+    resource,
+    query,
+  }) => {
+    const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?${query}`;
+    const publicResponse = await inject(url);
+
+    isPublicGuild.mockResolvedValue(false);
+    const privateResponse = await inject(url, {
+      headers: { cookie: `session_uid=${VALID_SESSION}` },
+    });
+
+    expect(publicResponse.status).toBe(400);
+    expect(privateResponse.status).toBe(400);
+    expect(publicResponse.json).toEqual(privateResponse.json);
+    expect(getUserGameStatistics).not.toHaveBeenCalled();
+    expect(getChampionStatistics).not.toHaveBeenCalled();
   });
 
   test('공개 설정을 끄면 다음 익명 요청부터 즉시 401이다', async () => {

@@ -10,6 +10,8 @@ let queue: unknown[] = [];
 let selects: Record<string, unknown>[] = [];
 /** leftJoin 대상 — 대회 범위 밖에서 조인이 늘지 않는지 보려고 모은다. */
 let joins: unknown[] = [];
+let havings: unknown[] = [];
+let orders: unknown[][] = [];
 let wheres: unknown[] = [];
 
 const CHAIN_METHODS = [
@@ -28,16 +30,22 @@ const CHAIN_METHODS = [
 const makeBuilder = (): Record<string, unknown> => {
   const builder: Record<string, unknown> = {};
   for (const method of CHAIN_METHODS) {
-    builder[method] =
-      method === 'where'
-        ? (condition: unknown) => {
-            wheres.push(condition);
-            return builder;
-          }
-        : () => builder;
+    builder[method] = () => builder;
   }
   builder.leftJoin = (table: unknown) => {
     joins.push(table);
+    return builder;
+  };
+  builder.having = (condition: unknown) => {
+    havings.push(condition);
+    return builder;
+  };
+  builder.orderBy = (...criteria: unknown[]) => {
+    orders.push(criteria);
+    return builder;
+  };
+  builder.where = (condition: unknown) => {
+    wheres.push(condition);
     return builder;
   };
   builder.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) => {
@@ -115,7 +123,131 @@ beforeEach(() => {
   queue = [];
   selects = [];
   joins = [];
+  havings = [];
+  orders = [];
   wheres = [];
+});
+
+describe('우수 성적 유저 랭킹', () => {
+  test.each([undefined, 'recent', 'recent30'] as const)(
+    'Wilson %s 기간은 최근 30일을 사용한다',
+    async (datePreset) => {
+      queue = [[], [{ count: 0 }]];
+      await service.getUserGameStatistics(GUILD, { sortBy: 'wilsonScore', datePreset });
+      expect(render(wheres[0])).toContain("INTERVAL '30 days'");
+      expect(render(wheres[1])).toContain("INTERVAL '30 days'");
+    },
+  );
+
+  test.each(['recent', 'recent30'] as const)(
+    '기존 유저 정렬 %s 기간은 명시적 recent30에서만 30일을 사용한다',
+    async (datePreset) => {
+      queue = [[], [{ count: 0 }]];
+      await service.getUserGameStatistics(GUILD, { sortBy: 'totalCount', datePreset });
+      expect(render(wheres[0])).toContain(
+        datePreset === 'recent' ? "INTERVAL '1 month'" : "INTERVAL '30 days'",
+      );
+    },
+  );
+
+  test('Wilson 모드는 전 포지션을 합산하고 설정된 최소 판수와 동률 정렬을 적용한다', async () => {
+    queue = [[{ ...baseRow, wilsonScore: 0.42 }], countRow];
+
+    const { result } = await service.getUserGameStatistics(GUILD, {
+      sortBy: 'wilsonScore',
+      position: 'ALL',
+    });
+
+    expect(selects[0]).toHaveProperty('wilsonScore');
+    expect(selects[0]).not.toHaveProperty('position');
+    expect(result[0]).toMatchObject({ totalCount: 4, winRate: 75, wilsonScore: 0.42 });
+    expect(havings).toHaveLength(2);
+    expect(dialect.sqlToQuery(havings[0] as SQL)).toMatchObject({ params: [10] });
+    expect(orders[0]).toHaveLength(3);
+  });
+
+  test('Wilson 모드는 챔피언과 특정 포지션을 최소 판수 집계 전에 거른다', async () => {
+    queue = [[], [{ count: 0 }]];
+    await service.getUserGameStatistics(GUILD, {
+      sortBy: 'wilsonScore',
+      championName: '아리',
+      position: 'MID',
+    });
+
+    const userQuery = selects[0];
+    expect(userQuery).not.toHaveProperty('position');
+    expect(havings).toHaveLength(2);
+    expect(render(wheres[0])).toContain('"champion"."champ_name"');
+  });
+
+  test('기존 유저 조회는 Wilson 점수를 추가하지 않는다', async () => {
+    queue = [[baseRow], countRow];
+    await service.getUserGameStatistics(GUILD, { sortBy: 'totalCount', position: 'ALL' });
+
+    expect(selects[0]).toHaveProperty('position');
+    expect(selects[0]).not.toHaveProperty('wilsonScore');
+  });
+});
+
+describe('클랜 챔피언 리더보드', () => {
+  test.each([undefined, 'recent', 'recent30'] as const)(
+    '픽률 %s 기간은 참가자와 전체 경기 분모에 동일한 최근 30일을 적용한다',
+    async (datePreset) => {
+      queue = [[], [{ count: 0 }]];
+      await service.getChampionStatistics(GUILD, { sortBy: 'pickRate', datePreset });
+      expect(render(wheres[0])).toContain("INTERVAL '30 days'");
+      expect(render(wheres[1])).toContain("INTERVAL '30 days'");
+    },
+  );
+
+  test.each(['recent', 'recent30'] as const)(
+    '기존 챔피언 정렬 %s 기간은 명시적 recent30에서만 30일을 사용한다',
+    async (datePreset) => {
+      queue = [[], [{ count: 0 }]];
+      await service.getChampionStatistics(GUILD, { sortBy: 'totalCount', datePreset });
+      expect(render(wheres[0])).toContain(
+        datePreset === 'recent' ? "INTERVAL '1 month'" : "INTERVAL '30 days'",
+      );
+    },
+  );
+
+  test('챔피언 메타 season은 최근 조건을 적용하지 않는다', async () => {
+    queue = [[], [{ count: 0 }]];
+    await service.getChampionStatistics(GUILD, { sortBy: 'wilsonScore', datePreset: 'season' });
+    expect(render(wheres[0])).not.toContain('INTERVAL');
+  });
+
+  test('픽률은 경기 중복을 제거하며 최소 판수와 ALL 라인 분할을 적용하지 않는다', async () => {
+    queue = [[{ champName: '아리', pickRate: 75 }], countRow];
+    await service.getChampionStatistics(GUILD, { sortBy: 'pickRate', position: 'ALL' });
+    const fields = selects.find((selection) => 'pickRate' in selection)!;
+    expect(fields).toHaveProperty('totalMatches');
+    expect(fields).not.toHaveProperty('position');
+    expect(render(fields.matchCount)).toContain(
+      'COUNT(DISTINCT "match_participant"."custom_match_id")',
+    );
+    expect(havings.every((condition) => condition === undefined)).toBe(true);
+  });
+
+  test('메타는 설정된 최소 판수를 적용하고 선택한 포지션을 표시한다', async () => {
+    queue = [[], [{ count: 0 }]];
+    const result = await service.getChampionStatistics(GUILD, {
+      sortBy: 'wilsonScore',
+      position: 'MID',
+    });
+    expect(selects.find((selection) => 'wilsonScore' in selection)).toHaveProperty('position');
+    expect(havings).toHaveLength(2);
+    expect(dialect.sqlToQuery(havings[0] as SQL)).toMatchObject({ params: [10] });
+    expect(result).toEqual({ result: [], totalCount: 0 });
+  });
+
+  test('기존 ALL 통계의 라인별 집계와 응답 필드는 유지한다', async () => {
+    queue = [[], [{ count: 0 }]];
+    await service.getChampionStatistics(GUILD, { position: 'ALL' });
+    expect(selects[0]).toHaveProperty('position');
+    expect(selects[0]).not.toHaveProperty('pickRate');
+    expect(selects[0]).not.toHaveProperty('wilsonScore');
+  });
 });
 
 describe('유저 랭킹 — 대회 지표', () => {
@@ -215,9 +347,13 @@ describe('대회 지표 SQL 조각', () => {
       expect(render(chunks.columns[key])).toContain('= 0 THEN 0');
     }
     const damagePerDeath = render(chunks.columns.damagePerDeath);
-    const zeroDeaths = damagePerDeath.indexOf('WHEN COALESCE(SUM("match_participant"."death"), 0) = 0');
+    const zeroDeaths = damagePerDeath.indexOf(
+      'WHEN COALESCE(SUM("match_participant"."death"), 0) = 0',
+    );
     expect(zeroDeaths).toBeGreaterThan(-1);
-    expect(damagePerDeath.slice(zeroDeaths)).toContain('SUM("match_participant"."total_damage_champions")');
+    expect(damagePerDeath.slice(zeroDeaths)).toContain(
+      'SUM("match_participant"."total_damage_champions")',
+    );
   });
 
   test('펜타킬만 match_participant에서 센다', () => {
