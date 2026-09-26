@@ -21,6 +21,9 @@ const getChampionStatistics =
       options: Record<string, unknown>,
     ) => Promise<{ result: unknown[]; totalCount: number }>
   >();
+const getRisingStars = jest.fn<(_guildId: string, _season?: string) => Promise<unknown[]>>();
+const getHighlights = jest.fn<(_guildId: string, _season?: string) => Promise<unknown>>();
+const getWinStreaks = jest.fn<(_guildId: string, _season?: string) => Promise<unknown[]>>();
 const findAuthSessionByUid =
   jest.fn<(sessionUid: string) => Promise<{ discordMemberId: string } | undefined>>();
 const getValidAccessToken = jest.fn<(memberId: string) => Promise<string>>();
@@ -59,6 +62,9 @@ jest.unstable_mockModule('../services/statistics.service.js', () => ({
     getUserGameStatistics,
     getChampionStatistics,
   },
+}));
+jest.unstable_mockModule('../services/clanLeaderboardMetrics.service.js', () => ({
+  clanLeaderboardMetricsService: { getRisingStars, getHighlights, getWinStreaks },
 }));
 jest.unstable_mockModule('../services/discordAuth.service.js', () => ({
   DiscordAuthService: class {
@@ -173,6 +179,9 @@ beforeEach(() => {
   updateGuild.mockReset().mockImplementation(async (id, data) => ({ id, ...data }));
   getUserGameStatistics.mockReset().mockResolvedValue({ result: [], totalCount: 0 });
   getChampionStatistics.mockReset().mockResolvedValue({ result: [], totalCount: 0 });
+  getRisingStars.mockReset().mockResolvedValue([]);
+  getHighlights.mockReset().mockResolvedValue({ kills: { value: null, entries: [] } });
+  getWinStreaks.mockReset().mockResolvedValue([]);
   findAuthSessionByUid.mockReset().mockResolvedValue({ discordMemberId: 'member-1' });
   getValidAccessToken.mockReset().mockResolvedValue('access-token');
   getActiveRoles.mockReset().mockResolvedValue([{ role: 'userNormal' }]);
@@ -184,6 +193,23 @@ afterEach(() => {
 });
 
 describe('실제 API 라우터의 공개 길드 인증 경계', () => {
+  test.each([
+    { resource: 'rising-stars', service: getRisingStars },
+    { resource: 'highlights', service: getHighlights },
+    { resource: 'win-streaks', service: getWinStreaks },
+  ])('새 $resource 경로는 공개 길드에서도 세션 인증을 요구한다', async ({
+    resource,
+    service,
+  }) => {
+    const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?season=2025`;
+    expect((await inject(url)).status).toBe(401);
+    expect(service).not.toHaveBeenCalled();
+    expect(
+      (await inject(url, { headers: { cookie: `session_uid=${VALID_SESSION}` } })).status,
+    ).toBe(200);
+    expect(service).toHaveBeenCalledWith(GUILD_ID, '2025');
+  });
+
   const statisticsUrl = `/api/statistics/${ENCODED_GUILD_ID}/users?page=2&limit=5`;
   const leaderboardModes = [
     { resource: 'users', sortBy: 'wilsonScore', service: getUserGameStatistics },

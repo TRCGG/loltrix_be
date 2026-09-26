@@ -203,6 +203,9 @@ export class StatisticsService {
     return { result, totalCount: countResult?.count || 0 };
   }
 
+  /**
+   * @desc 선택한 리더보드 기간에 최소 판수를 충족한 본캐 유저를 윌슨 점수로 정렬합니다.
+   */
   private async getLeaderboardUserStatistics(
     guildId: string,
     options: StatisticsServiceOptions,
@@ -358,6 +361,9 @@ export class StatisticsService {
   }
 
   // 기존 정렬의 ALL은 포지션별 행을 반환하므로, 전체 포지션을 합산하는 신규 정렬은 별도로 처리한다.
+  /**
+   * @desc 선택한 기간과 포지션에서 챔피언 픽률 또는 윌슨 점수를 집계합니다.
+   */
   private async getLeaderboardChampionStatistics(
     guildId: string,
     options: ChampionStatisticsServiceOptions,

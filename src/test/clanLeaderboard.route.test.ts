@@ -9,12 +9,18 @@ const getDuos = jest.fn<AsyncFn>();
 const getActivity = jest.fn<AsyncFn>();
 const getChampionStatistics = jest.fn<AsyncFn>();
 const getUserGameStatistics = jest.fn<AsyncFn>();
+const getRisingStars = jest.fn<AsyncFn>();
+const getHighlights = jest.fn<AsyncFn>();
+const getWinStreaks = jest.fn<AsyncFn>();
 
 jest.unstable_mockModule('../services/clanLeaderboard.service.js', () => ({
   clanLeaderboardService: { getChampionCombinations, getDuos, getActivity },
 }));
 jest.unstable_mockModule('../services/statistics.service.js', () => ({
   statisticsService: { getChampionStatistics, getUserGameStatistics },
+}));
+jest.unstable_mockModule('../services/clanLeaderboardMetrics.service.js', () => ({
+  clanLeaderboardMetricsService: { getRisingStars, getHighlights, getWinStreaks },
 }));
 const { default: router } = await import('../routes/statistics.route.js');
 const app = express();
@@ -49,9 +55,36 @@ beforeEach(() => {
     totalPlayers: 10,
     dailyMatches: [{ date: '2026-09-01', matchCount: 3 }],
   });
+  getRisingStars.mockResolvedValue([]);
+  getHighlights.mockResolvedValue({ kills: { value: null, entries: [] } });
+  getWinStreaks.mockResolvedValue([]);
 });
 
 describe('클랜 리더보드 HTTP 계약', () => {
+  test.each([
+    { path: '/rising-stars', service: getRisingStars },
+    { path: '/highlights', service: getHighlights },
+    { path: '/win-streaks', service: getWinStreaks },
+  ])('$path는 선택적 시즌만 받고 새 성공 응답을 반환한다', async ({ path, service }) => {
+    const response = await fetch(`${baseUrl}${path}?season=2025`);
+    expect(response.status).toBe(200);
+    expect(service).toHaveBeenCalledWith('guild-1', '2025');
+    expect(await response.json()).toMatchObject({ status: 'success' });
+    expect(response.headers.get('x-limit')).toBeNull();
+  });
+
+  test.each(['/rising-stars', '/highlights', '/win-streaks'])(
+    '%s는 기간·포지션·페이지·경기유형을 거부한다',
+    async (path) => {
+      for (const query of ['datePreset=recent30', 'position=TOP', 'page=1', 'gameType=1']) {
+        expect((await fetch(`${baseUrl}${path}?${query}`)).status).toBe(400);
+      }
+      expect(getRisingStars).not.toHaveBeenCalled();
+      expect(getHighlights).not.toHaveBeenCalled();
+      expect(getWinStreaks).not.toHaveBeenCalled();
+    },
+  );
+
   test.each([
     { path: '/users?sortBy=totalCount', service: getUserGameStatistics },
     { path: '/users?sortBy=wilsonScore', service: getUserGameStatistics },

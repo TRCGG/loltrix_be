@@ -23,6 +23,11 @@ const pagination = {
 };
 const params = z.object({ guildId: z.string().min(1).max(128) });
 
+export const metricFilterSchema = z.object({
+  params,
+  query: z.object({ season: z.string().min(1).max(32).optional() }).strict(),
+});
+
 export const combinationFilterSchema = z.object({
   params,
   query: periodQuery

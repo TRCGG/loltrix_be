@@ -23,6 +23,9 @@ import {
 export class ClanLeaderboardService {
   // 경기 수는 멤버의 가입 상태와 무관하게 유지하고, 참여자 집계만 현재 본캐 멤버십을 따른다.
   // 부캐를 본캐로 변환한 participants를 공유해야 듀오와 조합의 고유 쌍 기준도 일치한다.
+  /**
+   * @desc 선택한 기간의 일반내전과 현재 본캐 멤버 참가 기록을 공통 조회 범위로 만듭니다.
+   */
   private async source(guildId: string, options: ClanLeaderboardPeriod) {
     const season =
       options.season ||
@@ -65,6 +68,9 @@ export class ClanLeaderboardService {
     )`;
   }
 
+  /**
+   * @desc 순위 집계를 지정한 순서와 페이지로 조회하고 전체 순위 수를 함께 반환합니다.
+   */
   private async page<T>(source: SQL, ranking: SQL, order: SQL, options: ClanLeaderboardOptions) {
     const { page = 1, limit = 5 } = options;
     // 마지막 페이지를 넘겨도 전체 순위 수는 유지하고, JSON 배열에도 SQL 정렬 순서를 보존한다.
@@ -79,6 +85,9 @@ export class ClanLeaderboardService {
     return response.rows[0] ?? { result: [], totalCount: 0 };
   }
 
+  /**
+   * @desc 선택한 기간에 최소 판수를 충족한 같은 팀 챔피언 조합을 윌슨 점수로 정렬합니다.
+   */
   public async getChampionCombinations(guildId: string, options: ChampionCombinationOptions) {
     const source = await this.source(guildId, options);
     const minimum = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
@@ -113,6 +122,9 @@ export class ClanLeaderboardService {
     );
   }
 
+  /**
+   * @desc 선택한 기간에 같은 팀으로 함께한 본캐 듀오를 고유 경기 수로 정렬합니다.
+   */
   public async getDuos(guildId: string, options: ClanLeaderboardOptions = {}) {
     const source = await this.source(guildId, options);
     // 아래 조인의 player_code < 조건은 A–B/B–A 중복과 본캐 합산 후 자기 자신과의 쌍을 제외한다.
@@ -133,6 +145,9 @@ export class ClanLeaderboardService {
     return this.page<ClanDuo>(source, ranking, sql`"totalCount" DESC, players ASC`, options);
   }
 
+  /**
+   * @desc 선택한 기간의 일반내전 경기 수와 본캐 참여자 수, 일별 경기 수를 집계합니다.
+   */
   public async getActivity(
     guildId: string,
     options: ClanLeaderboardPeriod = {},

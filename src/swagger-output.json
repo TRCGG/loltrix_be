@@ -4179,6 +4179,102 @@
         }
       }
     },
+    "/api/statistics/{guildId}/rising-stars": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "최근 30일 상승세 TOP 5",
+        "description": "일반내전 등록일 기준 최근 30일과 직전 30일을 비교합니다. 양쪽 기간 각각 10판 이상이며 승률 상승폭이 양수인 현재 본캐 멤버만 반환합니다. data는 playerCode, riotName, riotNameTag, previous/current의 totalCount·win·winRate(%), improvementPp(승률 퍼센트포인트 차이)를 담은 TOP 5 배열입니다. query는 season만 허용합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "기본 LOL_SEASON",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/statistics/{guildId}/highlights": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "최근 30일 내전 명장면",
+        "description": "최근 30일 일반내전 등록일 기준입니다. data의 kills, assists, championDamage, visionScore, damageTaken, buildingDamage(건물 피해)는 단일 경기 공동 최고 value와 모든 공동 1위 entries를 반환합니다. entries는 본캐 식별자, 챔피언, registeredDate(등록일 YYYY-MM-DD), value를 담습니다. 경기 없는 항목은 value=null, entries=[]입니다. pentakills는 본캐 기준 totalPlayers, totalPentaKills, 경기별 entries의 pentaKills를 반환하며 여러 펜타킬은 횟수대로 합산합니다. query는 season만 허용합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "기본 LOL_SEASON",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/statistics/{guildId}/win-streaks": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "최근 30일 현재 연승 TOP 5",
+        "description": "최근 30일 일반내전 등록 경기부터 역순으로 비승리 전까지 이어진 2연승 이상 현재 연승 TOP 5를 반환합니다. data는 본캐 식별자, streak, latestRegisteredDate(등록일 YYYY-MM-DD)를 담습니다. 최고 연승은 포함하지 않으며 동시 등록 경기에는 경기 ID와 참가자 ID 역순을 적용합니다. query는 season만 허용합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "기본 LOL_SEASON",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/statistics/{guildId}/champion-combinations": {
       "get": {
         "tags": [
