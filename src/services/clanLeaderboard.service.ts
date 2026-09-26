@@ -7,7 +7,7 @@ import {
   riotAccount,
   champion,
 } from '../database/schema.js';
-import { periodCondition } from '../database/datePeriod.js';
+import { clanLeaderboardPeriodCondition } from '../database/clanLeaderboardPeriod.js';
 import { subAccountLink } from '../database/subAccountLink.js';
 import { wilsonScore } from '../database/wilsonScore.js';
 import { systemConfigService } from './systemConfig.service.js';
@@ -33,9 +33,9 @@ export class ClanLeaderboardService {
       eq(customMatch.isDeleted, false),
       eq(customMatch.gameType, '1'),
       eq(customMatch.season, season),
-      periodCondition(
+      clanLeaderboardPeriodCondition(
         customMatch.createDate,
-        options.datePreset ?? 'recent',
+        options.datePreset,
         options.fromMonth,
         options.toMonth,
       ),

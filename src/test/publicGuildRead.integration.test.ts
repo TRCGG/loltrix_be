@@ -192,6 +192,23 @@ describe('실제 API 라우터의 공개 길드 인증 경계', () => {
   ] as const;
 
   test.each(leaderboardModes)(
+    '공개·비공개 $resource $sortBy는 recent30을 같은 서비스 옵션으로 전달한다',
+    async ({ resource, sortBy, service }) => {
+      const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?sortBy=${sortBy}&datePreset=recent30`;
+      expect((await inject(url)).status).toBe(200);
+      isPublicGuild.mockResolvedValue(false);
+      expect(
+        (await inject(url, { headers: { cookie: `session_uid=${VALID_SESSION}` } })).status,
+      ).toBe(200);
+      expect(service).toHaveBeenCalledTimes(2);
+      expect(service).toHaveBeenCalledWith(
+        GUILD_ID,
+        expect.objectContaining({ datePreset: 'recent30', sortBy }),
+      );
+    },
+  );
+
+  test.each(leaderboardModes)(
     '공개 $resource $sortBy는 익명과 세션 요청 모두 새 정렬과 기본 5개를 전달한다',
     async ({ resource, sortBy, service }) => {
       const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?sortBy=${sortBy}`;

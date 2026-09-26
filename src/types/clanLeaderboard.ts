@@ -1,7 +1,7 @@
-import { DatePreset } from '../database/datePeriod.js';
+import { LeaderboardDatePreset } from '../database/clanLeaderboardPeriod.js';
 
 export type ClanLeaderboardPeriod = {
-  datePreset?: DatePreset;
+  datePreset?: LeaderboardDatePreset;
   fromMonth?: string;
   toMonth?: string;
   season?: string;

@@ -1,11 +1,11 @@
 // types/statistics.ts
 
 import { MatchStats } from './matchParticipant.js';
-import { DatePreset } from '../database/datePeriod.js';
+import { LeaderboardDatePreset } from '../database/clanLeaderboardPeriod.js';
 import { MatchScope } from './matchScope.js';
 
 // 통계 조회 방식
-export type StatisticsDatePreset = DatePreset;
+export type StatisticsDatePreset = LeaderboardDatePreset;
 
 /** 통계 랭킹 공통 집계 — MatchStats + 킬 합계·평균 DPM */
 export interface RankingStats extends MatchStats {

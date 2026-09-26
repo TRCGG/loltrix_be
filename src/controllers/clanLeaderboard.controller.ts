@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { clanLeaderboardService } from '../services/clanLeaderboard.service.js';
-import { DatePreset } from '../database/datePeriod.js';
+import { LeaderboardDatePreset } from '../database/clanLeaderboardPeriod.js';
 
 const periodOptions = (req: Request) => ({
-  datePreset: req.query.datePreset as DatePreset | undefined,
+  datePreset: req.query.datePreset as LeaderboardDatePreset | undefined,
   fromMonth: req.query.fromMonth as string | undefined,
   toMonth: req.query.toMonth as string | undefined,
   season: req.query.season as string | undefined,

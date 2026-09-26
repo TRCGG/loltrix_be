@@ -52,6 +52,24 @@ beforeEach(() => {
 });
 
 describe('클랜 리더보드 HTTP 계약', () => {
+  test.each([
+    { path: '/users?sortBy=totalCount', service: getUserGameStatistics },
+    { path: '/users?sortBy=wilsonScore', service: getUserGameStatistics },
+    { path: '/champions?sortBy=totalCount', service: getChampionStatistics },
+    { path: '/champions?sortBy=pickRate', service: getChampionStatistics },
+    { path: '/champions?sortBy=wilsonScore', service: getChampionStatistics },
+    { path: '/champion-combinations?combination=ADCSUP', service: getChampionCombinations },
+    { path: '/duos', service: getDuos },
+    { path: '/activity', service: getActivity },
+  ])('recent30 요청을 서비스에 전달한다: $path', async ({ path, service }) => {
+    const response = await fetch(`${baseUrl}${path}${path.includes('?') ? '&' : '?'}datePreset=recent30`);
+    expect(response.status).toBe(200);
+    expect(service).toHaveBeenCalledWith(
+      'guild-1',
+      expect.objectContaining({ datePreset: 'recent30' }),
+    );
+  });
+
   test('조합은 기간만 전달하고 기본 TOP 5 페이지 헤더를 반환한다', async () => {
     const response = await fetch(
       `${baseUrl}/champion-combinations?combination=ADCSUP&position=TOP&datePreset=season&season=2026`,

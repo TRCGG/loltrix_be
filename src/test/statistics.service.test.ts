@@ -129,6 +129,27 @@ beforeEach(() => {
 });
 
 describe('우수 성적 유저 랭킹', () => {
+  test.each([undefined, 'recent', 'recent30'] as const)(
+    'Wilson %s 기간은 최근 30일을 사용한다',
+    async (datePreset) => {
+      queue = [[], [{ count: 0 }]];
+      await service.getUserGameStatistics(GUILD, { sortBy: 'wilsonScore', datePreset });
+      expect(render(wheres[0])).toContain("INTERVAL '30 days'");
+      expect(render(wheres[1])).toContain("INTERVAL '30 days'");
+    },
+  );
+
+  test.each(['recent', 'recent30'] as const)(
+    '기존 유저 정렬 %s 기간은 명시적 recent30에서만 30일을 사용한다',
+    async (datePreset) => {
+      queue = [[], [{ count: 0 }]];
+      await service.getUserGameStatistics(GUILD, { sortBy: 'totalCount', datePreset });
+      expect(render(wheres[0])).toContain(
+        datePreset === 'recent' ? "INTERVAL '1 month'" : "INTERVAL '30 days'",
+      );
+    },
+  );
+
   test('Wilson 모드는 전 포지션을 합산하고 설정된 최소 판수와 동률 정렬을 적용한다', async () => {
     queue = [[{ ...baseRow, wilsonScore: 0.42 }], countRow];
 
@@ -169,6 +190,33 @@ describe('우수 성적 유저 랭킹', () => {
 });
 
 describe('클랜 챔피언 리더보드', () => {
+  test.each([undefined, 'recent', 'recent30'] as const)(
+    '픽률 %s 기간은 참가자와 전체 경기 분모에 동일한 최근 30일을 적용한다',
+    async (datePreset) => {
+      queue = [[], [{ count: 0 }]];
+      await service.getChampionStatistics(GUILD, { sortBy: 'pickRate', datePreset });
+      expect(render(wheres[0])).toContain("INTERVAL '30 days'");
+      expect(render(wheres[1])).toContain("INTERVAL '30 days'");
+    },
+  );
+
+  test.each(['recent', 'recent30'] as const)(
+    '기존 챔피언 정렬 %s 기간은 명시적 recent30에서만 30일을 사용한다',
+    async (datePreset) => {
+      queue = [[], [{ count: 0 }]];
+      await service.getChampionStatistics(GUILD, { sortBy: 'totalCount', datePreset });
+      expect(render(wheres[0])).toContain(
+        datePreset === 'recent' ? "INTERVAL '1 month'" : "INTERVAL '30 days'",
+      );
+    },
+  );
+
+  test('챔피언 메타 season은 최근 조건을 적용하지 않는다', async () => {
+    queue = [[], [{ count: 0 }]];
+    await service.getChampionStatistics(GUILD, { sortBy: 'wilsonScore', datePreset: 'season' });
+    expect(render(wheres[0])).not.toContain('INTERVAL');
+  });
+
   test('픽률은 경기 중복을 제거하며 최소 판수와 ALL 라인 분할을 적용하지 않는다', async () => {
     queue = [[{ champName: '아리', pickRate: 75 }], countRow];
     await service.getChampionStatistics(GUILD, { sortBy: 'pickRate', position: 'ALL' });

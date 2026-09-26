@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { monthSchema, rangeRequiresMonths } from './monthQuery.js';
 
 const periodQuery = z.object({
-  datePreset: z.enum(['recent', 'season', 'range']).optional(),
+  datePreset: z.enum(['recent', 'recent30', 'season', 'range']).optional(),
   fromMonth: monthSchema.optional(),
   toMonth: monthSchema.optional(),
   season: z.string().min(1).max(32).optional(),

@@ -26,7 +26,7 @@ export const filterSchema = z.object({
   }),
   query: z
     .object({
-      datePreset: z.enum(['recent', 'season', 'range']).optional(),
+      datePreset: z.enum(['recent', 'recent30', 'season', 'range']).optional(),
       fromMonth: monthSchema.optional(),
       toMonth: monthSchema.optional(),
       championName: z.string().max(32, 'championName must be less than 32 characters').optional(),
@@ -117,7 +117,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Statistics']
     #swagger.summary = '유저별 게임 통계'
-    #swagger.description = '특정 길드 내 유저들의 게임 통계를 조회합니다. sortBy=wilsonScore는 일반내전 전용 우수 성적 랭킹 TOP5이며, STATS_MIN_GAME_COUNT 이상을 Wilson 95% 하한으로 정렬합니다. 이 모드의 position=ALL 또는 생략은 전 포지션을 합산하고, 특정 포지션은 최소 판수 적용 전에 필터링합니다. 기존 totalCount·winRate는 유지합니다. gameType에 1이 없으면(대회 유형 합산) 시즌·기간 조건을 무시합니다. 대회 하나의 유저 랭킹은 GET /api/competitions/{guildId}/{competitionId}/statistics/users 로 조회합니다.'
+    #swagger.description = '특정 길드 내 유저들의 게임 통계를 조회합니다. sortBy=wilsonScore는 일반내전 전용 우수 성적 랭킹 TOP5이며, 기본 recent는 최근 30일, STATS_MIN_GAME_COUNT 이상을 Wilson 95% 하한으로 정렬합니다. 이 모드의 position=ALL 또는 생략은 전 포지션을 합산하고, 특정 포지션은 최소 판수 적용 전에 필터링합니다. 기존 totalCount·winRate의 기본 recent는 최근 1개월이며 recent30을 명시하면 최근 30일입니다. gameType에 1이 없으면(대회 유형 합산) 시즌·기간 조건을 무시합니다. 대회 하나의 유저 랭킹은 GET /api/competitions/{guildId}/{competitionId}/statistics/users 로 조회합니다.'
 
     #swagger.parameters['guildId'] = {
       in: 'path',
@@ -127,9 +127,9 @@ router.get(
     }
     #swagger.parameters['datePreset'] = {
       in: 'query',
-      description: '조회 방식. recent=최근 1개월, season=시즌 전체, range=기간 선택',
+      description: '기존 정렬 recent=최근 1개월, 새 리더보드 정렬 recent=최근 30일. recent30=최근 30일, season=시즌 전체, range=기간 선택',
       type: 'string',
-      enum: ['recent', 'season', 'range']
+      enum: ['recent', 'recent30', 'season', 'range']
     }
     #swagger.parameters['fromMonth'] = {
       in: 'query',
@@ -193,7 +193,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Statistics']
     #swagger.summary = '챔피언별 통계'
-    #swagger.description = '길드 내 챔피언 통계. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위. pickRate·wilsonScore는 일반내전 전용이며 기본 5개를 반환합니다. 두 모드의 position=ALL 또는 생략은 모든 포지션 합산입니다. matchCount는 고유 등장 경기 수, totalMatches는 포지션과 무관한 기간 내 전체 경기 수, pickRate는 두 값의 비율(%), wilsonScore는 95% 윌슨 하한입니다. 기존 totalCount·winRate 동작은 유지하며 gameType에 1이 없으면 시즌·기간 조건을 무시합니다. 대회 하나의 통계는 /api/competitions/{guildId}/{competitionId}/statistics/champions 에서 조회합니다.'
+    #swagger.description = '길드 내 챔피언 통계. 기존 정렬 recent=최근 1개월, pickRate·wilsonScore recent=최근 30일, recent30=최근 30일, season=시즌 전체, range=시즌 기준 월 범위. pickRate·wilsonScore는 일반내전 전용이며 기본 5개를 반환합니다. 두 모드의 position=ALL 또는 생략은 모든 포지션 합산입니다. matchCount는 고유 등장 경기 수, totalMatches는 포지션과 무관한 기간 내 전체 경기 수, pickRate는 두 값의 비율(%), wilsonScore는 95% 윌슨 하한입니다. 기존 totalCount·winRate 동작은 유지하며 gameType에 1이 없으면 시즌·기간 조건을 무시합니다. 대회 하나의 통계는 /api/competitions/{guildId}/{competitionId}/statistics/champions 에서 조회합니다.'
 
     #swagger.parameters['guildId'] = {
       in: 'path',
@@ -203,9 +203,9 @@ router.get(
     }
     #swagger.parameters['datePreset'] = {
       in: 'query',
-      description: '조회 방식. recent=최근 1개월, season=시즌 전체, range=기간 선택',
+      description: '기존 정렬 recent=최근 1개월, 새 리더보드 정렬 recent=최근 30일. recent30=최근 30일, season=시즌 전체, range=기간 선택',
       type: 'string',
-      enum: ['recent', 'season', 'range']
+      enum: ['recent', 'recent30', 'season', 'range']
     }
     #swagger.parameters['fromMonth'] = {
       in: 'query',
@@ -258,7 +258,7 @@ router.get(
     #swagger.description = '일반내전의 같은 팀 ADC+SUP 또는 MID+JUG 조합. STATS_MIN_GAME_COUNT 이상을 Wilson 95% 하한으로 정렬합니다. 포지션 필터는 적용하지 않습니다. data 배열의 각 행은 champions[{champName,champNameEng,position}], totalCount, win, lose, winRate(%), wilsonScore, playerPairCount(본캐 기준 고유 플레이어 쌍 수)를 반환합니다. 페이지 정보는 X-Total-Count, X-Page, X-Limit, X-Total-Pages 헤더에 제공합니다.'
     #swagger.parameters['guildId'] = { in: 'path', required: true, type: 'string' }
     #swagger.parameters['combination'] = { in: 'query', required: true, type: 'string', enum: ['ADCSUP', 'MIDJUG'] }
-    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'season', 'range'], description: '기본 recent=최근 1개월' }
+    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'recent30', 'season', 'range'], description: '기본 recent=최근 30일. recent30=최근 30일' }
     #swagger.parameters['fromMonth'] = { in: 'query', type: 'string', description: 'range 시작 월 (1~12)' }
     #swagger.parameters['toMonth'] = { in: 'query', type: 'string', description: 'range 종료 월 (1~12)' }
     #swagger.parameters['season'] = { in: 'query', type: 'string', description: '기본 LOL_SEASON. range일 때 필수' }
@@ -277,7 +277,7 @@ router.get(
     #swagger.summary = '함께한 판수 듀오 순위'
     #swagger.description = '일반내전에서 같은 팀으로 함께한 두 플레이어의 경기 수 순위. 부캐는 본캐로 합산하며 포지션 필터와 최소 판수는 적용하지 않습니다. data 배열의 각 행은 players[{playerCode,riotName,riotNameTag}], totalCount, win, lose, winRate(%)를 반환합니다. 페이지 정보는 X-Total-Count, X-Page, X-Limit, X-Total-Pages 헤더에 제공합니다.'
     #swagger.parameters['guildId'] = { in: 'path', required: true, type: 'string' }
-    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'season', 'range'], description: '기본 recent=최근 1개월' }
+    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'recent30', 'season', 'range'], description: '기본 recent=최근 30일. recent30=최근 30일' }
     #swagger.parameters['fromMonth'] = { in: 'query', type: 'string', description: 'range 시작 월 (1~12)' }
     #swagger.parameters['toMonth'] = { in: 'query', type: 'string', description: 'range 종료 월 (1~12)' }
     #swagger.parameters['season'] = { in: 'query', type: 'string', description: '기본 LOL_SEASON. range일 때 필수' }
@@ -296,7 +296,7 @@ router.get(
     #swagger.summary = '내전 집계 규모와 일별 경기 수'
     #swagger.description = '등록일 기준 일반내전 경기 수, 본캐 기준 참여자 수, 날짜별 경기 수. 포지션 필터는 적용하지 않습니다. data는 {totalMatches,totalPlayers,dailyMatches:[{date,matchCount}]} 객체입니다. date는 YYYY-MM-DD이며 경기 없는 날짜는 배열에 포함하지 않습니다.'
     #swagger.parameters['guildId'] = { in: 'path', required: true, type: 'string' }
-    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'season', 'range'], description: '기본 recent=최근 1개월' }
+    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'recent30', 'season', 'range'], description: '기본 recent=최근 30일. recent30=최근 30일' }
     #swagger.parameters['fromMonth'] = { in: 'query', type: 'string', description: 'range 시작 월 (1~12)' }
     #swagger.parameters['toMonth'] = { in: 'query', type: 'string', description: 'range 종료 월 (1~12)' }
     #swagger.parameters['season'] = { in: 'query', type: 'string', description: '기본 LOL_SEASON. range일 때 필수' }

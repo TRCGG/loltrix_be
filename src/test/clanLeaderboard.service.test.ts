@@ -24,7 +24,7 @@ describe('clan leaderboard scope', () => {
   test('uses registered date, normal matches, season and guild-specific main-account membership', async () => {
     await service.getDuos('guild-one');
     const { sql: text, params } = query();
-    expect(text).toContain('"custom_match"."create_date" >= NOW() - INTERVAL \'1 month\'');
+    expect(text).toContain('"custom_match"."create_date" >= NOW() - INTERVAL \'30 days\'');
     expect(text).toContain('"custom_match"."game_type" =');
     expect(text).toContain('"custom_match"."guild_id" =');
     expect(text).toContain('"custom_match"."season" =');
@@ -57,6 +57,11 @@ describe('clan leaderboard scope', () => {
     await service.getDuos('guild-one', { datePreset: 'season' });
     expect(query().sql).not.toContain('INTERVAL');
     expect(query().sql).not.toContain('EXTRACT(MONTH');
+  });
+
+  test.each(['recent', 'recent30'] as const)('%s uses the same 30-day match scope', async (datePreset) => {
+    await service.getActivity('guild-one', { datePreset });
+    expect(query().sql).toContain("INTERVAL '30 days'");
   });
 });
 

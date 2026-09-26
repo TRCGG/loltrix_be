@@ -3811,7 +3811,7 @@
           "Statistics"
         ],
         "summary": "유저별 게임 통계",
-        "description": "특정 길드 내 유저들의 게임 통계를 조회합니다. sortBy=wilsonScore는 일반내전 전용 우수 성적 랭킹 TOP5이며, STATS_MIN_GAME_COUNT 이상을 Wilson 95% 하한으로 정렬합니다. 이 모드의 position=ALL 또는 생략은 전 포지션을 합산하고, 특정 포지션은 최소 판수 적용 전에 필터링합니다. 기존 totalCount·winRate는 유지합니다. gameType에 1이 없으면(대회 유형 합산) 시즌·기간 조건을 무시합니다. 대회 하나의 유저 랭킹은 GET /api/competitions/{guildId}/{competitionId}/statistics/users 로 조회합니다.",
+        "description": "특정 길드 내 유저들의 게임 통계를 조회합니다. sortBy=wilsonScore는 일반내전 전용 우수 성적 랭킹 TOP5이며, 기본 recent는 최근 30일, STATS_MIN_GAME_COUNT 이상을 Wilson 95% 하한으로 정렬합니다. 이 모드의 position=ALL 또는 생략은 전 포지션을 합산하고, 특정 포지션은 최소 판수 적용 전에 필터링합니다. 기존 totalCount·winRate의 기본 recent는 최근 1개월이며 recent30을 명시하면 최근 30일입니다. gameType에 1이 없으면(대회 유형 합산) 시즌·기간 조건을 무시합니다. 대회 하나의 유저 랭킹은 GET /api/competitions/{guildId}/{competitionId}/statistics/users 로 조회합니다.",
         "parameters": [
           {
             "name": "guildId",
@@ -3825,9 +3825,10 @@
           {
             "name": "datePreset",
             "in": "query",
-            "description": "조회 방식. recent=최근 1개월, season=시즌 전체, range=기간 선택",
+            "description": "기존 정렬 recent=최근 1개월, 새 리더보드 정렬 recent=최근 30일. recent30=최근 30일, season=시즌 전체, range=기간 선택",
             "enum": [
               "recent",
+              "recent30",
               "season",
               "range"
             ],
@@ -3926,7 +3927,7 @@
           "Statistics"
         ],
         "summary": "챔피언별 통계",
-        "description": "길드 내 챔피언 통계. recent=최근 1개월, season=시즌 전체, range=시즌 기준 월 범위. pickRate·wilsonScore는 일반내전 전용이며 기본 5개를 반환합니다. 두 모드의 position=ALL 또는 생략은 모든 포지션 합산입니다. matchCount는 고유 등장 경기 수, totalMatches는 포지션과 무관한 기간 내 전체 경기 수, pickRate는 두 값의 비율(%), wilsonScore는 95% 윌슨 하한입니다. 기존 totalCount·winRate 동작은 유지하며 gameType에 1이 없으면 시즌·기간 조건을 무시합니다. 대회 하나의 통계는 /api/competitions/{guildId}/{competitionId}/statistics/champions 에서 조회합니다.",
+        "description": "길드 내 챔피언 통계. 기존 정렬 recent=최근 1개월, pickRate·wilsonScore recent=최근 30일, recent30=최근 30일, season=시즌 전체, range=시즌 기준 월 범위. pickRate·wilsonScore는 일반내전 전용이며 기본 5개를 반환합니다. 두 모드의 position=ALL 또는 생략은 모든 포지션 합산입니다. matchCount는 고유 등장 경기 수, totalMatches는 포지션과 무관한 기간 내 전체 경기 수, pickRate는 두 값의 비율(%), wilsonScore는 95% 윌슨 하한입니다. 기존 totalCount·winRate 동작은 유지하며 gameType에 1이 없으면 시즌·기간 조건을 무시합니다. 대회 하나의 통계는 /api/competitions/{guildId}/{competitionId}/statistics/champions 에서 조회합니다.",
         "parameters": [
           {
             "name": "guildId",
@@ -3940,9 +3941,10 @@
           {
             "name": "datePreset",
             "in": "query",
-            "description": "조회 방식. recent=최근 1개월, season=시즌 전체, range=기간 선택",
+            "description": "기존 정렬 recent=최근 1개월, 새 리더보드 정렬 recent=최근 30일. recent30=최근 30일, season=시즌 전체, range=기간 선택",
             "enum": [
               "recent",
+              "recent30",
               "season",
               "range"
             ],
@@ -4210,10 +4212,11 @@
             "in": "query",
             "enum": [
               "recent",
+              "recent30",
               "season",
               "range"
             ],
-            "description": "기본 recent=최근 1개월",
+            "description": "기본 recent=최근 30일. recent30=최근 30일",
             "schema": {
               "type": "string"
             }
@@ -4289,10 +4292,11 @@
             "in": "query",
             "enum": [
               "recent",
+              "recent30",
               "season",
               "range"
             ],
-            "description": "기본 recent=최근 1개월",
+            "description": "기본 recent=최근 30일. recent30=최근 30일",
             "schema": {
               "type": "string"
             }
@@ -4368,10 +4372,11 @@
             "in": "query",
             "enum": [
               "recent",
+              "recent30",
               "season",
               "range"
             ],
-            "description": "기본 recent=최근 1개월",
+            "description": "기본 recent=최근 30일. recent30=최근 30일",
             "schema": {
               "type": "string"
             }

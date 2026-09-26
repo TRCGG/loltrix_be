@@ -10,6 +10,7 @@ import {
 import { subAccountLink } from '../database/subAccountLink.js';
 import { competitionStatSql } from '../database/competitionStats.js';
 import { scopeConditions } from '../database/matchScope.js';
+import { clanLeaderboardPeriodCondition } from '../database/clanLeaderboardPeriod.js';
 import { periodCondition } from '../database/datePeriod.js';
 import { wilsonScore } from '../database/wilsonScore.js';
 import { systemConfigService } from './systemConfig.service.js';
@@ -65,7 +66,9 @@ export class StatisticsService {
     fromMonth: string | undefined,
     toMonth: string | undefined,
   ) {
-    return periodCondition(customMatch.createDate, datePreset ?? 'recent', fromMonth, toMonth);
+    return datePreset === 'recent30'
+      ? clanLeaderboardPeriodCondition(customMatch.createDate, datePreset, fromMonth, toMonth)
+      : periodCondition(customMatch.createDate, datePreset ?? 'recent', fromMonth, toMonth);
   }
 
   /**
@@ -219,7 +222,7 @@ export class StatisticsService {
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       ...scopeConditions(customMatch, NORMAL_MATCH_SCOPE),
-      this.buildDateCondition(datePreset, fromMonth, toMonth),
+      clanLeaderboardPeriodCondition(customMatch.createDate, datePreset, fromMonth, toMonth),
       await this.buildSeasonCondition(season),
       championName ? eq(champion.champName, championName) : undefined,
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined,
@@ -374,7 +377,7 @@ export class StatisticsService {
       eq(customMatch.guildId, guildId),
       eq(customMatch.isDeleted, false),
       ...scopeConditions(customMatch, NORMAL_MATCH_SCOPE),
-      this.buildDateCondition(datePreset, fromMonth, toMonth),
+      clanLeaderboardPeriodCondition(customMatch.createDate, datePreset, fromMonth, toMonth),
       await this.buildSeasonCondition(season),
     );
     // 픽률은 참가자 수가 아닌 고유 경기 기준이다. 같은 챔피언이 양 팀에 등장해도 한 경기로 센다.
