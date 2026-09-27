@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { monthSchema, rangeRequiresMonths } from './monthQuery.js';
 
 const periodQuery = z.object({
-  datePreset: z.enum(['recent', 'recent30', 'season', 'range']).optional(),
+  datePreset: z.enum(['recent', 'season', 'range']).optional(),
   fromMonth: monthSchema.optional(),
   toMonth: monthSchema.optional(),
   season: z.string().min(1).max(32).optional(),
@@ -46,4 +46,28 @@ export const duoFilterSchema = z.object({
 export const activityFilterSchema = z.object({
   params,
   query: periodQuery.superRefine(rangeRequiresMonths),
+});
+
+const position = z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional();
+const leaderboardQuery = periodQuery.extend({ ...pagination, position });
+
+export const clanUserFilterSchema = z.object({
+  params,
+  query: leaderboardQuery
+    .extend({
+      sortBy: z.enum(['totalCount', 'wilsonScore']).optional(),
+      championName: z.string().max(32).optional(),
+    })
+    .strict()
+    .superRefine(rangeRequiresMonths),
+});
+
+export const clanChampionFilterSchema = z.object({
+  params,
+  query: leaderboardQuery
+    .extend({
+      sortBy: z.enum(['pickRate', 'wilsonScore']).optional(),
+    })
+    .strict()
+    .superRefine(rangeRequiresMonths),
 });

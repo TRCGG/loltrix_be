@@ -33,6 +33,16 @@ jest.unstable_mockModule('../controllers/statistics.controller.js', () => ({
   getUserGameStats: terminalHandler,
   getChampionStats: terminalHandler,
 }));
+jest.unstable_mockModule('../controllers/clanLeaderboard.controller.js', () => ({
+  getClanLeaderboardUsers: terminalHandler,
+  getClanLeaderboardChampions: terminalHandler,
+  getChampionCombinations: terminalHandler,
+  getDuos: terminalHandler,
+  getActivity: terminalHandler,
+  getRisingStars: terminalHandler,
+  getHighlights: terminalHandler,
+  getWinStreaks: terminalHandler,
+}));
 jest.unstable_mockModule('../controllers/h2h.controller.js', () => ({
   getFrequentOpponents: terminalHandler,
   getH2hDetail: terminalHandler,
@@ -129,6 +139,8 @@ describe('공개 길드 조회 라우터 경계', () => {
     `/matches/${ENCODED_GUILD_ID}/games/KR_1234`,
     `/statistics/${ENCODED_GUILD_ID}/users`,
     `/statistics/${ENCODED_GUILD_ID}/champions`,
+    `/statistics/${ENCODED_GUILD_ID}/leaderboard/users`,
+    `/statistics/${ENCODED_GUILD_ID}/leaderboard/champions`,
     `/h2h/${ENCODED_GUILD_ID}?riotName1=Alice&riotName2=Bob`,
     `/h2h/${ENCODED_GUILD_ID}/frequent?riotName=Alice`,
   ];

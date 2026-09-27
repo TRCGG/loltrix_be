@@ -3805,6 +3805,245 @@
         ]
       }
     },
+    "/api/statistics/{guildId}/leaderboard/users": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "클랜 유저 리더보드",
+        "description": "현재 본캐 멤버의 일반내전 전적을 부캐와 합산합니다. position=ALL 또는 생략은 모든 포지션을 합칩니다. recent는 최근 30일이며 Wilson 정렬에만 STATS_MIN_GAME_COUNT를 적용합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "datePreset",
+            "in": "query",
+            "enum": [
+              "recent",
+              "season",
+              "range"
+            ],
+            "default": "recent",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromMonth",
+            "in": "query",
+            "description": "range일 때 필수인 시작 월 (1~12)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "toMonth",
+            "in": "query",
+            "description": "range일 때 필수인 종료 월 (1~12)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "range일 때 필수. 그 외에는 LOL_SEASON 기본값",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "position",
+            "in": "query",
+            "enum": [
+              "ALL",
+              "TOP",
+              "JUG",
+              "MID",
+              "ADC",
+              "SUP"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "championName",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "enum": [
+              "totalCount",
+              "wilsonScore"
+            ],
+            "default": "totalCount",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "minimum": 1,
+            "default": 1,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 5,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "통계 응답. X-Total-Count, X-Page, X-Limit, X-Total-Pages 헤더 포함"
+          },
+          "400": {
+            "description": "잘못된 조회 조건 또는 길드 ID"
+          },
+          "401": {
+            "description": "비공개 길드 인증 필요"
+          },
+          "500": {
+            "description": "서버 내부 오류"
+          }
+        }
+      }
+    },
+    "/api/statistics/{guildId}/leaderboard/champions": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "클랜 챔피언 리더보드",
+        "description": "현재 본캐 멤버의 일반내전 전적을 부캐와 합산합니다. position=ALL 또는 생략은 모든 포지션을 합칩니다. recent는 최근 30일입니다. 픽률 분모는 포지션과 무관한 기간 내 전체 경기 수이며 Wilson 정렬에만 STATS_MIN_GAME_COUNT를 적용합니다.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "datePreset",
+            "in": "query",
+            "enum": [
+              "recent",
+              "season",
+              "range"
+            ],
+            "default": "recent",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromMonth",
+            "in": "query",
+            "description": "range일 때 필수인 시작 월 (1~12)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "toMonth",
+            "in": "query",
+            "description": "range일 때 필수인 종료 월 (1~12)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "range일 때 필수. 그 외에는 LOL_SEASON 기본값",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "position",
+            "in": "query",
+            "enum": [
+              "ALL",
+              "TOP",
+              "JUG",
+              "MID",
+              "ADC",
+              "SUP"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "enum": [
+              "pickRate",
+              "wilsonScore"
+            ],
+            "default": "pickRate",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "minimum": 1,
+            "default": 1,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 5,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "통계 응답. X-Total-Count, X-Page, X-Limit, X-Total-Pages 헤더 포함"
+          },
+          "400": {
+            "description": "잘못된 조회 조건 또는 길드 ID"
+          },
+          "401": {
+            "description": "비공개 길드 인증 필요"
+          },
+          "500": {
+            "description": "서버 내부 오류"
+          }
+        }
+      }
+    },
     "/api/statistics/{guildId}/users": {
       "get": {
         "tags": [
@@ -4308,11 +4547,10 @@
             "in": "query",
             "enum": [
               "recent",
-              "recent30",
               "season",
               "range"
             ],
-            "description": "기본 recent=최근 30일. recent30=최근 30일",
+            "description": "기본 recent=최근 30일",
             "schema": {
               "type": "string"
             }
@@ -4388,11 +4626,10 @@
             "in": "query",
             "enum": [
               "recent",
-              "recent30",
               "season",
               "range"
             ],
-            "description": "기본 recent=최근 30일. recent30=최근 30일",
+            "description": "기본 recent=최근 30일",
             "schema": {
               "type": "string"
             }
@@ -4468,11 +4705,10 @@
             "in": "query",
             "enum": [
               "recent",
-              "recent30",
               "season",
               "range"
             ],
-            "description": "기본 recent=최근 30일. recent30=최근 30일",
+            "description": "기본 recent=최근 30일",
             "schema": {
               "type": "string"
             }

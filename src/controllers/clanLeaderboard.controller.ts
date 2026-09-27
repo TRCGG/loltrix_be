@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { clanLeaderboardService } from '../services/clanLeaderboard.service.js';
 import { clanLeaderboardMetricsService } from '../services/clanLeaderboardMetrics.service.js';
 import { LeaderboardDatePreset } from '../database/clanLeaderboardPeriod.js';
+import { statisticsService } from '../services/statistics.service.js';
 
 const periodOptions = (req: Request) => ({
   datePreset: req.query.datePreset as LeaderboardDatePreset | undefined,
@@ -20,6 +21,63 @@ const setPagination = (res: Response, totalCount: number, page: number, limit: n
   res.setHeader('X-Page', page.toString());
   res.setHeader('X-Limit', limit.toString());
   res.setHeader('X-Total-Pages', Math.ceil(totalCount / limit).toString());
+};
+
+/**
+ * @desc 선택한 기간의 본캐 유저 전적 순위를 페이지와 함께 반환합니다.
+ */
+export const getClanLeaderboardUsers = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const options = {
+      ...periodOptions(req),
+      ...paginationOptions(req),
+      position: req.query.position as string | undefined,
+      championName: req.query.championName as string | undefined,
+      sortBy: (req.query.sortBy || 'totalCount') as 'totalCount' | 'wilsonScore',
+    };
+    const { result, totalCount } = await statisticsService.getClanLeaderboardUserStatistics(
+      req.params.guildId,
+      options,
+    );
+    setPagination(res, totalCount, options.page, options.limit);
+    return res.status(200).json({
+      status: 'success',
+      message: 'User game statistics retrieved successfully',
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * @desc 선택한 기간의 챔피언 픽률 또는 Wilson 순위를 페이지와 함께 반환합니다.
+ */
+export const getClanLeaderboardChampions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const options = {
+      ...periodOptions(req),
+      ...paginationOptions(req),
+      position: req.query.position as string | undefined,
+      sortBy: (req.query.sortBy || 'pickRate') as 'pickRate' | 'wilsonScore',
+    };
+    const { result, totalCount } = await statisticsService.getClanLeaderboardChampionStatistics(
+      req.params.guildId,
+      options,
+    );
+    setPagination(res, totalCount, options.page, options.limit);
+    return res.status(200).json({
+      status: 'success',
+      message: 'Champion statistics retrieved successfully',
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 /**

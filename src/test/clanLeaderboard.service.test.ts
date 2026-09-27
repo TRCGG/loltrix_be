@@ -59,7 +59,7 @@ describe('clan leaderboard scope', () => {
     expect(query().sql).not.toContain('EXTRACT(MONTH');
   });
 
-  test.each(['recent', 'recent30'] as const)('%s uses the same 30-day match scope', async (datePreset) => {
+  test.each(['recent'] as const)('%s uses the same 30-day match scope', async (datePreset) => {
     await service.getActivity('guild-one', { datePreset });
     expect(query().sql).toContain("INTERVAL '30 days'");
   });
