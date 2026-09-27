@@ -9,6 +9,8 @@ const getDuos = jest.fn<AsyncFn>();
 const getActivity = jest.fn<AsyncFn>();
 const getChampionStatistics = jest.fn<AsyncFn>();
 const getUserGameStatistics = jest.fn<AsyncFn>();
+const getClanLeaderboardUserStatistics = jest.fn<AsyncFn>();
+const getClanLeaderboardChampionStatistics = jest.fn<AsyncFn>();
 const getRisingStars = jest.fn<AsyncFn>();
 const getHighlights = jest.fn<AsyncFn>();
 const getWinStreaks = jest.fn<AsyncFn>();
@@ -17,7 +19,12 @@ jest.unstable_mockModule('../services/clanLeaderboard.service.js', () => ({
   clanLeaderboardService: { getChampionCombinations, getDuos, getActivity },
 }));
 jest.unstable_mockModule('../services/statistics.service.js', () => ({
-  statisticsService: { getChampionStatistics, getUserGameStatistics },
+  statisticsService: {
+    getChampionStatistics,
+    getUserGameStatistics,
+    getClanLeaderboardUserStatistics,
+    getClanLeaderboardChampionStatistics,
+  },
 }));
 jest.unstable_mockModule('../services/clanLeaderboardMetrics.service.js', () => ({
   clanLeaderboardMetricsService: { getRisingStars, getHighlights, getWinStreaks },
@@ -47,6 +54,8 @@ beforeEach(() => {
     getDuos,
     getChampionStatistics,
     getUserGameStatistics,
+    getClanLeaderboardUserStatistics,
+    getClanLeaderboardChampionStatistics,
   ]) {
     service.mockResolvedValue({ result: [], totalCount: 12 });
   }
@@ -85,22 +94,48 @@ describe('클랜 리더보드 HTTP 계약', () => {
     },
   );
 
+  test.each(['/champion-combinations?combination=ADCSUP', '/duos', '/activity'])(
+    'clan period rejects recent30: %s',
+    async (path) => {
+      const response = await fetch(
+        `${baseUrl}${path}${path.includes('?') ? '&' : '?'}datePreset=recent30`,
+      );
+      expect(response.status).toBe(400);
+    },
+  );
+
   test.each([
     { path: '/users?sortBy=totalCount', service: getUserGameStatistics },
-    { path: '/users?sortBy=wilsonScore', service: getUserGameStatistics },
-    { path: '/champions?sortBy=totalCount', service: getChampionStatistics },
     { path: '/champions?sortBy=pickRate', service: getChampionStatistics },
-    { path: '/champions?sortBy=wilsonScore', service: getChampionStatistics },
-    { path: '/champion-combinations?combination=ADCSUP', service: getChampionCombinations },
-    { path: '/duos', service: getDuos },
-    { path: '/activity', service: getActivity },
-  ])('recent30 요청을 서비스에 전달한다: $path', async ({ path, service }) => {
-    const response = await fetch(`${baseUrl}${path}${path.includes('?') ? '&' : '?'}datePreset=recent30`);
+  ])('legacy API keeps recent30: $path', async ({ path, service }) => {
+    const response = await fetch(`${baseUrl}${path}&datePreset=recent30`);
     expect(response.status).toBe(200);
     expect(service).toHaveBeenCalledWith(
       'guild-1',
       expect.objectContaining({ datePreset: 'recent30' }),
     );
+  });
+
+  test.each([
+    { path: '/leaderboard/users', service: getClanLeaderboardUserStatistics, sortBy: 'totalCount' },
+    {
+      path: '/leaderboard/champions',
+      service: getClanLeaderboardChampionStatistics,
+      sortBy: 'pickRate',
+    },
+  ])('new $path defaults and validation', async ({ path, service, sortBy }) => {
+    const response = await fetch(`${baseUrl}${path}`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-page')).toBe('1');
+    expect(response.headers.get('x-limit')).toBe('5');
+    expect(response.headers.get('x-total-pages')).toBe('3');
+    expect(service).toHaveBeenCalledWith(
+      'guild-1',
+      expect.objectContaining({ sortBy, page: 1, limit: 5 }),
+    );
+    for (const query of ['datePreset=recent30', 'limit=101', 'page=0', 'gameType=1']) {
+      expect((await fetch(`${baseUrl}${path}?${query}`)).status).toBe(400);
+    }
   });
 
   test('조합은 기간만 전달하고 기본 TOP 5 페이지 헤더를 반환한다', async () => {

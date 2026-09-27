@@ -19,6 +19,11 @@ import {
   matchListSchema,
 } from './matchParticipant.routes.js';
 import { userFilterSchema, championFilterSchema } from './statistics.route.js';
+import { clanUserFilterSchema, clanChampionFilterSchema } from './clanLeaderboard.query.js';
+import {
+  getClanLeaderboardUsers,
+  getClanLeaderboardChampions,
+} from '../controllers/clanLeaderboard.controller.js';
 import { frequentSchema, detailSchema } from './h2h.routes.js';
 
 const router: Router = Router();
@@ -130,6 +135,21 @@ router.get(
   decodeGuildIdMiddleware,
   validateRequest(gameDetailSchema),
   getGameDetail,
+);
+
+router.get(
+  '/statistics/:guildId/leaderboard/users',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(clanUserFilterSchema),
+  getClanLeaderboardUsers,
+);
+router.get(
+  '/statistics/:guildId/leaderboard/champions',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(clanChampionFilterSchema),
+  getClanLeaderboardChampions,
 );
 
 router.get(

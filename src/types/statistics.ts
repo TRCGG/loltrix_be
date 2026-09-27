@@ -1,11 +1,11 @@
 // types/statistics.ts
 
 import { MatchStats } from './matchParticipant.js';
-import { LeaderboardDatePreset } from '../database/clanLeaderboardPeriod.js';
+import { DatePreset } from '../database/datePeriod.js';
 import { MatchScope } from './matchScope.js';
 
 // 통계 조회 방식
-export type StatisticsDatePreset = LeaderboardDatePreset;
+export type StatisticsDatePreset = DatePreset | 'recent30';
 
 /** 통계 랭킹 공통 집계 — MatchStats + 킬 합계·평균 DPM */
 export interface RankingStats extends MatchStats {
@@ -102,3 +102,22 @@ export interface StatisticsServiceOptions
   limit?: number;
   scope?: MatchScope;
 }
+
+export type ClanUserLeaderboardOptions = {
+  datePreset?: DatePreset;
+  fromMonth?: string;
+  toMonth?: string;
+  season?: string;
+  championName?: string;
+  position?: string;
+  sortBy?: 'totalCount' | 'wilsonScore';
+  page?: number;
+  limit?: number;
+};
+
+export type ClanChampionLeaderboardOptions = Omit<
+  ClanUserLeaderboardOptions,
+  'sortBy' | 'championName'
+> & {
+  sortBy?: 'pickRate' | 'wilsonScore';
+};

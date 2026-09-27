@@ -16,6 +16,8 @@ import { wilsonScore } from '../database/wilsonScore.js';
 import { systemConfigService } from './systemConfig.service.js';
 import {
   ChampionStatisticsServiceOptions,
+  ClanUserLeaderboardOptions,
+  ClanChampionLeaderboardOptions,
   StatisticsDatePreset,
   StatisticsServiceOptions,
 } from '../types/statistics.js';
@@ -67,7 +69,7 @@ export class StatisticsService {
     toMonth: string | undefined,
   ) {
     return datePreset === 'recent30'
-      ? clanLeaderboardPeriodCondition(customMatch.createDate, datePreset, fromMonth, toMonth)
+      ? clanLeaderboardPeriodCondition(customMatch.createDate, 'recent', fromMonth, toMonth)
       : periodCondition(customMatch.createDate, datePreset ?? 'recent', fromMonth, toMonth);
   }
 
@@ -94,6 +96,33 @@ export class StatisticsService {
     if (options.sortBy === 'wilsonScore') {
       return this.getLeaderboardUserStatistics(guildId, options);
     }
+    return this.getAggregateUserStatistics(guildId, options, false);
+  }
+
+  /**
+   * @desc 클랜 전용 기간과 본캐 합산 기준으로 유저 순위를 조회합니다.
+   */
+  public async getClanLeaderboardUserStatistics(
+    guildId: string,
+    options: ClanUserLeaderboardOptions = {},
+  ) {
+    const normalized = {
+      ...options,
+      sortBy: options.sortBy ?? 'totalCount',
+      page: options.page ?? 1,
+      limit: options.limit ?? 5,
+    };
+    if (normalized.sortBy === 'wilsonScore') {
+      return this.getLeaderboardUserStatistics(guildId, normalized);
+    }
+    return this.getAggregateUserStatistics(guildId, normalized, true);
+  }
+
+  private async getAggregateUserStatistics(
+    guildId: string,
+    options: StatisticsServiceOptions,
+    clan: boolean,
+  ) {
     const {
       datePreset,
       fromMonth,
@@ -113,8 +142,15 @@ export class StatisticsService {
     const noPeriod = ignoresPeriod(scope);
     const dateCondition = noPeriod
       ? undefined
-      : this.buildDateCondition(datePreset, fromMonth, toMonth);
-    const shouldGroupByPosition = !!position;
+      : clan
+        ? clanLeaderboardPeriodCondition(
+            customMatch.createDate,
+            datePreset as 'recent' | 'season' | 'range' | undefined,
+            fromMonth,
+            toMonth,
+          )
+        : this.buildDateCondition(datePreset, fromMonth, toMonth);
+    const shouldGroupByPosition = !!position && (!clan || position !== 'ALL');
     const positionCondition =
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined;
     const champCondition = championName ? eq(champion.champName, championName) : undefined;
@@ -179,7 +215,7 @@ export class StatisticsService {
       .where(whereCondition)
       .groupBy(...groupByColumns)
       .having(havingCondition)
-      .orderBy(orderCriteria)
+      .orderBy(orderCriteria, ...(clan ? [asc(riotAccount.playerCode)] : []))
       .limit(limit)
       .offset(offset);
 
@@ -206,12 +242,17 @@ export class StatisticsService {
   /**
    * @desc 선택한 리더보드 기간에 최소 판수를 충족한 본캐 유저를 윌슨 점수로 정렬합니다.
    */
-  private async getLeaderboardUserStatistics(
-    guildId: string,
-    options: StatisticsServiceOptions,
-  ) {
-    const { datePreset, fromMonth, toMonth, championName, season, position, page = 1, limit = 5 } =
-      options;
+  private async getLeaderboardUserStatistics(guildId: string, options: StatisticsServiceOptions) {
+    const {
+      datePreset,
+      fromMonth,
+      toMonth,
+      championName,
+      season,
+      position,
+      page = 1,
+      limit = 5,
+    } = options;
     const stats = this.getStatSqlChunks();
     const score = wilsonScore(stats.win, stats.totalCount);
     const minimum = await systemConfigService.getNumberConfig('STATS_MIN_GAME_COUNT', 10);
@@ -225,7 +266,12 @@ export class StatisticsService {
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       ...scopeConditions(customMatch, NORMAL_MATCH_SCOPE),
-      clanLeaderboardPeriodCondition(customMatch.createDate, datePreset, fromMonth, toMonth),
+      clanLeaderboardPeriodCondition(
+        customMatch.createDate,
+        datePreset === 'recent30' ? 'recent' : datePreset,
+        fromMonth,
+        toMonth,
+      ),
       await this.buildSeasonCondition(season),
       championName ? eq(champion.champName, championName) : undefined,
       position && position !== 'ALL' ? eq(matchParticipant.position, position) : undefined,
@@ -267,6 +313,28 @@ export class StatisticsService {
     if (options.sortBy === 'pickRate' || options.sortBy === 'wilsonScore') {
       return this.getLeaderboardChampionStatistics(guildId, options);
     }
+    return this.getAggregateChampionStatistics(guildId, options);
+  }
+
+  /**
+   * @desc 클랜 전용 기간의 챔피언 픽률 또는 Wilson 순위를 조회합니다.
+   */
+  public async getClanLeaderboardChampionStatistics(
+    guildId: string,
+    options: ClanChampionLeaderboardOptions = {},
+  ) {
+    return this.getLeaderboardChampionStatistics(guildId, {
+      ...options,
+      sortBy: options.sortBy ?? 'pickRate',
+      page: options.page ?? 1,
+      limit: options.limit ?? 5,
+    });
+  }
+
+  private async getAggregateChampionStatistics(
+    guildId: string,
+    options: ChampionStatisticsServiceOptions,
+  ) {
     const {
       datePreset,
       fromMonth,
@@ -383,7 +451,12 @@ export class StatisticsService {
       eq(customMatch.guildId, guildId),
       eq(customMatch.isDeleted, false),
       ...scopeConditions(customMatch, NORMAL_MATCH_SCOPE),
-      clanLeaderboardPeriodCondition(customMatch.createDate, datePreset, fromMonth, toMonth),
+      clanLeaderboardPeriodCondition(
+        customMatch.createDate,
+        datePreset === 'recent30' ? 'recent' : datePreset,
+        fromMonth,
+        toMonth,
+      ),
       await this.buildSeasonCondition(season),
     );
     // 픽률은 참가자 수가 아닌 고유 경기 기준이다. 같은 챔피언이 양 팀에 등장해도 한 경기로 센다.

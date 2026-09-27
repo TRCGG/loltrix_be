@@ -11,15 +11,70 @@ import {
   getRisingStars,
   getHighlights,
   getWinStreaks,
+  getClanLeaderboardUsers,
+  getClanLeaderboardChampions,
 } from '../controllers/clanLeaderboard.controller.js';
 import {
   combinationFilterSchema,
   duoFilterSchema,
   activityFilterSchema,
   metricFilterSchema,
+  clanUserFilterSchema,
+  clanChampionFilterSchema,
 } from './clanLeaderboard.query.js';
 
 const router: Router = Router();
+
+router.get(
+  '/:guildId/leaderboard/users',
+  /* #swagger.auto = false
+    #swagger.tags = ['Statistics']
+    #swagger.summary = '클랜 유저 리더보드'
+    #swagger.description = '현재 본캐 멤버의 일반내전 전적을 부캐와 합산합니다. position=ALL 또는 생략은 모든 포지션을 합칩니다. recent는 최근 30일이며 Wilson 정렬에만 STATS_MIN_GAME_COUNT를 적용합니다.'
+    #swagger.parameters['guildId'] = { in: 'path', required: true, type: 'string' }
+    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'season', 'range'], default: 'recent' }
+    #swagger.parameters['fromMonth'] = { in: 'query', type: 'string', description: 'range일 때 필수인 시작 월 (1~12)' }
+    #swagger.parameters['toMonth'] = { in: 'query', type: 'string', description: 'range일 때 필수인 종료 월 (1~12)' }
+    #swagger.parameters['season'] = { in: 'query', type: 'string', description: 'range일 때 필수. 그 외에는 LOL_SEASON 기본값' }
+    #swagger.parameters['position'] = { in: 'query', type: 'string', enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP'] }
+    #swagger.parameters['championName'] = { in: 'query', type: 'string' }
+    #swagger.parameters['sortBy'] = { in: 'query', type: 'string', enum: ['totalCount', 'wilsonScore'], default: 'totalCount' }
+    #swagger.parameters['page'] = { in: 'query', type: 'integer', minimum: 1, default: 1 }
+    #swagger.parameters['limit'] = { in: 'query', type: 'integer', minimum: 1, maximum: 100, default: 5 }
+    #swagger.responses[200] = { description: '통계 응답. X-Total-Count, X-Page, X-Limit, X-Total-Pages 헤더 포함' }
+    #swagger.responses[400] = { description: '잘못된 조회 조건 또는 길드 ID' }
+    #swagger.responses[401] = { description: '비공개 길드 인증 필요' }
+    #swagger.responses[500] = { description: '서버 내부 오류' }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(clanUserFilterSchema),
+  getClanLeaderboardUsers,
+);
+
+router.get(
+  '/:guildId/leaderboard/champions',
+  /* #swagger.auto = false
+    #swagger.tags = ['Statistics']
+    #swagger.summary = '클랜 챔피언 리더보드'
+    #swagger.description = '현재 본캐 멤버의 일반내전 전적을 부캐와 합산합니다. position=ALL 또는 생략은 모든 포지션을 합칩니다. recent는 최근 30일입니다. 픽률 분모는 포지션과 무관한 기간 내 전체 경기 수이며 Wilson 정렬에만 STATS_MIN_GAME_COUNT를 적용합니다.'
+    #swagger.parameters['guildId'] = { in: 'path', required: true, type: 'string' }
+    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'season', 'range'], default: 'recent' }
+    #swagger.parameters['fromMonth'] = { in: 'query', type: 'string', description: 'range일 때 필수인 시작 월 (1~12)' }
+    #swagger.parameters['toMonth'] = { in: 'query', type: 'string', description: 'range일 때 필수인 종료 월 (1~12)' }
+    #swagger.parameters['season'] = { in: 'query', type: 'string', description: 'range일 때 필수. 그 외에는 LOL_SEASON 기본값' }
+    #swagger.parameters['position'] = { in: 'query', type: 'string', enum: ['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP'] }
+    #swagger.parameters['sortBy'] = { in: 'query', type: 'string', enum: ['pickRate', 'wilsonScore'], default: 'pickRate' }
+    #swagger.parameters['page'] = { in: 'query', type: 'integer', minimum: 1, default: 1 }
+    #swagger.parameters['limit'] = { in: 'query', type: 'integer', minimum: 1, maximum: 100, default: 5 }
+    #swagger.responses[200] = { description: '통계 응답. X-Total-Count, X-Page, X-Limit, X-Total-Pages 헤더 포함' }
+    #swagger.responses[400] = { description: '잘못된 조회 조건 또는 길드 ID' }
+    #swagger.responses[401] = { description: '비공개 길드 인증 필요' }
+    #swagger.responses[500] = { description: '서버 내부 오류' }
+  */
+  decodeGuildIdMiddleware,
+  validateRequest(clanChampionFilterSchema),
+  getClanLeaderboardChampions,
+);
 
 export const filterSchema = z.object({
   params: z.object({
@@ -304,7 +359,7 @@ router.get(
     #swagger.description = '일반내전의 같은 팀 ADC+SUP 또는 MID+JUG 조합. STATS_MIN_GAME_COUNT 이상을 Wilson 95% 하한으로 정렬합니다. 포지션 필터는 적용하지 않습니다. data 배열의 각 행은 champions[{champName,champNameEng,position}], totalCount, win, lose, winRate(%), wilsonScore, playerPairCount(본캐 기준 고유 플레이어 쌍 수)를 반환합니다. 페이지 정보는 X-Total-Count, X-Page, X-Limit, X-Total-Pages 헤더에 제공합니다.'
     #swagger.parameters['guildId'] = { in: 'path', required: true, type: 'string' }
     #swagger.parameters['combination'] = { in: 'query', required: true, type: 'string', enum: ['ADCSUP', 'MIDJUG'] }
-    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'recent30', 'season', 'range'], description: '기본 recent=최근 30일. recent30=최근 30일' }
+    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'season', 'range'], description: '기본 recent=최근 30일' }
     #swagger.parameters['fromMonth'] = { in: 'query', type: 'string', description: 'range 시작 월 (1~12)' }
     #swagger.parameters['toMonth'] = { in: 'query', type: 'string', description: 'range 종료 월 (1~12)' }
     #swagger.parameters['season'] = { in: 'query', type: 'string', description: '기본 LOL_SEASON. range일 때 필수' }
@@ -323,7 +378,7 @@ router.get(
     #swagger.summary = '함께한 판수 듀오 순위'
     #swagger.description = '일반내전에서 같은 팀으로 함께한 두 플레이어의 경기 수 순위. 부캐는 본캐로 합산하며 포지션 필터와 최소 판수는 적용하지 않습니다. data 배열의 각 행은 players[{playerCode,riotName,riotNameTag}], totalCount, win, lose, winRate(%)를 반환합니다. 페이지 정보는 X-Total-Count, X-Page, X-Limit, X-Total-Pages 헤더에 제공합니다.'
     #swagger.parameters['guildId'] = { in: 'path', required: true, type: 'string' }
-    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'recent30', 'season', 'range'], description: '기본 recent=최근 30일. recent30=최근 30일' }
+    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'season', 'range'], description: '기본 recent=최근 30일' }
     #swagger.parameters['fromMonth'] = { in: 'query', type: 'string', description: 'range 시작 월 (1~12)' }
     #swagger.parameters['toMonth'] = { in: 'query', type: 'string', description: 'range 종료 월 (1~12)' }
     #swagger.parameters['season'] = { in: 'query', type: 'string', description: '기본 LOL_SEASON. range일 때 필수' }
@@ -342,7 +397,7 @@ router.get(
     #swagger.summary = '내전 집계 규모와 일별 경기 수'
     #swagger.description = '등록일 기준 일반내전 경기 수, 본캐 기준 참여자 수, 날짜별 경기 수. 포지션 필터는 적용하지 않습니다. data는 {totalMatches,totalPlayers,dailyMatches:[{date,matchCount}]} 객체입니다. date는 YYYY-MM-DD이며 경기 없는 날짜는 배열에 포함하지 않습니다.'
     #swagger.parameters['guildId'] = { in: 'path', required: true, type: 'string' }
-    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'recent30', 'season', 'range'], description: '기본 recent=최근 30일. recent30=최근 30일' }
+    #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'season', 'range'], description: '기본 recent=최근 30일' }
     #swagger.parameters['fromMonth'] = { in: 'query', type: 'string', description: 'range 시작 월 (1~12)' }
     #swagger.parameters['toMonth'] = { in: 'query', type: 'string', description: 'range 종료 월 (1~12)' }
     #swagger.parameters['season'] = { in: 'query', type: 'string', description: '기본 LOL_SEASON. range일 때 필수' }

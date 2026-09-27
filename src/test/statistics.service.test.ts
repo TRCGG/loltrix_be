@@ -128,6 +128,41 @@ beforeEach(() => {
   wheres = [];
 });
 
+describe('dedicated clan leaderboard statistics', () => {
+  test('user totalCount defaults to 30 days, merges ALL, and has no minimum game count', async () => {
+    queue = [[baseRow], countRow];
+    await service.getClanLeaderboardUserStatistics(GUILD, { position: 'ALL' });
+    expect(render(wheres[0])).toContain("INTERVAL '30 days'");
+    expect(selects[0]).not.toHaveProperty('position');
+    expect(havings.every((condition) => condition === undefined)).toBe(true);
+    expect(render(wheres[0])).toContain('"custom_match"."game_type"');
+  });
+
+  test('user totalCount keeps a specific position and applies standard pagination', async () => {
+    queue = [[], [{ count: 0 }]];
+    await service.getClanLeaderboardUserStatistics(GUILD, { position: 'MID', page: 2, limit: 8 });
+    expect(selects[0]).toHaveProperty('position');
+    expect(render(wheres[0])).toContain('"match_participant"."position"');
+  });
+
+  test('user Wilson retains minimum while omitted and ALL merge positions', async () => {
+    queue = [[], [{ count: 0 }]];
+    await service.getClanLeaderboardUserStatistics(GUILD, { sortBy: 'wilsonScore' });
+    expect(selects[0]).not.toHaveProperty('position');
+    expect(dialect.sqlToQuery(havings[0] as SQL).params).toContain(10);
+  });
+
+  test('champion pick rate defaults to 30 days with position independent denominator', async () => {
+    queue = [[], [{ count: 0 }]];
+    await service.getClanLeaderboardChampionStatistics(GUILD, { position: 'TOP' });
+    const fields = selects.find((selection) => 'pickRate' in selection)!;
+    expect(fields).toHaveProperty('position');
+    expect(render(wheres[0])).toContain("INTERVAL '30 days'");
+    expect(render(fields.totalMatches)).not.toContain('"match_participant"."position"');
+    expect(havings.every((condition) => condition === undefined)).toBe(true);
+  });
+});
+
 describe('우수 성적 유저 랭킹', () => {
   test.each([undefined, 'recent', 'recent30'] as const)(
     'Wilson %s 기간은 최근 30일을 사용한다',
