@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import { IncomingMessage, ServerResponse } from 'http';
 import { Socket } from 'net';
 
+const findAllGuilds =
+  jest.fn<(...args: unknown[]) => Promise<{ result: unknown[]; totalCount: number }>>();
 const isPublicGuild = jest.fn<(guildId: string) => Promise<boolean>>();
 const updateGuild =
   jest.fn<(guildId: string, data: Record<string, unknown>) => Promise<Record<string, unknown>>>();
@@ -55,7 +57,7 @@ jest.unstable_mockModule('../services/guild.service.js', () => ({
     isPublicGuild,
     updateGuild,
     findGuildById: jest.fn(),
-    findAllGuilds: jest.fn(),
+    findAllGuilds,
     insertGuild: jest.fn(),
     softDeleteGuild: jest.fn(),
     updateAllowAllUploads: jest.fn(),
@@ -181,6 +183,13 @@ const inject = (url: string, options: InjectOptions = {}) =>
   });
 
 beforeEach(() => {
+  findAllGuilds.mockReset().mockResolvedValue({
+    result: [
+      { id: GUILD_ID, isPublic: true },
+      { id: 'private-guild', isPublic: false },
+    ],
+    totalCount: 12,
+  });
   isPublicGuild.mockReset().mockResolvedValue(true);
   updateGuild.mockReset().mockImplementation(async (id, data) => ({ id, ...data }));
   getUserGameStatistics.mockReset().mockResolvedValue({ result: [], totalCount: 0 });
@@ -200,6 +209,79 @@ beforeEach(() => {
 afterEach(() => {
   if (ORIGINAL_BOT_SECRET === undefined) delete process.env.DISCORD_BOT_SECRET;
   else process.env.DISCORD_BOT_SECRET = ORIGINAL_BOT_SECRET;
+});
+
+describe('Session-free guild list', () => {
+  test.each(['/api/guilds', '/api/guilds/'])(
+    '%s allows anonymous and invalid sessions',
+    async (url) => {
+      for (const headers of [
+        {},
+        { cookie: 'session_uid=not-a-uuid' },
+        { cookie: `session_uid=${VALID_SESSION}` },
+      ] as Record<string, string>[]) {
+        const response = await inject(url, { headers });
+        expect(response.status).toBe(200);
+        expect(response.headers['cache-control']).toBe('no-store');
+        expect(response.headers['x-total-count']).toBe('12');
+        expect(response.headers['x-page']).toBe('1');
+        expect(response.headers['x-limit']).toBe('10');
+        expect(response.headers['x-total-pages']).toBe('2');
+        expect(response.json).toEqual({
+          status: 'success',
+          message: 'Guilds retrieved successfully',
+          data: [
+            { id: GUILD_ID, isPublic: true },
+            { id: 'private-guild', isPublic: false },
+          ],
+        });
+      }
+      expect(findAllGuilds).toHaveBeenCalledWith({
+        page: undefined,
+        limit: undefined,
+        search: undefined,
+      });
+      expect(findAuthSessionByUid).not.toHaveBeenCalled();
+      expect(getValidAccessToken).not.toHaveBeenCalled();
+      expect(isPublicGuild).not.toHaveBeenCalled();
+    },
+  );
+  test('search and pagination ignore undeclared isPublic query', async () => {
+    const response = await inject('/api/guilds/?page=2&limit=3&search=Public&isPublic=false');
+    expect(response.status).toBe(200);
+    expect(response.headers['x-total-pages']).toBe('4');
+    expect(findAllGuilds).toHaveBeenCalledWith({ page: 2, limit: 3, search: 'Public' });
+  });
+  test.each([
+    'page=0',
+    'page=invalid',
+    'page=9007199254740992',
+    'limit=0',
+    'limit=101',
+    'limit=1.5',
+    'search=' + 'x'.repeat(129),
+  ])('rejects invalid query %s', async (query) => {
+    expect((await inject(`/api/guilds/?${query}`)).status).toBe(400);
+    expect(findAllGuilds).not.toHaveBeenCalled();
+    expect(findAuthSessionByUid).not.toHaveBeenCalled();
+  });
+  test.each([
+    { method: 'GET', path: `/api/guilds/${GUILD_ID}` },
+    { method: 'POST', path: '/api/guilds/' },
+    { method: 'PUT', path: `/api/guilds/${GUILD_ID}` },
+    { method: 'DELETE', path: `/api/guilds/${GUILD_ID}` },
+    { method: 'PATCH', path: `/api/guilds/${ENCODED_GUILD_ID}/allow-all-uploads` },
+  ])('$method $path remains protected', async ({ method, path }) => {
+    expect((await inject(path, { method })).status).toBe(401);
+    expect(findAllGuilds).not.toHaveBeenCalled();
+  });
+  test('invalid bot secret uses existing authentication', async () => {
+    process.env.DISCORD_BOT_SECRET = 'right-secret';
+    expect(
+      (await inject('/api/guilds/', { headers: { 'x-discord-bot': 'wrong-secret' } })).status,
+    ).toBe(403);
+    expect(findAllGuilds).not.toHaveBeenCalled();
+  });
 });
 
 describe('실제 API 라우터의 공개 길드 인증 경계', () => {

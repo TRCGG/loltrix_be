@@ -11,6 +11,15 @@ jest.unstable_mockModule('../services/guild.service.js', () => ({
   guildService: { isPublicGuild },
 }));
 
+jest.unstable_mockModule('../controllers/guild.controller.js', () => ({
+  getAllGuilds: terminalHandler,
+  getGuildById: jest.fn(),
+  createGuild: jest.fn(),
+  updateGuild: jest.fn(),
+  deleteGuild: jest.fn(),
+  updateAllowAllUploads: jest.fn(),
+}));
+
 jest.unstable_mockModule('../controllers/guildMember.controller.js', () => ({
   searchGuildMembers: terminalHandler,
   linkSubAccount: jest.fn(),

@@ -1,4 +1,6 @@
 import { NextFunction, Request, Response, Router } from 'express';
+import { getAllGuilds } from '../controllers/guild.controller.js';
+import { getAllGuildsSchema } from './guild.routes.js';
 import { guildService } from '../services/guild.service.js';
 import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
@@ -98,6 +100,25 @@ export const rejectGuildMemberManagementPath = (
   }
   return next();
 };
+
+router.get(
+  '/guilds',
+  /* #swagger.tags = ['Guild']
+    #swagger.summary = '길드 목록 조회'
+    #swagger.description = '세션 없이 삭제되지 않은 모든 공개·비공개 길드를 조회합니다. 유효하거나 잘못된 세션 쿠키도 조회에 사용하지 않습니다. 프론트엔드는 data 배열의 id와 isPublic으로 길드 ID와 공개 여부를 확인합니다. x-discord-bot 헤더가 있으면 기존 봇 인증을 적용합니다.'
+    #swagger.security = []
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (1 이상, 기본 1)', type: 'integer', minimum: 1, default: 1 }
+    #swagger.parameters['limit'] = { in: 'query', description: '한 페이지당 개수 (1~100, 기본 10)', type: 'integer', minimum: 1, maximum: 100, default: 10 }
+    #swagger.parameters['search'] = { in: 'query', type: 'string', description: '길드명 검색어 (최대 128자)', maxLength: 128 }
+  */
+  (req, res, next) => {
+    if (req.headers['x-discord-bot']) return next('router');
+    res.setHeader('Cache-Control', 'no-store');
+    return next();
+  },
+  validateRequest(getAllGuildsSchema),
+  getAllGuilds,
+);
 
 router.get(
   '/guildMember/:guildId/:riotName',
