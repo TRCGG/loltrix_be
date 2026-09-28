@@ -57,18 +57,20 @@ const getGuildByIdSchema = z.object({
   }),
 });
 
-const getAllGuildsSchema = z.object({
+export const getAllGuildsSchema = z.object({
   query: z
     .object({
       page: z
         .string()
         .regex(/^\d+$/, 'Page must be a positive number')
         .transform(Number)
+        .pipe(z.number().int().min(1).max(Number.MAX_SAFE_INTEGER))
         .optional(),
       limit: z
         .string()
         .regex(/^\d+$/, 'Limit must be a positive number')
         .transform(Number)
+        .pipe(z.number().int().min(1).max(100))
         .optional(),
       search: z.string().max(128, 'Search term must be less than 128 characters').optional(),
     })
@@ -176,10 +178,11 @@ router.get(
   '/',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '길드 목록 조회'
-    #swagger.description = '검색어, 페이지, 리밋을 사용하여 길드 목록을 조회합니다.'
-    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (기본 1)', type: 'integer' }
-    #swagger.parameters['limit'] = { in: 'query', description: '한 페이지당 개수 (기본 10)', type: 'integer' }
-    #swagger.parameters['search'] = { in: 'query', description: '길드명 검색어', type: 'string' }
+    #swagger.description = '세션 없이 삭제되지 않은 모든 공개·비공개 길드를 조회합니다. 유효하거나 잘못된 세션 쿠키도 조회에 사용하지 않습니다. 프론트엔드는 data 배열의 id와 isPublic으로 길드 ID와 공개 여부를 확인합니다. x-discord-bot 헤더가 있으면 기존 봇 인증을 적용합니다.'
+    #swagger.security = []
+    #swagger.parameters['page'] = { in: 'query', description: '페이지 번호 (1 이상, 기본 1)', type: 'integer', minimum: 1, default: 1 }
+    #swagger.parameters['limit'] = { in: 'query', description: '한 페이지당 개수 (1~100, 기본 10)', type: 'integer', minimum: 1, maximum: 100, default: 10 }
+    #swagger.parameters['search'] = { in: 'query', description: '길드명 검색어 (최대 128자)', type: 'string', maxLength: 128 }
   */
   validateRequest(getAllGuildsSchema),
   getAllGuilds,
