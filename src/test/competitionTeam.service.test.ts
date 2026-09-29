@@ -136,6 +136,7 @@ const teamRow = [
     competitionId: COMPETITION,
     name: '1팀',
     captainPlayerCode: null,
+    isWinner: false,
     createDate: new Date(),
   },
 ];
@@ -519,6 +520,119 @@ describe('자동 배정 결과', () => {
       ),
     ).resolves.toEqual({ status: 'unassigned' });
     expect(queue).toHaveLength(1);
+  });
+});
+
+describe('팀 수정으로 우승 여부 변경', () => {
+  test.each(['RECRUITING', 'IN_PROGRESS', 'CLOSED'])(
+    '%s 대회에서 우승팀을 지정하고 대회 행을 잠근다',
+    async (status) => {
+      const winner = { ...teamRow[0], isWinner: true };
+      queue = [[{ ...inProgressCompetition[0], status }], teamRow, [], [winner]];
+      await expect(
+        service.updateTeam(GUILD, COMPETITION, TEAM, { isWinner: true }),
+      ).resolves.toEqual(winner);
+      expect(locks).toEqual(['update']);
+      expect(written).toEqual([{ isWinner: true }]);
+      expect(statements[0].where).toEqual(['competition_id', COMPETITION, 'id', TEAM]);
+    },
+  );
+
+  test('다른 팀 지정 시 이전 표시를 먼저 해제한다', async () => {
+    queue = [closedCompetition, teamRow, [{ id: 9 }], [], [{ ...teamRow[0], isWinner: true }]];
+    await service.updateTeam(GUILD, COMPETITION, TEAM, { isWinner: true });
+    expect(written).toEqual([{ isWinner: false }, { isWinner: true }]);
+    expect(statements.map((statement) => statement.where)).toEqual([
+      ['competition_id', COMPETITION, 'id', 9],
+      ['competition_id', COMPETITION, 'id', TEAM],
+    ]);
+  });
+
+  test('false로 현재 우승팀 지정을 해제한다', async () => {
+    queue = [closedCompetition, [{ ...teamRow[0], isWinner: true }], teamRow];
+    const updated = await service.updateTeam(GUILD, COMPETITION, TEAM, { isWinner: false });
+    expect(updated.isWinner).toBe(false);
+    expect(written).toEqual([{ isWinner: false }]);
+  });
+
+  test.each([true, false])('동일한 우승 여부 %s는 다시 쓰지 않는다', async (isWinner) => {
+    queue = [closedCompetition, [{ ...teamRow[0], isWinner }]];
+    await service.updateTeam(GUILD, COMPETITION, TEAM, { isWinner });
+    expect(written).toEqual([]);
+  });
+
+  test('우승팀이 아닌 팀에 false를 보내면 다른 우승팀을 건드리지 않는다', async () => {
+    queue = [closedCompetition, teamRow];
+    await service.updateTeam(GUILD, COMPETITION, TEAM, { isWinner: false });
+    expect(statements).toEqual([]);
+    expect(selects).toHaveLength(2);
+  });
+
+  test('우승 여부 생략 시 이름만 변경하고 기존 우승 표시를 유지한다', async () => {
+    const winner = { ...teamRow[0], isWinner: true };
+    queue = [inProgressCompetition, [winner], [{ ...winner, name: '수정한 팀' }]];
+    await service.updateTeam(GUILD, COMPETITION, TEAM, { name: '수정한 팀' });
+    expect(locks).toEqual(['share']);
+    expect(written).toEqual([{ name: '수정한 팀' }]);
+  });
+
+  test('이름과 우승 여부를 한 요청으로 저장한다', async () => {
+    queue = [
+      inProgressCompetition,
+      teamRow,
+      [],
+      [{ ...teamRow[0], name: '우승팀', isWinner: true }],
+    ];
+    await service.updateTeam(GUILD, COMPETITION, TEAM, { name: '우승팀', isWinner: true });
+    expect(written[0]).toEqual({ name: '우승팀', isWinner: true });
+  });
+
+  test.each([{ name: '수정' }, { captainPlayerCode: null }])(
+    '종료 후 이름·팀장을 함께 수정하면 우승 표시도 변경하지 않는다: %j',
+    async (input) => {
+      queue = [closedCompetition];
+      await expectStatus(
+        service.updateTeam(GUILD, COMPETITION, TEAM, { ...input, isWinner: true }),
+        409,
+        'competition-closed',
+      );
+      expect(written).toEqual([]);
+    },
+  );
+
+  test('다른 대회 팀은 이전 표시를 해제하지 않는다', async () => {
+    queue = [inProgressCompetition, []];
+    await expectStatus(
+      service.updateTeam(GUILD, COMPETITION, 999, { isWinner: true }),
+      404,
+      'team-not-found',
+    );
+    expect(written).toEqual([]);
+  });
+
+  test('없는 대회나 다른 길드 대회는 쓰지 않는다', async () => {
+    queue = [[]];
+    await expectStatus(
+      service.updateTeam(GUILD, COMPETITION, TEAM, { isWinner: true }),
+      404,
+      'competition-not-found',
+    );
+    expect(written).toEqual([]);
+  });
+
+  test.each([0, 1])('쓰기 단계 %s 실패는 한 트랜잭션의 오류로 전파한다', async (stage) => {
+    const error = new Error('write failed');
+    queue = [closedCompetition, teamRow, [{ id: 9 }], ...Array(stage).fill([]), error];
+    await expect(service.updateTeam(GUILD, COMPETITION, TEAM, { isWinner: true })).rejects.toBe(
+      error,
+    );
+    expect(written).toHaveLength(stage + 1);
+  });
+
+  test('종료 대회 팀 조회에 우승 표시가 포함된다', async () => {
+    queue = [closedCompetition, [{ ...teamRow[0], isWinner: true }], [], []];
+    const teams = await service.listTeams(GUILD, COMPETITION);
+    expect(teams[0]).toMatchObject({ id: TEAM, isWinner: true, roster: [] });
   });
 });
 
@@ -1309,6 +1423,28 @@ describe('로스터 전체 저장', () => {
     // 이름·팀장이 그대로면 팀 UPDATE 자체가 나가지 않는다.
     expect(written).toEqual([
       [{ competitionId: COMPETITION, teamId: TEAM, playerCode: 'PLR_000002', position: 'MID' }],
+    ]);
+  });
+
+  test('우승팀 이름·로스터를 수정해도 우승 표시는 유지된다', async () => {
+    queue = [
+      inProgressCompetition,
+      [], // 본계정 링크
+      [{ ...teamRow[0], isWinner: true }],
+      [], // 기존 멤버
+      [], // 이름 자리표
+      [], // 최종 이름
+      [], // 새 로스터
+      [{ ...teamRow[0], name: '우승팀', isWinner: true }],
+      [],
+    ];
+    const [saved] = await service.saveRoster(GUILD, COMPETITION, {
+      teams: [team({ id: TEAM, name: '우승팀' })],
+    });
+    expect(saved).toMatchObject({ id: TEAM, name: '우승팀', isWinner: true });
+    expect(written.filter((value) => !Array.isArray(value))).toEqual([
+      { name: `\u0001${TEAM}` },
+      { name: '우승팀', captainPlayerCode: null },
     ]);
   });
 

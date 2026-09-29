@@ -395,7 +395,11 @@ const decideApplicationsSchema = z.object({
 const createTeamSchema = z.object({
   params: competitionParams,
   body: z.object({
-    name: z.string().trim().min(1, 'name is required').max(64, 'name must be 64 characters or less'),
+    name: z
+      .string()
+      .trim()
+      .min(1, 'name is required')
+      .max(64, 'name must be 64 characters or less'),
   }),
 });
 
@@ -406,6 +410,7 @@ const updateTeamSchema = z.object({
   body: z.object({
     name: z.string().trim().min(1).max(64).optional(),
     captainPlayerCode: z.string().trim().min(1).max(64).nullable().optional(),
+    isWinner: z.boolean().optional(),
   }),
 });
 
@@ -647,7 +652,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 팀 목록'
-    #swagger.description = '각 팀에 roster(playerCode·position·riotName·riotNameTag)가 붙고, roster는 TOP→JUG→MID→ADC→SUP 순으로 정렬됩니다. records에는 상대를 가리지 않은 팀 전체 전적이 scrim·preliminary·main으로 나뉘어 담기며, 양 진영이 모두 팀에 귀속된 경기만 셉니다(용병전·미배정·삭제 경기 제외).'
+    #swagger.description = '각 팀에 isWinner(우승팀 여부)와 roster(playerCode·position·riotName·riotNameTag)가 붙고, roster는 TOP→JUG→MID→ADC→SUP 순으로 정렬됩니다. 우승 표시는 대회 종료 뒤에도 유지됩니다. records에는 상대를 가리지 않은 팀 전체 전적이 scrim·preliminary·main으로 나뉘어 담기며, 양 진영이 모두 팀에 귀속된 경기만 셉니다(용병전·미배정·삭제 경기 제외).'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
   */
@@ -666,7 +671,7 @@ router.put(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 로스터 전체 저장'
-    #swagger.description = '보낸 teams가 이 대회의 편성 전체가 됩니다 — id를 준 팀은 이름·팀장·로스터가 payload대로 맞춰지고, id 없는 팀은 새로 만들어지며, payload에 없는 기존 팀은 삭제됩니다. 삭제 대상 팀에 귀속된 활성 경기가 있으면 409(team-has-matches)로 전체가 실패합니다. 팀은 20개까지(409 team-limit-exceeded), 팀당 5명·포지션 하나씩(같은 팀에 같은 포지션이 둘이면 409 roster-position-taken, 6명 이상이면 409 roster-limit-exceeded), 한 선수는 한 팀에만(409 roster-duplicate), 이름은 중복 불가(409 team-name-exists), captainPlayerCode는 그 팀 members 안에 있어야 합니다(400 captain-not-in-roster). id가 이 대회 팀이 아니면 404(team-not-found), 같은 id가 두 번 오면 400(team-duplicate), 종료된 대회는 409(competition-closed). playerCode는 본계정으로 정규화해 저장하고, 응답은 GET /teams의 팀·로스터 부분과 같습니다(전적 records는 빠집니다).'
+    #swagger.description = '보낸 teams가 이 대회의 편성 전체가 됩니다 — id를 준 팀은 이름·팀장·로스터가 payload대로 맞춰지고, id 없는 팀은 새로 만들어지며, payload에 없는 기존 팀은 삭제됩니다. 기존 팀 id를 유지하면 isWinner도 유지되고, 우승팀을 삭제하면 우승 표시도 사라집니다. 삭제 대상 팀에 귀속된 활성 경기가 있으면 409(team-has-matches)로 전체가 실패합니다. 팀은 20개까지(409 team-limit-exceeded), 팀당 5명·포지션 하나씩(같은 팀에 같은 포지션이 둘이면 409 roster-position-taken, 6명 이상이면 409 roster-limit-exceeded), 한 선수는 한 팀에만(409 roster-duplicate), 이름은 중복 불가(409 team-name-exists), captainPlayerCode는 그 팀 members 안에 있어야 합니다(400 captain-not-in-roster). id가 이 대회 팀이 아니면 404(team-not-found), 같은 id가 두 번 오면 400(team-duplicate), 종료된 대회는 409(competition-closed). playerCode는 본계정으로 정규화해 저장하고, 응답은 GET /teams의 팀·로스터 부분과 같습니다(전적 records는 빠집니다).'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
@@ -699,7 +704,7 @@ router.get(
 
 /**
  * @route PATCH /api/competitions/:guildId/:competitionId/teams/:teamId
- * @desc 팀 이름·팀장 변경
+ * @desc 팀 이름·팀장·우승 여부 변경
  * @access guildManager 이상
  */
 router.patch(
@@ -707,12 +712,12 @@ router.patch(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 팀 수정'
-    #swagger.description = 'captainPlayerCode는 그 팀 로스터에 있는 계정이어야 합니다(400 captain-not-in-roster). null을 보내면 팀장을 비웁니다. 종료된 대회는 409(competition-closed).'
+    #swagger.description = 'name·captainPlayerCode·isWinner를 선택적으로 수정합니다. captainPlayerCode는 그 팀 로스터에 있는 계정이어야 합니다(400 captain-not-in-roster). null을 보내면 팀장을 비웁니다. isWinner=true면 이 팀을 우승팀으로 지정하고 이전 우승팀의 표시를 해제합니다. false면 이 팀의 표시만 해제하며 다른 팀의 표시는 유지합니다. 생략하면 우승 여부를 바꾸지 않습니다. 우승팀은 대회당 최대 한 팀이고 GET /teams의 isWinner로 표시합니다. 종료된 대회에서는 우승 여부만 지정·정정 가능하며 이름·팀장 수정은 409(competition-closed).'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
     #swagger.parameters['teamId'] = { in: 'path', required: true, type: 'integer' }
-    #swagger.parameters['body'] = { in: 'body', required: true, schema: { name: '1팀', captainPlayerCode: 'PLR_000123' } }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { name: '1팀', captainPlayerCode: 'PLR_000123', isWinner: true } }
   */
   decodeGuildIdMiddleware,
   manager,

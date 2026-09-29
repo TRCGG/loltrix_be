@@ -283,9 +283,15 @@ export const competitionTeam = pgTable(
     captainPlayerCode: varchar('captain_player_code', { length: 64 }).references(
       () => riotAccount.playerCode,
     ),
+    isWinner: boolean('is_winner').notNull().default(false),
     createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique('uq_competition_team_name').on(t.competitionId, t.name)],
+  (t) => [
+    unique('uq_competition_team_name').on(t.competitionId, t.name),
+    uniqueIndex('uq_competition_team_winner')
+      .on(t.competitionId)
+      .where(sql`${t.isWinner} = true`),
+  ],
 );
 
 export type CompetitionTeam = typeof competitionTeam.$inferSelect;

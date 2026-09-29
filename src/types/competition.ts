@@ -165,6 +165,7 @@ export interface CompetitionTeamWithRoster extends CompetitionTeamRoster {
 export interface CompetitionTeamUpdateInput {
   name?: string;
   captainPlayerCode?: string | null;
+  isWinner?: boolean;
 }
 
 /** 팀 귀속 관점의 경기 항목. blueTeamId/redTeamId가 모두 null이면 아직 귀속되지 않은 경기다. */

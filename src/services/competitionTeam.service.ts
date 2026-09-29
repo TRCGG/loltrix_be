@@ -451,7 +451,21 @@ export class CompetitionTeamService {
   ): Promise<CompetitionTeam> {
     try {
       return await db.transaction(async (tx) => {
-        this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
+        // 우승팀 교체는 이전 표시 해제와 새 표시 저장을 한 트랜잭션에서 처리한다.
+        const target = await this.loadCompetition(
+          tx,
+          guildId,
+          competitionId,
+          input.isWinner !== undefined ? 'update' : 'share',
+        );
+        // 종료 뒤에는 우승 여부만 정정할 수 있고 이름·팀장 수정은 기존처럼 막는다.
+        if (
+          input.isWinner === undefined ||
+          input.name !== undefined ||
+          input.captainPlayerCode !== undefined
+        ) {
+          this.assertWritable(target);
+        }
         const team = await this.loadTeam(tx, competitionId, teamId);
 
         const patch: Partial<InsertCompetitionTeam> = {};
@@ -468,12 +482,41 @@ export class CompetitionTeamService {
               ? null
               : await this.resolveCaptain(tx, guildId, teamId, input.captainPlayerCode);
         }
+        if (input.isWinner !== undefined && input.isWinner !== team.isWinner) {
+          if (input.isWinner) {
+            const [previous] = await tx
+              .select({ id: competitionTeam.id })
+              .from(competitionTeam)
+              .where(
+                and(
+                  eq(competitionTeam.competitionId, competitionId),
+                  eq(competitionTeam.isWinner, true),
+                ),
+              )
+              .limit(1);
+            // 부분 유니크 인덱스는 문장마다 검사하므로 이전 팀부터 해제한다.
+            if (previous) {
+              await tx
+                .update(competitionTeam)
+                .set({ isWinner: false })
+                .where(
+                  and(
+                    eq(competitionTeam.competitionId, competitionId),
+                    eq(competitionTeam.id, previous.id),
+                  ),
+                );
+            }
+          }
+          patch.isWinner = input.isWinner;
+        }
         if (Object.keys(patch).length === 0) return team;
 
         const [updated] = await tx
           .update(competitionTeam)
           .set(patch)
-          .where(eq(competitionTeam.id, teamId))
+          .where(
+            and(eq(competitionTeam.competitionId, competitionId), eq(competitionTeam.id, teamId)),
+          )
           .returning();
         return updated;
       });
