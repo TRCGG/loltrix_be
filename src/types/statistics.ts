@@ -86,7 +86,7 @@ export interface StatisticsRequestQuery {
   season?: string;
   limit?: string;
   sortBy?: UserStatisticsSort;
-  /** '1' | '2' | '3' 또는 콤마 구분(예: '2,3'). 생략 시 일반내전. */
+  /** '1' | '2' | '3' | '4' 또는 콤마 구분. 생략 시 일반내전. */
   gameType?: string;
 }
 

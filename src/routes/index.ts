@@ -57,7 +57,7 @@ router.use('/statistics', statisticsRoutes);
 
 router.use('/h2h', h2hRoutes);
 
-// 클랜 내 대회 (스크림/본경기 묶음)
+// 클랜 내 대회 (스크림/예선/본선 묶음)
 router.use('/competitions', competitionRoutes);
 
 // 챔피언 목록 (대회 신청의 champions id 선택용)

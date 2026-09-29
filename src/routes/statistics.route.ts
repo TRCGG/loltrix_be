@@ -96,7 +96,7 @@ export const filterSchema = z.object({
       sortBy: z.enum(['totalCount', 'winRate']).optional(),
       gameType: z
         .string()
-        .regex(/^[123](,[123])*$/, 'gameType must be 1|2|3 (comma separated)')
+        .regex(/^[1234](,[1234])*$/, 'gameType must be 1|2|3|4 (comma separated)')
         .optional(),
     })
     .superRefine(rangeRequiresMonths),
@@ -234,7 +234,7 @@ router.get(
     }
     #swagger.parameters['gameType'] = {
       in: 'query',
-      description: '1=일반내전 / 2=스크림 / 3=본경기. 콤마 구분 가능(예: 2,3). 생략 시 1',
+      description: '1=일반내전 / 2=스크림 / 3=예선/4=본선. 콤마 구분 가능(예: 2,3). 생략 시 1',
       type: 'string'
     }
   */

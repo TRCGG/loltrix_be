@@ -116,7 +116,7 @@ describe('선수의 대회 목록', () => {
 
     expect(item.team).toBeNull();
     expect(item.applicationStatus).toBe('REJECTED');
-    expect(item.teamRank).toEqual({ scrim: null, main: null });
+    expect(item.teamRank).toEqual({ scrim: null, preliminary: null, main: null });
   });
 
   test('신청·로스터 없이 경기만 뛰어도 목록에 나온다', async () => {
@@ -189,13 +189,22 @@ describe('선수의 대회 목록', () => {
 
   test('팀이 있으면 순위표에서 등수를 가져온다', async () => {
     computeStandingsMany.mockResolvedValue(
-      new Map([[7, { scrim: [{ teamId: 3, rank: 2 }], main: [{ teamId: 9, rank: 1 }] }]]),
+      new Map([
+        [
+          7,
+          {
+            scrim: [{ teamId: 3, rank: 2 }],
+            preliminary: [{ teamId: 3, rank: 1 }],
+            main: [{ teamId: 9, rank: 1 }],
+          },
+        ],
+      ]),
     );
     setQueue({ rosters: [rosterRow()], competitions: [competitionRow()] });
 
     const [item] = await service.listCompetitions(GUILD, MAIN);
 
-    expect(item.teamRank).toEqual({ scrim: 2, main: null });
+    expect(item.teamRank).toEqual({ scrim: 2, preliminary: 1, main: null });
   });
 
   test('로스터에 오른 대회 전부를 순위표 조회 한 번으로 묶는다', async () => {

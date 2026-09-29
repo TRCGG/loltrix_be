@@ -56,10 +56,14 @@ const emptyRecord = (): PlayerRecord => ({
 const teamRank = (
   standings: CompetitionStandings | undefined,
   teamId: number | undefined,
-): { scrim: number | null; main: number | null } => {
+): PlayerCompetitionItem['teamRank'] => {
   const rankOf = (rows: { teamId: number; rank: number }[]) =>
     teamId == null ? null : (rows.find((row) => row.teamId === teamId)?.rank ?? null);
-  return { scrim: rankOf(standings?.scrim ?? []), main: rankOf(standings?.main ?? []) };
+  return {
+    scrim: rankOf(standings?.scrim ?? []),
+    preliminary: rankOf(standings?.preliminary ?? []),
+    main: rankOf(standings?.main ?? []),
+  };
 };
 
 export class CompetitionPlayerService {

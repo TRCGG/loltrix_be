@@ -46,7 +46,7 @@ export const message = pgTable('message', {
 });
 
 /**
- * 대회: 클랜 안에서 여는 이벤트 단위(멸망전 1회 등). 스크림(2)·본경기(3) 경기가 어느 대회 것인지 잇는다.
+ * 대회: 클랜 안에서 여는 이벤트 단위(멸망전 1회 등). 스크림(2)·예선(3)·본선(4) 경기가 어느 대회 것인지 잇는다.
  * 모집중은 길드에 여러 개 둘 수 있고, 길드당 IN_PROGRESS는 하나 —
  * 리플 태깅 시 대회명 없이 진행중 한 건으로 자동 해석하기 위한 전제.
  */
@@ -81,7 +81,7 @@ export const replay = pgTable('replay', {
   fileUrl: varchar('file_url', { length: 255 }).notNull(),
   rawData: jsonb('raw_data').notNull(),
   hashData: varchar('hash_data', { length: 128 }).notNull(),
-  gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=본경기
+  gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=예선/4=본선
   // 원천 값. custom_match·mmr_participant_metric의 competition_id는 저장 시 여기서 복제된다.
   competitionId: integer('competition_id').references(() => competition.id),
   season: varchar('season', { length: 32 }).notNull(),
@@ -213,7 +213,7 @@ export const customMatch = pgTable(
   'custom_match',
   {
     id: varchar('id', { length: 255 }).primaryKey(),
-    gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=본경기
+    gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=예선/4=본선
     competitionId: integer('competition_id').references(() => competition.id),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
     season: varchar('season', { length: 32 }).notNull(),
@@ -701,7 +701,7 @@ export const mmrParticipantMetric = pgTable(
     playerCode: varchar('player_code', { length: 64 }),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
     season: varchar('season', { length: 32 }).notNull(),
-    // 1=일반내전/2=스크림/3=본경기. custom_match 값 복제 — H2H·MMR 조회가 custom_match 조인 없이 유형을 거르기 위함
+    // 1=일반내전/2=스크림/3=예선/4=본선. custom_match 값 복제 — H2H·MMR 조회가 custom_match 조인 없이 유형을 거르기 위함
     gameType: char('game_type', { length: 1 }).notNull().default('1'),
     championId: varchar('champion_id', { length: 16 }), // SKIN→champion.id (실패 시 NULL)
     gameTeam: varchar('game_team', { length: 8 }).notNull(), // blue/red
@@ -840,7 +840,7 @@ export type InsertTournament = typeof tournament.$inferInsert;
  * status: PENDING(발급됨/미사용) → COMPLETED(경기 완료·적재됨) / INVALID(무효).
  * custom_match_id는 콜백/폴링으로 경기가 적재될 때 채워짐(발급 시점엔 NULL).
  * metadata는 코드에 임베드한 자체 메타(길드·경기 설정 등).
- * game_type은 발급 시 지정한 경기 유형(1=일반내전/2=스크림/3=대회) — MVP raw-only에선 코드에만 기록,
+ * game_type은 발급 시 지정한 경기 유형(1=일반내전/2=스크림/3=예선/4=본선) — MVP raw-only에선 코드에만 기록,
  * 추후 raw→정규화 승격 시 custom_match.game_type으로 전파.
  */
 export const tournamentCode = pgTable(
@@ -849,7 +849,7 @@ export const tournamentCode = pgTable(
     code: varchar('code', { length: 128 }).primaryKey(),
     tournamentId: integer('tournament_id').notNull(),
     guildId: varchar('guild_id', { length: 128 }).notNull(),
-    gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=대회
+    gameType: char('game_type', { length: 1 }).notNull().default('1'), // 1=일반내전/2=스크림/3=예선/4=본선
     customMatchId: varchar('custom_match_id', { length: 255 }), // 사용 후 match-v5 matchId 기록 (raw-only라 custom_match 행은 없음)
     metadata: jsonb('metadata'),
     status: varchar('status', { length: 16 }).notNull().default('PENDING'),
