@@ -98,7 +98,7 @@ export class TournamentService {
    * @desc count개 코드를 선발급하고 tournament_code 행으로 저장한다(status PENDING).
    * channelId는 봇 발급 시에만 metadata(jsonb)에 저장 — 콜백 수신 시 그 채널로 다음 코드를
    * 게시하기 위함. 웹 발급(source=WEB)은 채널이 없고 issuedBy로 발급자를 남긴다.
-   * gameType(1=일반내전/2=스크림/3=대회)은 발급 시 코드 행에 확정 기록된다
+   * gameType(1=일반내전/2=스크림/3=예선/4=본선)은 발급 시 코드 행에 확정 기록된다
    * (MVP raw-only — 추후 raw→정규화 승격 시 custom_match로 전파).
    */
   public async issueCodes(params: {

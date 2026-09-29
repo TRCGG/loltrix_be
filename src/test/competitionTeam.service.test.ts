@@ -14,6 +14,7 @@ let written: unknown[] = [];
 let locks: unknown[] = [];
 /** select에 넘어간 필드 — 조회가 몇 번 도는지, 산식이 무엇인지 보려고 모은다. */
 let selects: unknown[] = [];
+let transactionCount = 0;
 /** delete/update가 어느 테이블에 어떤 값으로 좁혀 나갔는지. */
 let statements: { kind: string; table: string; where: unknown[] }[] = [];
 
@@ -86,7 +87,10 @@ const executor: Record<string, unknown> = {
   insert: () => makeBuilder(),
   update: (table: unknown) => track('update', table),
   delete: (table: unknown) => track('delete', table),
-  transaction: async (callback: (tx: unknown) => unknown) => callback(executor),
+  transaction: async (callback: (tx: unknown) => unknown) => {
+    transactionCount += 1;
+    return callback(executor);
+  },
 };
 
 jest.unstable_mockModule('../database/connectionPool.js', () => ({ db: executor }));
@@ -357,7 +361,11 @@ describe('본계정 정규화', () => {
 
   test('자기 자신을 가리키는 링크는 부캐가 아니라 그대로 통과한다', async () => {
     const saved = { id: 1, competitionId: COMPETITION, playerCode: 'PLR_000100', champions: [] };
-    queue = [recruitingCompetition, [{ account: 'PLR_000100', mainAccount: 'PLR_000100' }], [saved]];
+    queue = [
+      recruitingCompetition,
+      [{ account: 'PLR_000100', mainAccount: 'PLR_000100' }],
+      [saved],
+    ];
     await expect(
       service.apply(GUILD, COMPETITION, applyInput({ playerCode: 'PLR_000100' }), 'member-1'),
     ).resolves.toEqual(saved);
@@ -515,8 +523,11 @@ describe('자동 배정 결과', () => {
 });
 
 describe('경기 유형 일괄 변경', () => {
+  beforeEach(() => {
+    transactionCount = 0;
+  });
   const changeToMain = (ids: string[]) =>
-    service.changeMatchGameType(GUILD, COMPETITION, ids, '3', ACTOR);
+    service.changeMatchGameType(GUILD, COMPETITION, ids, '4', ACTOR);
 
   test('종료된 대회는 잠긴다', async () => {
     queue = [closedCompetition];
@@ -534,7 +545,7 @@ describe('경기 유형 일괄 변경', () => {
   });
 
   test('이미 목표 유형이면 skipped로 빠지고 쓰지 않는다', async () => {
-    queue = [inProgressCompetition, [{ id: 'm1', gameType: '3' }]];
+    queue = [inProgressCompetition, [{ id: 'm1', gameType: '4' }]];
     await expect(changeToMain(['m1'])).resolves.toEqual({ changed: [], skipped: ['m1'] });
     expect(written).toEqual([]);
   });
@@ -543,8 +554,8 @@ describe('경기 유형 일괄 변경', () => {
     queue = [
       inProgressCompetition,
       [
-        { id: 'm1', gameType: '2' },
-        { id: 'm2', gameType: '3' },
+        { id: 'm1', gameType: '3' },
+        { id: 'm2', gameType: '4' },
       ],
     ];
 
@@ -553,9 +564,9 @@ describe('경기 유형 일괄 변경', () => {
       skipped: ['m2'],
     });
     expect(written.slice(0, 3)).toEqual([
-      { gameType: '3' },
-      { gameType: '3', updateDate: expect.any(Date) },
-      { gameType: '3' },
+      { gameType: '4' },
+      { gameType: '4', updateDate: expect.any(Date) },
+      { gameType: '4' },
     ]);
     expect(written[3]).toEqual([
       {
@@ -565,13 +576,49 @@ describe('경기 유형 일괄 변경', () => {
         detail: {
           competitionId: COMPETITION,
           customMatchId: 'm1',
-          from: '2',
-          to: '3',
+          from: '3',
+          to: '4',
           source: 'web',
         },
       },
     ]);
+    expect(transactionCount).toBe(1);
   });
+
+  test('본선에서 예선으로도 세 테이블과 감사 로그를 함께 변경한다', async () => {
+    queue = [inProgressCompetition, [{ id: 'm1', gameType: '4' }]];
+    await expect(
+      service.changeMatchGameType(GUILD, COMPETITION, ['m1'], '3', ACTOR),
+    ).resolves.toEqual({ changed: ['m1'], skipped: [] });
+    expect(written.slice(0, 3)).toEqual([
+      { gameType: '3' },
+      { gameType: '3', updateDate: expect.any(Date) },
+      { gameType: '3' },
+    ]);
+    expect(written[3]).toEqual([
+      expect.objectContaining({
+        eventType: 'matchGameTypeChange',
+        detail: expect.objectContaining({ from: '4', to: '3' }),
+      }),
+    ]);
+    expect(transactionCount).toBe(1);
+  });
+
+  test.each([0, 1, 2, 3])(
+    '쓰기 단계 %s 실패는 트랜잭션 밖으로 전파되고 후속 쓰기를 하지 않는다',
+    async (stage) => {
+      const error = new Error('write failed');
+      queue = [
+        inProgressCompetition,
+        [{ id: 'm1', gameType: '3' }],
+        ...Array(stage).fill([]),
+        error,
+      ];
+      await expect(changeToMain(['m1'])).rejects.toBe(error);
+      expect(transactionCount).toBe(1);
+      expect(written).toHaveLength(stage + 1);
+    },
+  );
 
   test('대회는 FOR SHARE, 대상 경기는 FOR UPDATE로 잡는다', async () => {
     queue = [inProgressCompetition, [{ id: 'm1', gameType: '2' }]];
@@ -939,12 +986,7 @@ describe('본인 신청 수정·취소', () => {
   });
 
   test('playerCode를 본계정으로 바꾸면 저장하고, 그 계정이 이미 신청돼 있으면 409', async () => {
-    queue = [
-      recruitingCompetition,
-      [current],
-      [],
-      uniqueViolation('uq_competition_application'),
-    ];
+    queue = [recruitingCompetition, [current], [], uniqueViolation('uq_competition_application')];
     await expectStatus(
       service.updateMyApplication(GUILD, COMPETITION, 'member-1', { playerCode: 'PLR_000100' }),
       409,
@@ -1388,11 +1430,13 @@ describe('팀 목록', () => {
 
     expect(first.records).toEqual({
       scrim: { games: 1, win: 1, lose: 0 },
-      main: { games: 1, win: 0, lose: 1 },
+      preliminary: { games: 1, win: 0, lose: 1 },
+      main: { games: 0, win: 0, lose: 0 },
     });
     expect(second.records).toEqual({
       scrim: { games: 1, win: 0, lose: 1 },
-      main: { games: 1, win: 1, lose: 0 },
+      preliminary: { games: 1, win: 1, lose: 0 },
+      main: { games: 0, win: 0, lose: 0 },
     });
   });
 
@@ -1402,6 +1446,7 @@ describe('팀 목록', () => {
 
     expect(team.records).toEqual({
       scrim: { games: 0, win: 0, lose: 0 },
+      preliminary: { games: 0, win: 0, lose: 0 },
       main: { games: 0, win: 0, lose: 0 },
     });
   });

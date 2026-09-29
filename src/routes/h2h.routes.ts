@@ -10,7 +10,7 @@ const router: Router = Router();
 
 // 경기 유형 필터. 생략 시 일반내전. 상대전적은 대회 단위 필터(competitionId)를 받지 않는다.
 const scopeQuery = {
-  gameType: z.string().regex(/^[123](,[123])*$/).optional(),
+  gameType: z.string().regex(/^[1234](,[1234])*$/).optional(),
 };
 
 export const frequentSchema = z.object({
@@ -63,6 +63,7 @@ router.get(
 
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID', required: true, type: 'string' }
     #swagger.parameters['riotName'] = { in: 'query', description: '기준 유저 Riot Name', required: true, type: 'string' }
+    #swagger.parameters['gameType'] = { in: 'query', description: '1=일반내전/2=스크림/3=예선/4=본선. 콤마 구분 가능, 생략 시 1', type: 'string' }
     #swagger.parameters['riotNameTag'] = { in: 'query', description: '기준 유저 Riot Tag', type: 'string' }
     #swagger.parameters['q'] = { in: 'query', description: '상대 닉네임#태그 부분일치 검색어', type: 'string' }
     #swagger.parameters['season'] = { in: 'query', description: '시즌 (미입력 현재시즌, all 전체)', type: 'string' }
@@ -86,6 +87,7 @@ router.get(
 
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID', required: true, type: 'string' }
     #swagger.parameters['riotName1'] = { in: 'query', description: '유저 A Riot Name', required: true, type: 'string' }
+    #swagger.parameters['gameType'] = { in: 'query', description: '1=일반내전/2=스크림/3=예선/4=본선. 콤마 구분 가능, 생략 시 1', type: 'string' }
     #swagger.parameters['riotNameTag1'] = { in: 'query', description: '유저 A Riot Tag', type: 'string' }
     #swagger.parameters['riotName2'] = { in: 'query', description: '유저 B Riot Name', required: true, type: 'string' }
     #swagger.parameters['riotNameTag2'] = { in: 'query', description: '유저 B Riot Tag', type: 'string' }

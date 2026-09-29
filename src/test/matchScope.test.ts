@@ -9,23 +9,32 @@ import { scopeConditions, metricScopeConditions } from '../database/matchScope.j
 import { customMatch, mmrParticipantMetric } from '../database/schema.js';
 
 describe('scopeFromQuery — 쿼리 파라미터 → 조회 범위', () => {
+  test('본선 단독·세 대회 유형을 지정하면 유형 4를 유지한다', () => {
+    expect(scopeFromQuery({ gameType: '4' })).toEqual({ gameTypes: ['4'] });
+    expect(scopeFromQuery({ gameType: '2,3,4,4', competitionId: 7 })).toEqual({
+      gameTypes: ['2', '3', '4'],
+      competitionId: 7,
+    });
+    expect(ignoresPeriod({ gameTypes: ['4'] })).toBe(true);
+  });
+
   test('아무것도 없으면 일반내전만 (기존 호출 불변)', () => {
     expect(scopeFromQuery({})).toEqual({ gameTypes: ['1'] });
     expect(scopeFromQuery({ gameType: '', competitionId: '' })).toEqual({ gameTypes: ['1'] });
   });
 
-  test('competitionId만 있으면 스크림+본경기', () => {
+  test('competitionId만 있으면 스크림+예선+본선', () => {
     expect(scopeFromQuery({ competitionId: '7' })).toEqual({
-      gameTypes: ['2', '3'],
+      gameTypes: ['2', '3', '4'],
       competitionId: 7,
     });
     expect(scopeFromQuery({ competitionId: 7 })).toEqual({
-      gameTypes: ['2', '3'],
+      gameTypes: ['2', '3', '4'],
       competitionId: 7,
     });
   });
 
-  test('gameType은 콤마 구분·공백·중복을 정리하고 1|2|3 외는 버린다', () => {
+  test('gameType은 콤마 구분·공백·중복을 정리하고 1|2|3|4 외는 버린다', () => {
     expect(scopeFromQuery({ gameType: '2, 2,3' }).gameTypes).toEqual(['2', '3']);
     expect(scopeFromQuery({ gameType: '9,x' }).gameTypes).toEqual(['1']);
     expect(scopeFromQuery({ gameType: '1', competitionId: '3' })).toEqual({
