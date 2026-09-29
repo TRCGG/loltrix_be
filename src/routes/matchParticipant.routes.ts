@@ -20,7 +20,7 @@ const router: Router = Router();
 const scopeQuery = {
   gameType: z
     .string()
-    .regex(/^[123](,[123])*$/, 'gameType must be 1|2|3 (comma separated)')
+    .regex(/^[1234](,[1234])*$/, 'gameType must be 1|2|3|4 (comma separated)')
     .optional(),
   competitionId: z.string().regex(/^\d+$/).transform(Number).optional(),
 };
@@ -113,7 +113,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Matches']
     #swagger.summary = '최근 게임 목록 조회'
-    #swagger.description = '특정 유저의 최근 게임 전적 리스트를 조회합니다. gameType(1=일반내전/2=스크림/3=본경기, 콤마 구분)과 competitionId로 범위를 좁힙니다. competitionId를 준 조회에서는 각 항목에 teamName(본인 진영의 대회 팀)·opponentTeamName(상대 진영)이 채워지고, 그 밖의 조회에서는 두 칸 모두 null입니다(칸은 항상 있습니다). gameType에 1이 없고 competitionId도 없으면 시즌·기간 조건을 무시하고 모든 대회를 가로질러 읽습니다.'
+    #swagger.description = '특정 유저의 최근 게임 전적 리스트를 조회합니다. gameType(1=일반내전/2=스크림/3=예선/4=본선, 콤마 구분)과 competitionId로 범위를 좁힙니다. competitionId를 준 조회에서는 각 항목에 teamName(본인 진영의 대회 팀)·opponentTeamName(상대 진영)이 채워지고, 그 밖의 조회에서는 두 칸 모두 null입니다(칸은 항상 있습니다). gameType에 1이 없고 competitionId도 없으면 시즌·기간 조건을 무시하고 모든 대회를 가로질러 읽습니다.'
     
     #swagger.parameters['guildId'] = { 
       in: 'path', 
@@ -131,7 +131,7 @@ router.get(
     #swagger.parameters['season'] = { in: 'query', description: '시즌 필터 (예: S13)', type: 'string' }
     #swagger.parameters['page'] = { in: 'query', description: '페이지 번호', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', description: '페이지당 개수', type: 'integer' }
-    #swagger.parameters['gameType'] = { in: 'query', description: "1=일반내전/2=스크림/3=본경기 (콤마 구분, 예: '2,3')", type: 'string' }
+    #swagger.parameters['gameType'] = { in: 'query', description: '1=일반내전/2=스크림/3=예선/4=본선 (콤마 구분, 예: 2,3,4). competitionId 지정 후 생략 시 2,3,4', type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'query', description: '대회 ID', type: 'integer' }
   */
   decodeGuildIdMiddleware,
@@ -164,7 +164,7 @@ router.get(
     }
     #swagger.parameters['riotNameTag'] = { in: 'query', description: 'Riot Tag (선택)', type: 'string' }
     #swagger.parameters['season'] = { in: 'query', description: '시즌 필터', type: 'string' }
-    #swagger.parameters['gameType'] = { in: 'query', description: "1=일반내전/2=스크림/3=본경기 (콤마 구분, 예: '2,3')", type: 'string' }
+    #swagger.parameters['gameType'] = { in: 'query', description: '1=일반내전/2=스크림/3=예선/4=본선 (콤마 구분, 예: 2,3,4). competitionId 지정 후 생략 시 2,3,4', type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'query', description: '대회 ID', type: 'integer' }
   */
   decodeGuildIdMiddleware,

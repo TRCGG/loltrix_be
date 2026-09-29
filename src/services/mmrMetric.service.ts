@@ -105,7 +105,7 @@ export interface BuildMetricRowsInput {
   customMatchId: string;
   guildId: string;
   season: string;
-  /** 1=일반내전/2=스크림/3=본경기 (custom_match.game_type과 동일 값) */
+  /** 1=일반내전/2=스크림/3=예선/4=본선 (custom_match.game_type과 동일 값) */
   gameType: string;
   playedDate: Date;
   /** puuid → 실제 계정 playerCode (병합 없음, match_participant와 동일 — TRC-243 A안).

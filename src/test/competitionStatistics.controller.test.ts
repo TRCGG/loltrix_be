@@ -93,7 +93,7 @@ describe('대회 유저 랭킹', () => {
     });
   });
 
-  test('gameType 생략 시 스크림·본경기 합산, 기본 50개', async () => {
+  test('gameType 생략 시 스크림·예선·본선 합산, 기본 50개', async () => {
     await run(getCompetitionUserStats);
 
     expect(getUserGameStatistics).toHaveBeenCalledWith('g1', {
@@ -101,7 +101,7 @@ describe('대회 유저 랭킹', () => {
       sortBy: 'totalCount',
       page: 1,
       limit: 50,
-      scope: { gameTypes: ['2', '3'], competitionId: 7 },
+      scope: { gameTypes: ['2', '3', '4'], competitionId: 7 },
     });
   });
 
@@ -145,7 +145,7 @@ describe('대회 챔피언 통계', () => {
       sortBy: 'totalCount',
       page: 1,
       limit: 20,
-      scope: { gameTypes: ['2', '3'], competitionId: 7 },
+      scope: { gameTypes: ['2', '3', '4'], competitionId: 7 },
     });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({

@@ -884,7 +884,7 @@ export class CompetitionTeamService {
   }
 
   /**
-   * 대회 경기의 유형(스크림/본경기)을 한 번에 옮긴다. 유형은 custom_match·replay·
+   * 대회 경기의 유형(스크림/예선/본선)을 한 번에 옮긴다. 유형은 custom_match·replay·
    * mmr_participant_metric 세 곳에 복제돼 있어 셋을 같은 트랜잭션에서 함께 바꿔야
    * 전적·MMR 조회가 서로 다른 유형으로 갈린다.
    */
@@ -989,7 +989,7 @@ export class CompetitionTeamService {
   }
 
   /**
-   * 대회 순위표. 양 진영이 모두 팀에 귀속된 경기만 세고, 스크림·본경기를 따로 매긴다.
+   * 대회 순위표. 양 진영이 모두 팀에 귀속된 경기만 세고, 스크림·예선·본선를 따로 매긴다.
    * 대회의 모든 팀이 0판이어도 목록에 남는다 — 화면이 참가 팀 전체를 보여줘야 한다.
    */
   public async getStandings(guildId: string, competitionId: number): Promise<CompetitionStandings> {

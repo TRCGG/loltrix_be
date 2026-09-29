@@ -56,7 +56,7 @@ export class CompetitionService {
 
   /**
    * 리플이 붙을 대회를 확정한다. 일반내전(1)은 대회 없음.
-   * 스크림·본경기는 competitionId가 없으면 길드의 진행중 대회로 해석한다.
+   * 스크림·예선·본선은 competitionId가 없으면 길드의 진행중 대회로 해석한다.
    *
    * lock=true(저장 트랜잭션 안): FOR SHARE로 잡아 트랜잭션이 끝날 때까지 종료(UPDATE)가 못 끼어들게 한다.
    * 봇이 첨부 여러 개를 수십 초에 걸쳐 순차 저장하는 동안 !대회종료가 오면, 잠금이 없을 때
@@ -72,7 +72,7 @@ export class CompetitionService {
     if (gameType === '1') {
       // 조용히 버리면 호출자는 대회에 올렸다고 믿는다.
       if (competitionId != null) {
-        throw new BusinessError('competitionId requires gameType 2 or 3', 400, {
+        throw new BusinessError('competitionId requires gameType 2, 3 or 4', 400, {
           type: 'competition-requires-game-type',
           isLoggable: false,
         });
@@ -500,6 +500,7 @@ export class CompetitionService {
 
     const empty = () => ({
       scrimCount: 0,
+      preliminaryCount: 0,
       mainCount: 0,
       applicationCount: 0,
       pendingCount: 0,
@@ -514,7 +515,8 @@ export class CompetitionService {
       const acc = accOf(row.competitionId);
       if (!acc) continue;
       if (row.gameType === '2') acc.scrimCount += row.count;
-      if (row.gameType === '3') acc.mainCount += row.count;
+      if (row.gameType === '3') acc.preliminaryCount += row.count;
+      if (row.gameType === '4') acc.mainCount += row.count;
     }
     for (const row of applications) {
       const acc = accOf(row.competitionId);
