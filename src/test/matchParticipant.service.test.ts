@@ -1,5 +1,6 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
-import { getTableName } from 'drizzle-orm';
+import { getTableName, SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
 /**
  * competition.service.test.ts와 같은 방식 — 체인 메서드는 자기 자신을 돌려주고 await 때 큐에서 꺼낸다.
@@ -8,14 +9,19 @@ let queue: unknown[] = [];
 let written: unknown[] = [];
 /** 실행된 쓰기 문을 `op table` 형태로 */
 let statements: string[] = [];
+let wheres: unknown[] = [];
 
-const CHAIN_METHODS = ['from', 'where', 'limit', 'returning', 'orderBy'];
+const CHAIN_METHODS = ['from', 'limit', 'returning', 'orderBy', 'innerJoin', 'leftJoin'];
 
 const makeBuilder = (): Record<string, unknown> => {
   const builder: Record<string, unknown> = {};
   for (const method of CHAIN_METHODS) {
     builder[method] = () => builder;
   }
+  builder.where = (condition: unknown) => {
+    wheres.push(condition);
+    return builder;
+  };
   builder.set = (value: unknown) => {
     written.push(value);
     return builder;
@@ -53,11 +59,27 @@ const { matchParticipantService } = await import('../services/matchParticipant.s
 const GAME = 'KR_1234';
 const GUILD = 'guild-1';
 const ACTOR = { memberId: 'member-1', source: 'bot' as const };
+const dialect = new PgDialect();
 
 beforeEach(() => {
   queue = [];
   written = [];
   statements = [];
+  wheres = [];
+});
+
+describe('공개 경기 상세 길드 격리', () => {
+  test('gameId만 일치하는 다른 길드 경기는 조회하지 않는다', async () => {
+    queue = [[]];
+
+    await matchParticipantService.getGameDetail(GAME, GUILD);
+
+    const whereQuery = dialect.sqlToQuery(wheres[0] as SQL);
+    expect(whereQuery.sql).toContain('"custom_match"."id" = $1');
+    expect(whereQuery.sql).toContain('"custom_match"."guild_id" = $2');
+    expect(whereQuery.sql).toContain('"custom_match"."is_deleted" = $4');
+    expect(whereQuery.params).toEqual([GAME, GUILD, false, false]);
+  });
 });
 
 describe('경기 삭제(!drop)', () => {

@@ -7,7 +7,7 @@ import { monthSchema, rangeRequiresMonths } from './monthQuery.js';
 
 const router: Router = Router();
 
-const filterSchema = z.object({
+export const filterSchema = z.object({
   params: z.object({
     guildId: z
       .string()
