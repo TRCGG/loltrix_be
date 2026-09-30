@@ -112,7 +112,7 @@ interface ResolvedRosterTeam {
   id?: number;
   name: string;
   captainPlayerCode: string | null;
-  members: { playerCode: string; position: CompetitionPosition }[];
+  members: { playerCode: string }[];
 }
 
 const pgError = (error: unknown): { code?: string; constraint?: string } =>
@@ -540,7 +540,7 @@ export class CompetitionTeamService {
     guildId: string,
     competitionId: number,
     teamId: number,
-    input: { playerCode: string; position: CompetitionPosition },
+    input: { playerCode: string },
   ): Promise<CompetitionTeamMember> {
     try {
       return await db.transaction(async (tx) => {
@@ -550,7 +550,7 @@ export class CompetitionTeamService {
         const playerCode = await this.toMainAccount(guildId, input.playerCode, tx);
         const [created] = await tx
           .insert(competitionTeamMember)
-          .values({ competitionId, teamId, playerCode, position: input.position })
+          .values({ competitionId, teamId, playerCode })
           .returning();
         return created;
       });
@@ -1267,12 +1267,19 @@ export class CompetitionTeamService {
         .select({
           teamId: competitionTeamMember.teamId,
           playerCode: competitionTeamMember.playerCode,
-          position: competitionTeamMember.position,
+          position: competitionApplication.mainPosition,
           riotName: riotAccount.riotName,
           riotNameTag: riotAccount.riotNameTag,
         })
         .from(competitionTeamMember)
         .innerJoin(riotAccount, eq(riotAccount.playerCode, competitionTeamMember.playerCode))
+        .leftJoin(
+          competitionApplication,
+          and(
+            eq(competitionApplication.competitionId, competitionTeamMember.competitionId),
+            eq(competitionApplication.playerCode, competitionTeamMember.playerCode),
+          ),
+        )
         .where(eq(competitionTeamMember.competitionId, competitionId))
         .orderBy(competitionTeamMember.id),
     ]);
@@ -1282,13 +1289,14 @@ export class CompetitionTeamService {
       const roster = byTeam.get(member.teamId) ?? [];
       roster.push({
         playerCode: member.playerCode,
-        position: member.position as CompetitionPosition,
+        position: member.position as CompetitionPosition | null,
         riotName: member.riotName,
         riotNameTag: member.riotNameTag,
       });
       byTeam.set(member.teamId, roster);
     }
-    const rank = (position: string) => POSITION_ORDER.get(position) ?? POSITION_ORDER.size;
+    const rank = (position: CompetitionPosition | null) =>
+      position === null ? POSITION_ORDER.size : (POSITION_ORDER.get(position) ?? POSITION_ORDER.size);
     for (const roster of byTeam.values()) {
       roster.sort((a, b) => rank(a.position) - rank(b.position));
     }
@@ -1425,7 +1433,7 @@ export class CompetitionTeamService {
           });
         }
         taken.add(playerCode);
-        return { playerCode, position: member.position };
+        return { playerCode };
       });
 
       const captainPlayerCode = team.captainPlayerCode ? resolve(team.captainPlayerCode) : null;
@@ -1454,25 +1462,23 @@ export class CompetitionTeamService {
         id: competitionTeamMember.id,
         teamId: competitionTeamMember.teamId,
         playerCode: competitionTeamMember.playerCode,
-        position: competitionTeamMember.position,
       })
       .from(competitionTeamMember)
       .where(eq(competitionTeamMember.competitionId, competitionId));
 
-    const seat = (teamId: number, playerCode: string, position: string) =>
-      `${teamId}:${playerCode}:${position}`;
+    const seat = (teamId: number, playerCode: string) => `${teamId}:${playerCode}`;
     const wanted = new Set(
       teams.flatMap((team) =>
         team.id === undefined
           ? []
           : team.members.map((member) =>
-              seat(team.id as number, member.playerCode, member.position),
+              seat(team.id as number, member.playerCode),
             ),
       ),
     );
 
     const stale = existing.filter(
-      (row) => !wanted.has(seat(row.teamId, row.playerCode, row.position)),
+      (row) => !wanted.has(seat(row.teamId, row.playerCode)),
     );
     if (stale.length > 0) {
       await tx.delete(competitionTeamMember).where(
@@ -1484,7 +1490,7 @@ export class CompetitionTeamService {
     }
     const survived = new Set(
       existing
-        .map((row) => seat(row.teamId, row.playerCode, row.position))
+        .map((row) => seat(row.teamId, row.playerCode))
         .filter((key) => wanted.has(key)),
     );
 
@@ -1538,12 +1544,11 @@ export class CompetitionTeamService {
       const teamId = teamIdByName.get(team.name);
       if (teamId === undefined) continue;
       for (const member of team.members) {
-        if (survived.has(seat(teamId, member.playerCode, member.position))) continue;
+        if (survived.has(seat(teamId, member.playerCode))) continue;
         inserts.push({
           competitionId,
           teamId,
           playerCode: member.playerCode,
-          position: member.position,
         });
       }
     }

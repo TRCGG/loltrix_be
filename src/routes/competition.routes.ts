@@ -418,7 +418,7 @@ const teamSchema = z.object({ params: teamParams });
 
 const addMemberSchema = z.object({
   params: teamParams,
-  body: z.object({ playerCode, position }),
+  body: z.object({ playerCode }),
 });
 
 const rosterSaveSchema = z.object({
@@ -433,7 +433,7 @@ const rosterSaveSchema = z.object({
           .min(1, 'name is required')
           .max(64, 'name must be 64 characters or less'),
         captainPlayerCode: z.string().trim().min(1).max(64).nullable().optional(),
-        members: z.array(z.object({ playerCode, position })),
+        members: z.array(z.object({ playerCode })),
       }),
     ),
   }),
@@ -671,11 +671,11 @@ router.put(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '대회 로스터 전체 저장'
-    #swagger.description = '보낸 teams가 이 대회의 편성 전체가 됩니다 — id를 준 팀은 이름·팀장·로스터가 payload대로 맞춰지고, id 없는 팀은 새로 만들어지며, payload에 없는 기존 팀은 삭제됩니다. 기존 팀 id를 유지하면 isWinner도 유지되고, 우승팀을 삭제하면 우승 표시도 사라집니다. 삭제 대상 팀에 귀속된 활성 경기가 있으면 409(team-has-matches)로 전체가 실패합니다. 팀은 20개까지(409 team-limit-exceeded), 팀당 인원 제한은 없고, 같은 팀의 포지션 중복은 허용하며, 한 선수는 한 팀에만(409 roster-duplicate), 이름은 중복 불가(409 team-name-exists), captainPlayerCode는 그 팀 members 안에 있어야 합니다(400 captain-not-in-roster). id가 이 대회 팀이 아니면 404(team-not-found), 같은 id가 두 번 오면 400(team-duplicate), 종료된 대회는 409(competition-closed). position은 필수이며 전달한 값을 저장합니다. playerCode는 본계정으로 정규화해 저장하고, 응답은 GET /teams의 팀·로스터 부분과 같습니다(전적 records는 빠집니다).'
+    #swagger.description = '보낸 teams가 이 대회의 편성 전체가 됩니다 — id를 준 팀은 이름·팀장·로스터가 payload대로 맞춰지고, id 없는 팀은 새로 만들어지며, payload에 없는 기존 팀은 삭제됩니다. 기존 팀 id를 유지하면 isWinner도 유지되고, 우승팀을 삭제하면 우승 표시도 사라집니다. 삭제 대상 팀에 귀속된 활성 경기가 있으면 409(team-has-matches)로 전체가 실패합니다. 팀은 20개까지(409 team-limit-exceeded), 팀당 인원 제한은 없고, 같은 팀의 포지션 중복은 허용하며, 한 선수는 한 팀에만(409 roster-duplicate), 이름은 중복 불가(409 team-name-exists), captainPlayerCode는 그 팀 members 안에 있어야 합니다(400 captain-not-in-roster). id가 이 대회 팀이 아니면 404(team-not-found), 같은 id가 두 번 오면 400(team-duplicate), 종료된 대회는 409(competition-closed). 로스터 포지션은 신청서의 mainPosition으로 조회하며 신청서가 없으면 null입니다. playerCode는 본계정으로 정규화해 저장하고, 응답은 GET /teams의 팀·로스터 부분과 같습니다(전적 records는 빠집니다).'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
-    #swagger.parameters['body'] = { in: 'body', required: true, schema: { teams: [{ id: 1, name: '1팀', captainPlayerCode: 'PLR_000123', members: [{ playerCode: 'PLR_000123', position: 'TOP' }, { playerCode: 'PLR_000124', position: 'JUG' }] }] } }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { teams: [{ id: 1, name: '1팀', captainPlayerCode: 'PLR_000123', members: [{ playerCode: 'PLR_000123' }, { playerCode: 'PLR_000124' }] }] } }
   */
   decodeGuildIdMiddleware,
   manager,
@@ -757,12 +757,12 @@ router.post(
   /* #swagger.auto = false
     #swagger.tags = ['Competition']
     #swagger.summary = '로스터 등록'
-    #swagger.description = 'playerCode는 본계정으로 정규화해 저장합니다. 같은 팀의 포지션 중복은 허용하며, 이미 이 대회의 다른 팀에 있으면 409(roster-duplicate), 종료된 대회는 409(competition-closed). position은 필수이며 전달한 값을 저장합니다. 편성 전체를 한 번에 저장하려면 PUT /roster. 승인(APPROVED)은 전제가 아닙니다.'
+    #swagger.description = 'playerCode는 본계정으로 정규화해 저장합니다. 같은 팀의 포지션 중복은 허용하며, 이미 이 대회의 다른 팀에 있으면 409(roster-duplicate), 종료된 대회는 409(competition-closed). 로스터 포지션은 신청서의 mainPosition으로 조회하며 신청서가 없으면 null입니다. 편성 전체를 한 번에 저장하려면 PUT /roster. 승인(APPROVED)은 전제가 아닙니다.'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['competitionId'] = { in: 'path', required: true, type: 'integer' }
     #swagger.parameters['teamId'] = { in: 'path', required: true, type: 'integer' }
-    #swagger.parameters['body'] = { in: 'body', required: true, schema: { playerCode: 'PLR_000123', position: 'TOP' } }
+    #swagger.parameters['body'] = { in: 'body', required: true, schema: { playerCode: 'PLR_000123' } }
   */
   decodeGuildIdMiddleware,
   manager,

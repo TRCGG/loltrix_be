@@ -67,16 +67,13 @@ CREATE TABLE IF NOT EXISTS competition_team (
 );
 
 -- competition_id는 team_id에서 유도 가능하지만, "한 대회에서 한 팀만"을 DB 유니크로 걸려면 여기 있어야 한다.
--- 팀당 5명 상한은 (team_id, position) 유니크가 대신한다.
 CREATE TABLE IF NOT EXISTS competition_team_member (
   id             SERIAL       PRIMARY KEY,
   competition_id INTEGER      NOT NULL REFERENCES competition(id) ON DELETE CASCADE,
   team_id        INTEGER      NOT NULL REFERENCES competition_team(id) ON DELETE CASCADE,
   player_code    VARCHAR(64)  NOT NULL REFERENCES riot_account(player_code),
-  position       VARCHAR(8)   NOT NULL,
   create_date    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  CONSTRAINT uq_competition_team_member_player   UNIQUE (competition_id, player_code),
-  CONSTRAINT uq_competition_team_member_position UNIQUE (team_id, position)
+  CONSTRAINT uq_competition_team_member_player UNIQUE (competition_id, player_code)
 );
 
 CREATE INDEX IF NOT EXISTS idx_competition_team_member_team
