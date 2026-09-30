@@ -1,6 +1,6 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 import { getTableName } from 'drizzle-orm';
-import { CompetitionApplyInput, CompetitionPosition } from '../types/competition.js';
+import { CompetitionApplyInput } from '../types/competition.js';
 
 /**
  * DB는 결과 큐로 대신한다 — 쿼리 빌더의 모든 체인 메서드는 자기 자신을 돌려주고,
@@ -120,9 +120,8 @@ const applyInput = (extra: Partial<CompetitionApplyInput> = {}): CompetitionAppl
   ...extra,
 });
 
-const rosterMember = (extra: { playerCode?: string; position?: CompetitionPosition } = {}) => ({
+const rosterMember = (extra: { playerCode?: string } = {}) => ({
   playerCode: 'PLR_000001',
-  position: 'TOP' as CompetitionPosition,
   ...extra,
 });
 
@@ -372,7 +371,7 @@ describe('본계정 정규화', () => {
     ];
     await service.addMember(GUILD, COMPETITION, TEAM, rosterMember({ playerCode: 'PLR_000200' }));
     expect(written).toEqual([
-      expect.objectContaining({ playerCode: 'PLR_000100', position: 'TOP' }),
+      expect.objectContaining({ playerCode: 'PLR_000100' }),
     ]);
   });
 
@@ -1291,14 +1290,14 @@ describe('로스터 전체 저장', () => {
     ...extra,
   });
 
-  test('Duplicate supplied positions are stored unchanged', async () => {
+  test('Roster payload stores player codes without position', async () => {
     queue = [recruitingCompetition, [], [], [], [{ id: 30, name: '1팀' }], [], [], []];
     await service.saveRoster(GUILD, COMPETITION, {
       teams: [team({ members: [rosterMember(), rosterMember({ playerCode: 'PLR_000002' })] })],
     });
     expect(written).toContainEqual([
-      { competitionId: COMPETITION, teamId: 30, playerCode: 'PLR_000001', position: 'TOP' },
-      { competitionId: COMPETITION, teamId: 30, playerCode: 'PLR_000002', position: 'TOP' },
+      { competitionId: COMPETITION, teamId: 30, playerCode: 'PLR_000001' },
+      { competitionId: COMPETITION, teamId: 30, playerCode: 'PLR_000002' },
     ]);
   });
 
@@ -1406,7 +1405,7 @@ describe('로스터 전체 저장', () => {
       },
     ]);
     expect(written).toContainEqual([
-      { competitionId: COMPETITION, teamId: 30, playerCode: 'PLR_000001', position: 'TOP' },
+      { competitionId: COMPETITION, teamId: 30, playerCode: 'PLR_000001' },
     ]);
   });
 
@@ -1416,11 +1415,9 @@ describe('로스터 전체 저장', () => {
       [], // 본계정 링크
       [{ id: TEAM, name: '1팀', captainPlayerCode: null }], // 기존 팀
       [
-        { id: 1, teamId: TEAM, playerCode: 'PLR_000001', position: 'TOP' },
-        { id: 2, teamId: TEAM, playerCode: 'PLR_000002', position: 'JUG' },
+        { id: 1, teamId: TEAM, playerCode: 'PLR_000001' },
+        { id: 2, teamId: TEAM, playerCode: 'PLR_000002' },
       ],
-      [], // 자리가 바뀐 행 삭제
-      [], // 로스터 삽입
       [{ id: TEAM, name: '1팀' }],
       [],
     ];
@@ -1428,14 +1425,12 @@ describe('로스터 전체 저장', () => {
       teams: [
         team({
           id: TEAM,
-          members: [rosterMember(), rosterMember({ playerCode: 'PLR_000002', position: 'MID' })],
+          members: [rosterMember(), rosterMember({ playerCode: 'PLR_000002' })],
         }),
       ],
     });
     // 이름·팀장이 그대로면 팀 UPDATE 자체가 나가지 않는다.
-    expect(written).toEqual([
-      [{ competitionId: COMPETITION, teamId: TEAM, playerCode: 'PLR_000002', position: 'MID' }],
-    ]);
+    expect(written).toEqual([]);
   });
 
   test('우승팀 이름·로스터를 수정해도 우승 표시는 유지된다', async () => {
@@ -1469,8 +1464,8 @@ describe('로스터 전체 저장', () => {
         { id: 2, name: 'B팀', captainPlayerCode: null },
       ],
       [
-        { id: 10, teamId: 1, playerCode: 'PLR_000001', position: 'TOP' },
-        { id: 11, teamId: 2, playerCode: 'PLR_000002', position: 'TOP' },
+        { id: 10, teamId: 1, playerCode: 'PLR_000001' },
+        { id: 11, teamId: 2, playerCode: 'PLR_000002' },
       ],
       [], // 자리표 UPDATE
       [], // 자리표 UPDATE
@@ -1527,6 +1522,16 @@ describe('신청 목록 가시성', () => {
 });
 
 describe('팀 목록', () => {
+  test('신청서가 없는 선수의 포지션은 null로 반환한다', async () => {
+    queue = [
+      recruitingCompetition,
+      [{ id: TEAM, name: '1팀' }],
+      [{ teamId: TEAM, playerCode: 'PLR_1', position: null, riotName: 'a', riotNameTag: 'KR1' }],
+    ];
+    const [saved] = await service.listTeams(GUILD, COMPETITION);
+    expect(saved.roster[0].position).toBeNull();
+  });
+
   test('같은 포지션 선수들도 팀 목록에 모두 유지된다', async () => {
     const members = [
       { teamId: TEAM, playerCode: 'PLR_1', position: 'JUG', riotName: 'a', riotNameTag: 'KR1' },

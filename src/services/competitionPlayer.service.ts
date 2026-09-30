@@ -83,12 +83,19 @@ export class CompetitionPlayerService {
         .select({
           competitionId: competitionTeamMember.competitionId,
           teamId: competitionTeamMember.teamId,
-          position: competitionTeamMember.position,
+          position: competitionApplication.mainPosition,
           teamName: competitionTeam.name,
           captainPlayerCode: competitionTeam.captainPlayerCode,
         })
         .from(competitionTeamMember)
         .innerJoin(competitionTeam, eq(competitionTeam.id, competitionTeamMember.teamId))
+        .leftJoin(
+          competitionApplication,
+          and(
+            eq(competitionApplication.competitionId, competitionTeamMember.competitionId),
+            eq(competitionApplication.playerCode, competitionTeamMember.playerCode),
+          ),
+        )
         .innerJoin(
           competition,
           and(
@@ -179,7 +186,7 @@ export class CompetitionPlayerService {
           ? {
               id: roster.teamId,
               name: roster.teamName,
-              position: roster.position as CompetitionPosition,
+              position: roster.position as CompetitionPosition | null,
               isCaptain: codes.includes(roster.captainPlayerCode ?? ''),
             }
           : null,

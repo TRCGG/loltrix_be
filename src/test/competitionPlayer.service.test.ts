@@ -92,14 +92,14 @@ beforeEach(() => {
 
 describe('선수의 대회 목록', () => {
   test('로스터에만 올라도 목록에 나온다', async () => {
-    setQueue({ rosters: [rosterRow()], competitions: [competitionRow()] });
+    setQueue({ rosters: [rosterRow({ position: null })], competitions: [competitionRow()] });
 
     const [item] = await service.listCompetitions(GUILD, MAIN);
 
     expect(item).toMatchObject({
       competitionId: 7,
       name: '멸망전 1회',
-      team: { id: 3, name: '1팀', position: 'MID', isCaptain: false },
+      team: { id: 3, name: '1팀', position: null, isCaptain: false },
       applicationStatus: null,
       record: { games: 0, win: 0, lose: 0, winRate: 0 },
       recent: [],

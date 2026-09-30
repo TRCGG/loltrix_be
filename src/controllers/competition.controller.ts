@@ -16,7 +16,6 @@ import {
   CompetitionApplicationUpdateInput,
   CompetitionApplyInput,
   CompetitionGameType,
-  CompetitionPosition,
   RosterSaveInput,
   CompetitionCreateInput,
   CompetitionDetail,
@@ -496,7 +495,7 @@ export const addTeamMember = async (
       guildId,
       Number(competitionId),
       Number(teamId),
-      req.body as { playerCode: string; position: CompetitionPosition },
+      req.body as { playerCode: string },
     );
     return res
       .status(201)

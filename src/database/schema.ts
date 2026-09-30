@@ -311,7 +311,6 @@ export const competitionTeamMember = pgTable(
     playerCode: varchar('player_code', { length: 64 })
       .notNull()
       .references(() => riotAccount.playerCode),
-    position: varchar('position', { length: 8 }).notNull(), // TOP/JUG/MID/ADC/SUP
     createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
