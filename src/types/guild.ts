@@ -23,6 +23,7 @@ export interface GetGuildsQuery {
   page?: number;
   limit?: number;
   search?: string;
+  isPublic?: boolean;
 }
 
 export type { Guild, InsertGuild };
