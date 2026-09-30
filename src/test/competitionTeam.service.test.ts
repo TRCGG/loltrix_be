@@ -102,7 +102,6 @@ jest.unstable_mockModule('../services/systemConfig.service.js', () => ({
 
 const {
   CompetitionTeamService,
-  MAX_ROSTER_SIZE,
   MAX_TEAMS_PER_COMPETITION,
   visibleApplicationStatus,
 } = await import('../services/competitionTeam.service.js');
@@ -283,18 +282,9 @@ describe('상한 (409)', () => {
     await expectStatus(service.createTeam(GUILD, COMPETITION, '21팀'), 409, 'team-limit-exceeded');
   });
 
-  test(`팀당 로스터는 ${MAX_ROSTER_SIZE}명까지`, async () => {
-    queue = [recruitingCompetition, teamRow, [], [{ size: MAX_ROSTER_SIZE }]];
-    await expectStatus(
-      service.addMember(GUILD, COMPETITION, TEAM, rosterMember()),
-      409,
-      'roster-limit-exceeded',
-    );
-  });
-
-  test('상한 미만이면 통과한다', async () => {
+  test('인원 상한 검사 없이 선수를 등록한다', async () => {
     const created = { id: 1, competitionId: COMPETITION, teamId: TEAM, playerCode: 'PLR_000001' };
-    queue = [recruitingCompetition, teamRow, [], [{ size: MAX_ROSTER_SIZE - 1 }], [created]];
+    queue = [recruitingCompetition, teamRow, [], [created]];
     await expect(service.addMember(GUILD, COMPETITION, TEAM, rosterMember())).resolves.toEqual(
       created,
     );
@@ -321,7 +311,6 @@ describe('중복 (409)', () => {
       recruitingCompetition,
       teamRow,
       [],
-      [{ size: 0 }],
       uniqueViolation('uq_competition_team_member_player'),
     ];
     await expectStatus(
@@ -379,11 +368,12 @@ describe('본계정 정규화', () => {
       teamRow,
       [{ account: 'PLR_000200', mainAccount: 'PLR_000100' }],
       [{ playerCode: 'PLR_000100' }],
-      [{ size: 0 }],
       [{ id: 1 }],
     ];
     await service.addMember(GUILD, COMPETITION, TEAM, rosterMember({ playerCode: 'PLR_000200' }));
-    expect(written).toEqual([expect.objectContaining({ playerCode: 'PLR_000100' })]);
+    expect(written).toEqual([
+      expect.objectContaining({ playerCode: 'PLR_000100', position: 'TOP' }),
+    ]);
   });
 
   test('본계정 링크가 가리키는 계정이 사라졌으면 신청 계정 문제와 구분한다', async () => {
@@ -449,7 +439,7 @@ describe('행 잠금', () => {
   });
 
   test('로스터 등록은 대회를 FOR SHARE, 팀을 FOR UPDATE로 잡는다', async () => {
-    queue = [recruitingCompetition, teamRow, [], [{ size: 0 }], [{ id: 1 }]];
+    queue = [recruitingCompetition, teamRow, [], [{ id: 1 }]];
     await service.addMember(GUILD, COMPETITION, TEAM, rosterMember());
     expect(locks).toEqual(['share', 'update']);
   });
@@ -1010,6 +1000,16 @@ describe('본인 신청 수정·취소', () => {
     status: 'APPROVED',
   };
 
+  test('Editing application mainPosition leaves the roster unchanged', async () => {
+    queue = [recruitingCompetition, [current], [{ ...current, mainPosition: 'JUG' }]];
+    await service.updateMyApplication(GUILD, COMPETITION, 'member-1', { mainPosition: 'JUG' });
+    expect(locks[0]).toBe('share');
+    expect(written).toEqual([{ mainPosition: 'JUG' }]);
+    expect(statements.some((statement) => statement.table === 'competition_team_member')).toBe(
+      false,
+    );
+  });
+
   test('진행중 대회는 수정할 수 없다 (409)', async () => {
     queue = [inProgressCompetition];
     await expectStatus(
@@ -1291,13 +1291,25 @@ describe('로스터 전체 저장', () => {
     ...extra,
   });
 
-  test('한 팀에 같은 포지션이 둘이면 거부한다 (409)', async () => {
-    await expectStatus(
-      service.saveRoster(GUILD, COMPETITION, {
-        teams: [team({ members: [rosterMember(), rosterMember({ playerCode: 'PLR_000002' })] })],
-      }),
-      409,
-      'roster-position-taken',
+  test('Duplicate supplied positions are stored unchanged', async () => {
+    queue = [recruitingCompetition, [], [], [], [{ id: 30, name: '1팀' }], [], [], []];
+    await service.saveRoster(GUILD, COMPETITION, {
+      teams: [team({ members: [rosterMember(), rosterMember({ playerCode: 'PLR_000002' })] })],
+    });
+    expect(written).toContainEqual([
+      { competitionId: COMPETITION, teamId: 30, playerCode: 'PLR_000001', position: 'TOP' },
+      { competitionId: COMPETITION, teamId: 30, playerCode: 'PLR_000002', position: 'TOP' },
+    ]);
+  });
+
+  test.each([6, 7])('일괄 저장은 %d명도 받아들인다', async (size) => {
+    const members = Array.from({ length: size }, (_, index) =>
+      rosterMember({ playerCode: `PLR_${index}` }),
+    );
+    queue = [recruitingCompetition, [], [], [], [{ id: 30, name: '1팀' }], [], [], []];
+    await service.saveRoster(GUILD, COMPETITION, { teams: [team({ members })] });
+    expect(written).toContainEqual(
+      members.map((member) => ({ competitionId: COMPETITION, teamId: 30, ...member })),
     );
   });
 
@@ -1515,6 +1527,16 @@ describe('신청 목록 가시성', () => {
 });
 
 describe('팀 목록', () => {
+  test('같은 포지션 선수들도 팀 목록에 모두 유지된다', async () => {
+    const members = [
+      { teamId: TEAM, playerCode: 'PLR_1', position: 'JUG', riotName: 'a', riotNameTag: 'KR1' },
+      { teamId: TEAM, playerCode: 'PLR_2', position: 'JUG', riotName: 'b', riotNameTag: 'KR1' },
+    ];
+    queue = [recruitingCompetition, [{ id: TEAM, name: '1팀' }], members];
+    const [saved] = await service.listTeams(GUILD, COMPETITION);
+    expect(saved.roster).toEqual(members.map(({ teamId: _teamId, ...member }) => member));
+  });
+
   test('로스터는 TOP·JUG·MID·ADC·SUP 순으로 나온다', async () => {
     queue = [
       recruitingCompetition,

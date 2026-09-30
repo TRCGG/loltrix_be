@@ -316,7 +316,6 @@ export const competitionTeamMember = pgTable(
   },
   (t) => [
     unique('uq_competition_team_member_player').on(t.competitionId, t.playerCode),
-    unique('uq_competition_team_member_position').on(t.teamId, t.position),
     index('idx_competition_team_member_team').on(t.teamId),
   ],
 );
