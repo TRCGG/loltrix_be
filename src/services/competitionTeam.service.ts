@@ -77,8 +77,6 @@ const groupByCompetition = <T extends { competitionId: number }>(rows: T[]): Map
 };
 
 export const MAX_TEAMS_PER_COMPETITION = 20;
-/** 팀은 포지션당 한 명 — 상한과 포지션 유니크가 같은 규칙의 앞뒤다. */
-export const MAX_ROSTER_SIZE = COMPETITION_POSITIONS.length;
 
 const PG_UNIQUE_VIOLATION = '23505';
 const PG_FOREIGN_KEY_VIOLATION = '23503';
@@ -93,10 +91,6 @@ const ROSTER_UNIQUE_ERRORS: Record<string, [message: string, type: string]> = {
   uq_competition_team_member_player: [
     'player already belongs to a team in this competition',
     'roster-duplicate',
-  ],
-  uq_competition_team_member_position: [
-    'position is already taken in this team',
-    'roster-position-taken',
   ],
 };
 
@@ -551,21 +545,9 @@ export class CompetitionTeamService {
     try {
       return await db.transaction(async (tx) => {
         this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
-        // 상한 검사가 count-then-insert라 동시 추가 두 건이 서로를 못 보고 상한을 넘는다.
         await this.loadTeam(tx, competitionId, teamId, true);
 
         const playerCode = await this.toMainAccount(guildId, input.playerCode, tx);
-        const [{ size }] = await tx
-          .select({ size: sql<number>`count(*)::integer` })
-          .from(competitionTeamMember)
-          .where(eq(competitionTeamMember.teamId, teamId));
-        if (size >= MAX_ROSTER_SIZE) {
-          throw new BusinessError(`team allows up to ${MAX_ROSTER_SIZE} members`, 409, {
-            type: 'roster-limit-exceeded',
-            isLoggable: false,
-          });
-        }
-
         const [created] = await tx
           .insert(competitionTeamMember)
           .values({ competitionId, teamId, playerCode, position: input.position })
@@ -579,7 +561,7 @@ export class CompetitionTeamService {
 
   /**
    * 대회의 팀 편성 전체를 한 번에 바꾼다. payload에 없는 팀은 지워지고, 남는 팀은 이름·팀장·로스터가
-   * payload와 같아진다. 개별 API를 여러 번 부르면 중간 상태가 유니크 제약에 걸려(포지션·소속) 화면이
+   * payload와 같아진다. 개별 API를 여러 번 부르면 중간 상태가 소속 유니크 제약에 걸려 화면이
    * 순서를 맞춰야 하지만, 여기서는 삭제를 전부 끝낸 뒤 삽입해 그 순서 문제를 없앤다.
    */
   public async saveRoster(
@@ -1372,7 +1354,7 @@ export class CompetitionTeamService {
     await tx.delete(competitionTeam).where(inArray(competitionTeam.id, teamIds));
   }
 
-  /** DB를 보지 않고 payload만으로 잡히는 것 — 팀 수·이름·팀당 인원·팀 안 포지션 중복. */
+  /** DB를 보지 않고 payload만으로 잡히는 것 — 팀 수·이름. */
   private normalizeRosterPayload(input: RosterSaveInput): ResolvedRosterTeam[] {
     if (input.teams.length > MAX_TEAMS_PER_COMPETITION) {
       throw new BusinessError(`competition allows up to ${MAX_TEAMS_PER_COMPETITION} teams`, 409, {
@@ -1406,19 +1388,6 @@ export class CompetitionTeamService {
         });
       }
       names.add(name);
-
-      if (team.members.length > MAX_ROSTER_SIZE) {
-        throw new BusinessError(`team allows up to ${MAX_ROSTER_SIZE} members`, 409, {
-          type: 'roster-limit-exceeded',
-          isLoggable: false,
-        });
-      }
-      if (new Set(team.members.map((member) => member.position)).size !== team.members.length) {
-        throw new BusinessError('position is already taken in this team', 409, {
-          type: 'roster-position-taken',
-          isLoggable: false,
-        });
-      }
 
       return {
         id: team.id,
@@ -1472,7 +1441,7 @@ export class CompetitionTeamService {
 
   /**
    * 삭제를 전부 끝낸 뒤 삽입한다 — 자리를 맞바꾸거나 다른 팀으로 옮기는 저장이,
-   * 옮기는 도중의 상태에서 포지션·소속 유니크에 걸리지 않게.
+   * 옮기는 도중의 상태에서 소속 유니크에 걸리지 않게.
    */
   private async saveRosterMembers(
     tx: TransactionType,
