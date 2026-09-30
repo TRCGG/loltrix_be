@@ -70,9 +70,12 @@ export class GuildService {
   /**
    * @desc 모든 길드를 페이지네이션 및 검색 조건에 따라 조회
    */
-  public async findAllGuilds({ page = 1, limit = 10, search }: GetGuildsQuery) {
+  public async findAllGuilds({ page = 1, limit = 10, search, isPublic }: GetGuildsQuery) {
     const offset = (Number(page) - 1) * Number(limit);
-    const baseCondition = eq(guild.isDeleted, false);
+    const baseCondition = and(
+      eq(guild.isDeleted, false),
+      isPublic === true ? eq(guild.isPublic, true) : undefined,
+    );
     const whereCondition = search
       ? and(baseCondition, ilike(guild.name, `%${search}%`))
       : baseCondition;

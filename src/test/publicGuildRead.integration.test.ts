@@ -240,17 +240,26 @@ describe('Session-free guild list', () => {
         page: undefined,
         limit: undefined,
         search: undefined,
+        isPublic: undefined,
       });
       expect(findAuthSessionByUid).not.toHaveBeenCalled();
       expect(getValidAccessToken).not.toHaveBeenCalled();
       expect(isPublicGuild).not.toHaveBeenCalled();
     },
   );
-  test('search and pagination ignore undeclared isPublic query', async () => {
+  test('search and pagination accept isPublic=false without filtering', async () => {
     const response = await inject('/api/guilds/?page=2&limit=3&search=Public&isPublic=false');
     expect(response.status).toBe(200);
     expect(response.headers['x-total-pages']).toBe('4');
-    expect(findAllGuilds).toHaveBeenCalledWith({ page: 2, limit: 3, search: 'Public' });
+    expect(findAllGuilds).toHaveBeenCalledWith({ page: 2, limit: 3, search: 'Public', isPublic: false });
+  });
+  test('isPublic=true is forwarded with search and pagination', async () => {
+    findAllGuilds.mockResolvedValue({ result: [{ id: GUILD_ID, isPublic: true }], totalCount: 1 });
+    const response = await inject('/api/guilds/?page=1&limit=3&search=Public&isPublic=true');
+    expect(response.status).toBe(200);
+    expect(response.headers['x-total-count']).toBe('1');
+    expect(response.headers['x-total-pages']).toBe('1');
+    expect(findAllGuilds).toHaveBeenCalledWith({ page: 1, limit: 3, search: 'Public', isPublic: true });
   });
   test.each([
     'page=0',
@@ -260,6 +269,8 @@ describe('Session-free guild list', () => {
     'limit=101',
     'limit=1.5',
     'search=' + 'x'.repeat(129),
+    'isPublic=invalid',
+    'isPublic=',
   ])('rejects invalid query %s', async (query) => {
     expect((await inject(`/api/guilds/?${query}`)).status).toBe(400);
     expect(findAllGuilds).not.toHaveBeenCalled();
