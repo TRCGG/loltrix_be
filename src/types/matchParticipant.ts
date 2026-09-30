@@ -58,7 +58,7 @@ export interface RecentGame {
   gameId: string;
   season: string;
   createDate: Date;
-  /** 1=일반내전/2=스크림/3=본경기 */
+  /** 1=일반내전/2=스크림/3=예선/4=본선 */
   gameType?: string;
   competitionId?: number | null;
   competitionName?: string | null;
@@ -133,7 +133,7 @@ export interface MatchQuery {
   toMonth?: string;
   page?: string;
   limit?: string;
-  /** '1' | '2' | '3' 또는 콤마 구분(예: '2,3'). 생략 시 일반내전(competitionId 있으면 2,3). */
+  /** '1' | '2' | '3' | '4' 또는 콤마 구분. 생략 시 일반내전(competitionId 있으면 2,3,4). */
   gameType?: string;
   competitionId?: number;
 }

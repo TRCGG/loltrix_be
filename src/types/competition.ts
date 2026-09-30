@@ -1,8 +1,4 @@
-import {
-  Competition,
-  CompetitionApplication,
-  CompetitionTeam,
-} from '../database/schema.js';
+import { Competition, CompetitionApplication, CompetitionTeam } from '../database/schema.js';
 
 export type CompetitionStatus = 'RECRUITING' | 'IN_PROGRESS' | 'CLOSED';
 
@@ -42,6 +38,7 @@ export interface CompetitionRemoveResult extends Competition {
 /** 대회 + 유형별 활성 경기 수 + 신청·팀 규모 */
 export interface CompetitionSummary extends Competition {
   scrimCount: number;
+  preliminaryCount: number;
   mainCount: number;
   applicationCount: number;
   pendingCount: number;
@@ -141,14 +138,14 @@ export interface CompetitionPlayerSummary {
 }
 
 export interface CompetitionRosterMember extends CompetitionPlayerSummary {
-  position: CompetitionPosition;
+  position: CompetitionPosition | null;
 }
 
 export interface RosterSaveTeamInput {
   id?: number;
   name: string;
   captainPlayerCode?: string | null;
-  members: { playerCode: string; position: CompetitionPosition }[];
+  members: { playerCode: string }[];
 }
 
 /** 로스터 전체 저장 — payload에 없는 팀은 삭제된다. */
@@ -168,6 +165,7 @@ export interface CompetitionTeamWithRoster extends CompetitionTeamRoster {
 export interface CompetitionTeamUpdateInput {
   name?: string;
   captainPlayerCode?: string | null;
+  isWinner?: boolean;
 }
 
 /** 팀 귀속 관점의 경기 항목. blueTeamId/redTeamId가 모두 null이면 아직 귀속되지 않은 경기다. */
@@ -188,7 +186,7 @@ export interface CompetitionMatchTeamItem {
 }
 
 /** 대회 경기가 가질 수 있는 유형 — 일반내전(1)은 대회에 속하지 않으므로 오갈 수 없다. */
-export const COMPETITION_GAME_TYPES = ['2', '3'] as const;
+export const COMPETITION_GAME_TYPES = ['2', '3', '4'] as const;
 export type CompetitionGameType = (typeof COMPETITION_GAME_TYPES)[number];
 
 /** 이미 목표 유형이던 경기는 skipped로 빠지고 요청은 성공한다. */
@@ -219,11 +217,11 @@ export interface PlayerCompetitionItem {
   season: string;
   createDate: Date;
   closeDate: Date | null;
-  team: { id: number; name: string; position: CompetitionPosition; isCaptain: boolean } | null;
+  team: { id: number; name: string; position: CompetitionPosition | null; isCaptain: boolean } | null;
   applicationStatus: CompetitionApplicationStatus | null;
-  /** 팀 귀속과 무관한 본인 전적 (스크림+본경기 합산) */
+  /** 팀 귀속과 무관한 본인 전적 (스크림+예선+본선 합산) */
   record: { games: number; win: number; lose: number; winRate: number; kda: number };
-  teamRank: { scrim: number | null; main: number | null };
+  teamRank: { scrim: number | null; preliminary: number | null; main: number | null };
   /** 최근 6경기 결과('승'/'패'), 최신순 */
   recent: string[];
 }
@@ -267,6 +265,7 @@ export interface RecordCount {
 
 export interface TeamRecordSplit {
   scrim: RecordCount;
+  preliminary: RecordCount;
   main: RecordCount;
 }
 
@@ -295,5 +294,6 @@ export interface StandingRow {
 
 export interface CompetitionStandings {
   scrim: StandingRow[];
+  preliminary: StandingRow[];
   main: StandingRow[];
 }

@@ -56,10 +56,14 @@ const emptyRecord = (): PlayerRecord => ({
 const teamRank = (
   standings: CompetitionStandings | undefined,
   teamId: number | undefined,
-): { scrim: number | null; main: number | null } => {
+): PlayerCompetitionItem['teamRank'] => {
   const rankOf = (rows: { teamId: number; rank: number }[]) =>
     teamId == null ? null : (rows.find((row) => row.teamId === teamId)?.rank ?? null);
-  return { scrim: rankOf(standings?.scrim ?? []), main: rankOf(standings?.main ?? []) };
+  return {
+    scrim: rankOf(standings?.scrim ?? []),
+    preliminary: rankOf(standings?.preliminary ?? []),
+    main: rankOf(standings?.main ?? []),
+  };
 };
 
 export class CompetitionPlayerService {
@@ -79,12 +83,19 @@ export class CompetitionPlayerService {
         .select({
           competitionId: competitionTeamMember.competitionId,
           teamId: competitionTeamMember.teamId,
-          position: competitionTeamMember.position,
+          position: competitionApplication.mainPosition,
           teamName: competitionTeam.name,
           captainPlayerCode: competitionTeam.captainPlayerCode,
         })
         .from(competitionTeamMember)
         .innerJoin(competitionTeam, eq(competitionTeam.id, competitionTeamMember.teamId))
+        .leftJoin(
+          competitionApplication,
+          and(
+            eq(competitionApplication.competitionId, competitionTeamMember.competitionId),
+            eq(competitionApplication.playerCode, competitionTeamMember.playerCode),
+          ),
+        )
         .innerJoin(
           competition,
           and(
@@ -175,7 +186,7 @@ export class CompetitionPlayerService {
           ? {
               id: roster.teamId,
               name: roster.teamName,
-              position: roster.position as CompetitionPosition,
+              position: roster.position as CompetitionPosition | null,
               isCaptain: codes.includes(roster.captainPlayerCode ?? ''),
             }
           : null,

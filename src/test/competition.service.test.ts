@@ -200,6 +200,17 @@ describe('수정', () => {
 });
 
 describe('리플이 붙을 대회 해석', () => {
+  test.each(['3', '4'])(
+    '유형 %s는 진행중 대회를 해석하고 저장 트랜잭션의 공유 잠금을 유지한다',
+    async (gameType) => {
+      queue = [competitionRow('IN_PROGRESS')];
+      await expect(
+        service.resolveForSave(GUILD, gameType, undefined, executor as never, true),
+      ).resolves.toEqual({ id: COMPETITION, name: '멸망전 1회' });
+      expect(locks).toEqual(['share']);
+    },
+  );
+
   test('일반내전에 competitionId를 주면 400', async () => {
     await expectStatus(
       service.resolveForSave(GUILD, '1', COMPETITION),
@@ -224,6 +235,23 @@ describe('리플이 붙을 대회 해석', () => {
 });
 
 describe('대회명 해석', () => {
+  test('경기 수는 예선(3)과 본선(4)을 분리하며 빈 대회도 세 수를 반환한다', async () => {
+    queue = [
+      [...competitionRow('IN_PROGRESS'), ...competitionRow('CLOSED', { id: 8 })],
+      [
+        { competitionId: COMPETITION, gameType: '2', count: 2 },
+        { competitionId: COMPETITION, gameType: '3', count: 5 },
+        { competitionId: COMPETITION, gameType: '4', count: 3 },
+      ],
+      [],
+      [],
+      [],
+    ];
+    const [played, empty] = await service.list(GUILD);
+    expect(played).toMatchObject({ scrimCount: 2, preliminaryCount: 5, mainCount: 3 });
+    expect(empty).toMatchObject({ scrimCount: 0, preliminaryCount: 0, mainCount: 0 });
+  });
+
   test('이름이 없으면 진행중 대회를 먼저 고른다', async () => {
     queue = [competitionRow('IN_PROGRESS')];
     const result = await service.resolveByName(GUILD);

@@ -6,6 +6,7 @@ import {
   UserGameStatistic,
   StatisticsRequestQuery,
   ChampionStatistic,
+  ChampionStatisticsRequestQuery,
 } from '../types/statistics.js';
 
 /**
@@ -43,16 +44,20 @@ export const getUserGameStats = async (
       championName,
       position,
       season,
-      sortBy: (sortBy as 'totalCount' | 'winRate') || 'totalCount',
+      sortBy: sortBy || 'totalCount',
       page: Number(page) || 1,
-      limit: Number(limit) || 50,
+      limit: Number(limit) || (sortBy === 'wilsonScore' ? 5 : 50),
       scope: scopeFromQuery({ gameType }),
     });
 
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
-    res.setHeader('X-Limit', (limit ?? 50).toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) || 50)).toString());
+    const defaultLimit = sortBy === 'wilsonScore' ? 5 : 50;
+    res.setHeader('X-Limit', (limit ?? defaultLimit).toString());
+    res.setHeader(
+      'X-Total-Pages',
+      Math.ceil(totalCount / (Number(limit) || defaultLimit)).toString(),
+    );
 
     return res.status(200).json({
       status: 'success',
@@ -78,7 +83,7 @@ export const getChampionStats = async (
     { guildId: string },
     StatisticsResponse<ChampionStatistic>,
     Record<string, never>,
-    StatisticsRequestQuery
+    ChampionStatisticsRequestQuery
   >,
   res: Response<StatisticsResponse<ChampionStatistic>>,
 ) => {
@@ -86,6 +91,7 @@ export const getChampionStats = async (
     const { guildId } = req.params;
     const { datePreset, fromMonth, toMonth, position, season, sortBy, page, limit, gameType } =
       req.query;
+    const defaultLimit = sortBy === 'pickRate' || sortBy === 'wilsonScore' ? 5 : 20;
 
     const { result, totalCount } = await statisticsService.getChampionStatistics(guildId, {
       datePreset,
@@ -93,16 +99,19 @@ export const getChampionStats = async (
       toMonth,
       position,
       season,
-      sortBy: (sortBy as 'totalCount' | 'winRate') || 'totalCount',
+      sortBy: sortBy || 'totalCount',
       page: Number(page) || 1,
-      limit: Number(limit) || 20,
+      limit: Number(limit) || defaultLimit,
       scope: scopeFromQuery({ gameType }),
     });
 
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
-    res.setHeader('X-Limit', (limit ?? 20).toString());
-    res.setHeader('X-Total-Pages', Math.ceil(totalCount / (Number(limit) || 20)).toString());
+    res.setHeader('X-Limit', (limit ?? defaultLimit).toString());
+    res.setHeader(
+      'X-Total-Pages',
+      Math.ceil(totalCount / (Number(limit) || defaultLimit)).toString(),
+    );
 
     return res.status(200).json({
       status: 'success',

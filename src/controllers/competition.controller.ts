@@ -8,6 +8,7 @@ import {
 } from '../services/competitionTeam.service.js';
 import { competitionPlayerService } from '../services/competitionPlayer.service.js';
 import { hasGuildRole } from '../middlewares/requireRole.js';
+import { competitionApplicationsCsv } from '../utils/competitionApplicationCsv.js';
 import {
   CompetitionActor,
   CompetitionApplicationItem,
@@ -15,7 +16,6 @@ import {
   CompetitionApplicationUpdateInput,
   CompetitionApplyInput,
   CompetitionGameType,
-  CompetitionPosition,
   RosterSaveInput,
   CompetitionCreateInput,
   CompetitionDetail,
@@ -344,6 +344,28 @@ export const listApplications = async (
   }
 };
 
+/** @route GET /api/competitions/:guildId/:competitionId/applications/export.csv */
+export const exportApplicationsCsv = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { guildId, competitionId } = req.params as { guildId: string; competitionId: string };
+    const data = await competitionTeamService.listApplications(guildId, Number(competitionId));
+    const csv = competitionApplicationsCsv(data);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="competition-${competitionId}-applicants.csv"`,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.status(200).send(csv);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 /** @route PATCH /api/competitions/:guildId/:competitionId/applications/decide */
 export const decideApplications = async (
   req: AuthRequest,
@@ -473,7 +495,7 @@ export const addTeamMember = async (
       guildId,
       Number(competitionId),
       Number(teamId),
-      req.body as { playerCode: string; position: CompetitionPosition },
+      req.body as { playerCode: string },
     );
     return res
       .status(201)

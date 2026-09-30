@@ -14,11 +14,16 @@ import {
 
 const emptyCount = (): RecordCount => ({ games: 0, win: 0, lose: 0 });
 
-export const emptySplit = (): TeamRecordSplit => ({ scrim: emptyCount(), main: emptyCount() });
+export const emptySplit = (): TeamRecordSplit => ({
+  scrim: emptyCount(),
+  preliminary: emptyCount(),
+  main: emptyCount(),
+});
 
 const bucketOf = (split: TeamRecordSplit, gameType: string): RecordCount | null => {
   if (gameType === '2') return split.scrim;
-  if (gameType === '3') return split.main;
+  if (gameType === '3') return split.preliminary;
+  if (gameType === '4') return split.main;
   return null;
 };
 
@@ -128,23 +133,31 @@ const rankRows = (rows: Omit<StandingRow, 'rank'>[]): StandingRow[] => {
   });
 };
 
-/** 스크림(2)·본경기(3)를 절대 합치지 않는다 — 두 유형은 서로 다른 순위표다. */
+/** 스크림(2)·예선(3)·본선(4)를 절대 합치지 않는다 — 세 유형은 서로 다른 순위표다. */
 export const foldStandings = (
   teams: { id: number; name: string }[],
   rows: StandingMatchRow[],
 ): CompetitionStandings => {
   const buckets = {
     scrim: new Map<number, StandingAccumulator>(),
+    preliminary: new Map<number, StandingAccumulator>(),
     main: new Map<number, StandingAccumulator>(),
   };
   for (const team of teams) {
     buckets.scrim.set(team.id, emptyAccumulator());
+    buckets.preliminary.set(team.id, emptyAccumulator());
     buckets.main.set(team.id, emptyAccumulator());
   }
 
   for (const row of rows) {
     const bucket =
-      row.gameType === '2' ? buckets.scrim : row.gameType === '3' ? buckets.main : null;
+      row.gameType === '2'
+        ? buckets.scrim
+        : row.gameType === '3'
+          ? buckets.preliminary
+          : row.gameType === '4'
+            ? buckets.main
+            : null;
     if (!bucket) continue;
     for (const [teamId, stats] of [
       [row.blueTeamId, row.blue],
@@ -177,5 +190,9 @@ export const foldStandings = (
       }),
     );
 
-  return { scrim: toRows(buckets.scrim), main: toRows(buckets.main) };
+  return {
+    scrim: toRows(buckets.scrim),
+    preliminary: toRows(buckets.preliminary),
+    main: toRows(buckets.main),
+  };
 };
