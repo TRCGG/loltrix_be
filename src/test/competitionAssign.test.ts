@@ -80,10 +80,12 @@ describe('foldOpponentRecords — 상대 팀별 전적', () => {
     expect([...byOpponent.keys()].sort()).toEqual([2, 3]);
     expect(byOpponent.get(2)).toEqual({
       scrim: { games: 2, win: 2, lose: 0 },
-      main: { games: 1, win: 0, lose: 1 },
+      preliminary: { games: 1, win: 0, lose: 1 },
+      main: { games: 0, win: 0, lose: 0 },
     });
     expect(byOpponent.get(3)).toEqual({
       scrim: { games: 1, win: 0, lose: 1 },
+      preliminary: { games: 0, win: 0, lose: 0 },
       main: { games: 0, win: 0, lose: 0 },
     });
   });
@@ -91,13 +93,15 @@ describe('foldOpponentRecords — 상대 팀별 전적', () => {
   test('승자를 못 찾은 경기는 판수만 센다', () => {
     expect(foldOpponentRecords([row('m1', '2', 1, 2, null)], 1).get(2)).toEqual({
       scrim: { games: 1, win: 0, lose: 0 },
+      preliminary: { games: 0, win: 0, lose: 0 },
       main: { games: 0, win: 0, lose: 0 },
     });
   });
 
-  test('일반내전(1)은 스크림·본경기 어느 쪽에도 안 들어간다', () => {
+  test('일반내전(1)은 스크림·예선·본선 전적에 들어가지 않는다', () => {
     expect(foldOpponentRecords([row('m1', '1', 1, 2, 1)], 1).get(2)).toEqual({
       scrim: { games: 0, win: 0, lose: 0 },
+      preliminary: { games: 0, win: 0, lose: 0 },
       main: { games: 0, win: 0, lose: 0 },
     });
   });
@@ -116,7 +120,8 @@ describe('foldHeadToHead — 두 팀 맞대결', () => {
 
     expect(record).toEqual({
       scrim: { games: 2, win: 1, lose: 1 },
-      main: { games: 1, win: 1, lose: 0 },
+      preliminary: { games: 1, win: 1, lose: 0 },
+      main: { games: 0, win: 0, lose: 0 },
     });
     expect(matches.map((m) => m.customMatchId)).toEqual(['m1', 'm2', 'm3']);
   });
@@ -124,7 +129,8 @@ describe('foldHeadToHead — 두 팀 맞대결', () => {
   test('관점을 뒤집으면 승패가 뒤집힌다', () => {
     expect(foldHeadToHead(rows, 2, 1).record).toEqual({
       scrim: { games: 2, win: 1, lose: 1 },
-      main: { games: 1, win: 0, lose: 1 },
+      preliminary: { games: 1, win: 0, lose: 1 },
+      main: { games: 0, win: 0, lose: 0 },
     });
   });
 });
@@ -146,6 +152,31 @@ const standingRow = (
 });
 
 describe('foldTeamTotals — 상대를 가리지 않은 팀 전체 전적', () => {
+  test('기존 유형 3은 예선, 유형 4는 본선으로 전적과 순위를 따로 집계한다', () => {
+    const rows = [
+      standingRow('preliminary', '3', 1, 2, 1, stats(10, 2, 4), stats(2, 10, 1)),
+      standingRow('main', '4', 1, 2, 2, stats(2, 8, 1), stats(8, 2, 5)),
+    ];
+    const expected = {
+      scrim: { games: 0, win: 0, lose: 0 },
+      preliminary: { games: 1, win: 1, lose: 0 },
+      main: { games: 1, win: 0, lose: 1 },
+    };
+    expect(foldTeamTotals(rows).get(1)).toEqual(expected);
+    expect(foldOpponentRecords(rows, 1).get(2)).toEqual(expected);
+    expect(foldHeadToHead(rows, 1, 2).record).toEqual(expected);
+    const standings = foldStandings(
+      [
+        { id: 1, name: 'A' },
+        { id: 2, name: 'B' },
+      ],
+      rows,
+    );
+    expect(standings.preliminary[0]).toMatchObject({ teamId: 1, rank: 1, avgKda: 7 });
+    expect(standings.main[0]).toMatchObject({ teamId: 2, rank: 1, avgKda: 6.5 });
+    expect(standings.scrim.every((team) => team.games === 0)).toBe(true);
+  });
+
   test('양 진영을 모두 세고 유형별로 나눈다', () => {
     const totals = foldTeamTotals([
       row('m1', '2', 1, 2, 1),
@@ -155,10 +186,12 @@ describe('foldTeamTotals — 상대를 가리지 않은 팀 전체 전적', () =
 
     expect(totals.get(1)).toEqual({
       scrim: { games: 2, win: 1, lose: 0 },
-      main: { games: 1, win: 0, lose: 1 },
+      preliminary: { games: 1, win: 0, lose: 1 },
+      main: { games: 0, win: 0, lose: 0 },
     });
     expect(totals.get(3)).toEqual({
       scrim: { games: 1, win: 0, lose: 0 },
+      preliminary: { games: 0, win: 0, lose: 0 },
       main: { games: 0, win: 0, lose: 0 },
     });
   });
@@ -189,15 +222,15 @@ describe('foldStandings — 대회 순위표', () => {
   });
 
   test('한 판도 안 뛴 팀은 지기만 한 팀보다 아래에서 같은 등수를 나눈다', () => {
-    const { main } = foldStandings(teams, rows);
+    const { preliminary } = foldStandings(teams, rows);
 
-    expect(main.map((team) => [team.name, team.rank])).toEqual([
+    expect(preliminary.map((team) => [team.name, team.rank])).toEqual([
       ['D', 1],
       ['B', 2],
       ['A', 3],
       ['C', 3],
     ]);
-    expect(main.find((team) => team.name === 'A')).toMatchObject({
+    expect(preliminary.find((team) => team.name === 'A')).toMatchObject({
       games: 0,
       win: 0,
       lose: 0,
@@ -206,11 +239,11 @@ describe('foldStandings — 대회 순위표', () => {
     });
   });
 
-  test('스크림과 본경기는 따로 매긴다', () => {
-    const { scrim, main } = foldStandings(teams, rows);
+  test('스크림과 예선은 따로 매긴다', () => {
+    const { scrim, preliminary } = foldStandings(teams, rows);
 
     expect(scrim.find((team) => team.name === 'D')?.games).toBe(0);
-    expect(main.map((team) => [team.name, team.rank, team.games])).toEqual([
+    expect(preliminary.map((team) => [team.name, team.rank, team.games])).toEqual([
       ['D', 1, 1],
       ['B', 2, 1],
       ['A', 3, 0],
@@ -249,9 +282,10 @@ describe('foldStandings — 대회 순위표', () => {
   });
 
   test('일반내전(1)은 어느 순위표에도 들어가지 않는다', () => {
-    const { scrim, main } = foldStandings(teams, [standingRow('m9', '1', 1, 2, 1)]);
+    const { scrim, preliminary, main } = foldStandings(teams, [standingRow('m9', '1', 1, 2, 1)]);
 
     expect(scrim.every((team) => team.games === 0)).toBe(true);
+    expect(preliminary.every((team) => team.games === 0)).toBe(true);
     expect(main.every((team) => team.games === 0)).toBe(true);
   });
 });

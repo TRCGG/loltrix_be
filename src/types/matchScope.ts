@@ -1,7 +1,7 @@
 import { DatePreset } from '../database/datePeriod.js';
 
-/** 1=일반내전 / 2=스크림 / 3=본경기. replay·custom_match·mmr_participant_metric.game_type 공통. */
-export type GameType = '1' | '2' | '3';
+/** 1=일반내전 / 2=스크림 / 3=예선/4=본선. replay·custom_match·mmr_participant_metric.game_type 공통. */
+export type GameType = '1' | '2' | '3' | '4';
 
 /**
  * 전적 조회 범위. competitionId가 있거나 gameTypes에 일반내전(1)이 없으면 season·기간 조건은 무시한다 —
@@ -15,7 +15,7 @@ export interface MatchScope {
   toMonth?: string;
 }
 
-/** 기존 호출의 기본값. 이 값만으로 스크림·본경기가 일반내전 전적에서 빠진다. */
+/** 기존 호출의 기본값. 이 값만으로 스크림·예선·본선이 일반내전 전적에서 빠진다. */
 export const NORMAL_MATCH_SCOPE: MatchScope = { gameTypes: ['1'] };
 
 export const isCompetitionScope = (scope: MatchScope): boolean => scope.competitionId != null;
@@ -38,11 +38,11 @@ export const competitionTeamNames = (
 ): { teamName: string | null; opponentTeamName: string | null } =>
   isCompetitionScope(scope) ? names : { teamName: null, opponentTeamName: null };
 
-const GAME_TYPES = new Set<string>(['1', '2', '3']);
+const GAME_TYPES = new Set<string>(['1', '2', '3', '4']);
 
 /**
  * 쿼리 파라미터 → scope.
- * gameType 생략 시: competitionId가 있으면 스크림+본경기(2,3), 없으면 일반내전(1).
+ * gameType 생략 시: competitionId가 있으면 스크림+예선+본선(2,3,4), 없으면 일반내전(1).
  */
 export function scopeFromQuery(query: {
   gameType?: string;
@@ -58,7 +58,7 @@ export function scopeFromQuery(query: {
     .map((v) => v.trim())
     .filter((v): v is GameType => GAME_TYPES.has(v));
   const gameTypes: GameType[] =
-    parsed.length > 0 ? [...new Set(parsed)] : competitionId != null ? ['2', '3'] : ['1'];
+    parsed.length > 0 ? [...new Set(parsed)] : competitionId != null ? ['2', '3', '4'] : ['1'];
 
   return competitionId != null ? { gameTypes, competitionId } : { gameTypes };
 }

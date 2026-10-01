@@ -77,8 +77,6 @@ const groupByCompetition = <T extends { competitionId: number }>(rows: T[]): Map
 };
 
 export const MAX_TEAMS_PER_COMPETITION = 20;
-/** 팀은 포지션당 한 명 — 상한과 포지션 유니크가 같은 규칙의 앞뒤다. */
-export const MAX_ROSTER_SIZE = COMPETITION_POSITIONS.length;
 
 const PG_UNIQUE_VIOLATION = '23505';
 const PG_FOREIGN_KEY_VIOLATION = '23503';
@@ -93,10 +91,6 @@ const ROSTER_UNIQUE_ERRORS: Record<string, [message: string, type: string]> = {
   uq_competition_team_member_player: [
     'player already belongs to a team in this competition',
     'roster-duplicate',
-  ],
-  uq_competition_team_member_position: [
-    'position is already taken in this team',
-    'roster-position-taken',
   ],
 };
 
@@ -118,7 +112,7 @@ interface ResolvedRosterTeam {
   id?: number;
   name: string;
   captainPlayerCode: string | null;
-  members: { playerCode: string; position: CompetitionPosition }[];
+  members: { playerCode: string }[];
 }
 
 const pgError = (error: unknown): { code?: string; constraint?: string } =>
@@ -451,7 +445,21 @@ export class CompetitionTeamService {
   ): Promise<CompetitionTeam> {
     try {
       return await db.transaction(async (tx) => {
-        this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
+        // 우승팀 교체는 이전 표시 해제와 새 표시 저장을 한 트랜잭션에서 처리한다.
+        const target = await this.loadCompetition(
+          tx,
+          guildId,
+          competitionId,
+          input.isWinner !== undefined ? 'update' : 'share',
+        );
+        // 종료 뒤에는 우승 여부만 정정할 수 있고 이름·팀장 수정은 기존처럼 막는다.
+        if (
+          input.isWinner === undefined ||
+          input.name !== undefined ||
+          input.captainPlayerCode !== undefined
+        ) {
+          this.assertWritable(target);
+        }
         const team = await this.loadTeam(tx, competitionId, teamId);
 
         const patch: Partial<InsertCompetitionTeam> = {};
@@ -468,12 +476,41 @@ export class CompetitionTeamService {
               ? null
               : await this.resolveCaptain(tx, guildId, teamId, input.captainPlayerCode);
         }
+        if (input.isWinner !== undefined && input.isWinner !== team.isWinner) {
+          if (input.isWinner) {
+            const [previous] = await tx
+              .select({ id: competitionTeam.id })
+              .from(competitionTeam)
+              .where(
+                and(
+                  eq(competitionTeam.competitionId, competitionId),
+                  eq(competitionTeam.isWinner, true),
+                ),
+              )
+              .limit(1);
+            // 부분 유니크 인덱스는 문장마다 검사하므로 이전 팀부터 해제한다.
+            if (previous) {
+              await tx
+                .update(competitionTeam)
+                .set({ isWinner: false })
+                .where(
+                  and(
+                    eq(competitionTeam.competitionId, competitionId),
+                    eq(competitionTeam.id, previous.id),
+                  ),
+                );
+            }
+          }
+          patch.isWinner = input.isWinner;
+        }
         if (Object.keys(patch).length === 0) return team;
 
         const [updated] = await tx
           .update(competitionTeam)
           .set(patch)
-          .where(eq(competitionTeam.id, teamId))
+          .where(
+            and(eq(competitionTeam.competitionId, competitionId), eq(competitionTeam.id, teamId)),
+          )
           .returning();
         return updated;
       });
@@ -503,29 +540,17 @@ export class CompetitionTeamService {
     guildId: string,
     competitionId: number,
     teamId: number,
-    input: { playerCode: string; position: CompetitionPosition },
+    input: { playerCode: string },
   ): Promise<CompetitionTeamMember> {
     try {
       return await db.transaction(async (tx) => {
         this.assertWritable(await this.loadCompetition(tx, guildId, competitionId, 'share'));
-        // 상한 검사가 count-then-insert라 동시 추가 두 건이 서로를 못 보고 상한을 넘는다.
         await this.loadTeam(tx, competitionId, teamId, true);
 
         const playerCode = await this.toMainAccount(guildId, input.playerCode, tx);
-        const [{ size }] = await tx
-          .select({ size: sql<number>`count(*)::integer` })
-          .from(competitionTeamMember)
-          .where(eq(competitionTeamMember.teamId, teamId));
-        if (size >= MAX_ROSTER_SIZE) {
-          throw new BusinessError(`team allows up to ${MAX_ROSTER_SIZE} members`, 409, {
-            type: 'roster-limit-exceeded',
-            isLoggable: false,
-          });
-        }
-
         const [created] = await tx
           .insert(competitionTeamMember)
-          .values({ competitionId, teamId, playerCode, position: input.position })
+          .values({ competitionId, teamId, playerCode })
           .returning();
         return created;
       });
@@ -536,7 +561,7 @@ export class CompetitionTeamService {
 
   /**
    * 대회의 팀 편성 전체를 한 번에 바꾼다. payload에 없는 팀은 지워지고, 남는 팀은 이름·팀장·로스터가
-   * payload와 같아진다. 개별 API를 여러 번 부르면 중간 상태가 유니크 제약에 걸려(포지션·소속) 화면이
+   * payload와 같아진다. 개별 API를 여러 번 부르면 중간 상태가 소속 유니크 제약에 걸려 화면이
    * 순서를 맞춰야 하지만, 여기서는 삭제를 전부 끝낸 뒤 삽입해 그 순서 문제를 없앤다.
    */
   public async saveRoster(
@@ -884,7 +909,7 @@ export class CompetitionTeamService {
   }
 
   /**
-   * 대회 경기의 유형(스크림/본경기)을 한 번에 옮긴다. 유형은 custom_match·replay·
+   * 대회 경기의 유형(스크림/예선/본선)을 한 번에 옮긴다. 유형은 custom_match·replay·
    * mmr_participant_metric 세 곳에 복제돼 있어 셋을 같은 트랜잭션에서 함께 바꿔야
    * 전적·MMR 조회가 서로 다른 유형으로 갈린다.
    */
@@ -989,7 +1014,7 @@ export class CompetitionTeamService {
   }
 
   /**
-   * 대회 순위표. 양 진영이 모두 팀에 귀속된 경기만 세고, 스크림·본경기를 따로 매긴다.
+   * 대회 순위표. 양 진영이 모두 팀에 귀속된 경기만 세고, 스크림·예선·본선를 따로 매긴다.
    * 대회의 모든 팀이 0판이어도 목록에 남는다 — 화면이 참가 팀 전체를 보여줘야 한다.
    */
   public async getStandings(guildId: string, competitionId: number): Promise<CompetitionStandings> {
@@ -1242,12 +1267,19 @@ export class CompetitionTeamService {
         .select({
           teamId: competitionTeamMember.teamId,
           playerCode: competitionTeamMember.playerCode,
-          position: competitionTeamMember.position,
+          position: competitionApplication.mainPosition,
           riotName: riotAccount.riotName,
           riotNameTag: riotAccount.riotNameTag,
         })
         .from(competitionTeamMember)
         .innerJoin(riotAccount, eq(riotAccount.playerCode, competitionTeamMember.playerCode))
+        .leftJoin(
+          competitionApplication,
+          and(
+            eq(competitionApplication.competitionId, competitionTeamMember.competitionId),
+            eq(competitionApplication.playerCode, competitionTeamMember.playerCode),
+          ),
+        )
         .where(eq(competitionTeamMember.competitionId, competitionId))
         .orderBy(competitionTeamMember.id),
     ]);
@@ -1257,13 +1289,14 @@ export class CompetitionTeamService {
       const roster = byTeam.get(member.teamId) ?? [];
       roster.push({
         playerCode: member.playerCode,
-        position: member.position as CompetitionPosition,
+        position: member.position as CompetitionPosition | null,
         riotName: member.riotName,
         riotNameTag: member.riotNameTag,
       });
       byTeam.set(member.teamId, roster);
     }
-    const rank = (position: string) => POSITION_ORDER.get(position) ?? POSITION_ORDER.size;
+    const rank = (position: CompetitionPosition | null) =>
+      position === null ? POSITION_ORDER.size : (POSITION_ORDER.get(position) ?? POSITION_ORDER.size);
     for (const roster of byTeam.values()) {
       roster.sort((a, b) => rank(a.position) - rank(b.position));
     }
@@ -1329,7 +1362,7 @@ export class CompetitionTeamService {
     await tx.delete(competitionTeam).where(inArray(competitionTeam.id, teamIds));
   }
 
-  /** DB를 보지 않고 payload만으로 잡히는 것 — 팀 수·이름·팀당 인원·팀 안 포지션 중복. */
+  /** DB를 보지 않고 payload만으로 잡히는 것 — 팀 수·이름. */
   private normalizeRosterPayload(input: RosterSaveInput): ResolvedRosterTeam[] {
     if (input.teams.length > MAX_TEAMS_PER_COMPETITION) {
       throw new BusinessError(`competition allows up to ${MAX_TEAMS_PER_COMPETITION} teams`, 409, {
@@ -1363,19 +1396,6 @@ export class CompetitionTeamService {
         });
       }
       names.add(name);
-
-      if (team.members.length > MAX_ROSTER_SIZE) {
-        throw new BusinessError(`team allows up to ${MAX_ROSTER_SIZE} members`, 409, {
-          type: 'roster-limit-exceeded',
-          isLoggable: false,
-        });
-      }
-      if (new Set(team.members.map((member) => member.position)).size !== team.members.length) {
-        throw new BusinessError('position is already taken in this team', 409, {
-          type: 'roster-position-taken',
-          isLoggable: false,
-        });
-      }
 
       return {
         id: team.id,
@@ -1413,7 +1433,7 @@ export class CompetitionTeamService {
           });
         }
         taken.add(playerCode);
-        return { playerCode, position: member.position };
+        return { playerCode };
       });
 
       const captainPlayerCode = team.captainPlayerCode ? resolve(team.captainPlayerCode) : null;
@@ -1429,7 +1449,7 @@ export class CompetitionTeamService {
 
   /**
    * 삭제를 전부 끝낸 뒤 삽입한다 — 자리를 맞바꾸거나 다른 팀으로 옮기는 저장이,
-   * 옮기는 도중의 상태에서 포지션·소속 유니크에 걸리지 않게.
+   * 옮기는 도중의 상태에서 소속 유니크에 걸리지 않게.
    */
   private async saveRosterMembers(
     tx: TransactionType,
@@ -1442,25 +1462,23 @@ export class CompetitionTeamService {
         id: competitionTeamMember.id,
         teamId: competitionTeamMember.teamId,
         playerCode: competitionTeamMember.playerCode,
-        position: competitionTeamMember.position,
       })
       .from(competitionTeamMember)
       .where(eq(competitionTeamMember.competitionId, competitionId));
 
-    const seat = (teamId: number, playerCode: string, position: string) =>
-      `${teamId}:${playerCode}:${position}`;
+    const seat = (teamId: number, playerCode: string) => `${teamId}:${playerCode}`;
     const wanted = new Set(
       teams.flatMap((team) =>
         team.id === undefined
           ? []
           : team.members.map((member) =>
-              seat(team.id as number, member.playerCode, member.position),
+              seat(team.id as number, member.playerCode),
             ),
       ),
     );
 
     const stale = existing.filter(
-      (row) => !wanted.has(seat(row.teamId, row.playerCode, row.position)),
+      (row) => !wanted.has(seat(row.teamId, row.playerCode)),
     );
     if (stale.length > 0) {
       await tx.delete(competitionTeamMember).where(
@@ -1472,7 +1490,7 @@ export class CompetitionTeamService {
     }
     const survived = new Set(
       existing
-        .map((row) => seat(row.teamId, row.playerCode, row.position))
+        .map((row) => seat(row.teamId, row.playerCode))
         .filter((key) => wanted.has(key)),
     );
 
@@ -1526,12 +1544,11 @@ export class CompetitionTeamService {
       const teamId = teamIdByName.get(team.name);
       if (teamId === undefined) continue;
       for (const member of team.members) {
-        if (survived.has(seat(teamId, member.playerCode, member.position))) continue;
+        if (survived.has(seat(teamId, member.playerCode))) continue;
         inserts.push({
           competitionId,
           teamId,
           playerCode: member.playerCode,
-          position: member.position,
         });
       }
     }
