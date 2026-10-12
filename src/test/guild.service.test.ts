@@ -99,4 +99,14 @@ describe('Guild list filters', () => {
     expect(query.params).toEqual([false]);
     expect(rowLimit).toBe(1000);
   });
+  test.each([undefined, false, true])('isPublic=%s filters rows and count consistently', async (isPublic) => {
+    await service.findAllGuilds({ isPublic, search: 'Public' });
+    const queries = conditions.map((condition) => dialect.sqlToQuery(condition as SQL));
+    expect(queries).toHaveLength(2);
+    expect(queries[0]).toEqual(queries[1]);
+    expect(queries[0].sql.includes('"guild"."is_public"')).toBe(isPublic === true);
+    expect(queries[0].params).toEqual(
+      isPublic === true ? [false, true, '%Public%'] : [false, '%Public%'],
+    );
+  });
 });

@@ -84,9 +84,9 @@ export const getAllGuilds = async (
   res: Response<GuildResponse>,
 ) => {
   try {
-    const { page, limit, search } = req.query;
+    const { page, limit, search, isPublic } = req.query;
 
-    const { result, totalCount } = await guildService.findAllGuilds({ page, limit, search });
+    const { result, totalCount } = await guildService.findAllGuilds({ page, limit, search, isPublic });
 
     res.setHeader('X-Total-Count', totalCount.toString());
     res.setHeader('X-Page', (page ?? 1).toString());
