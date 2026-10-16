@@ -25,4 +25,5 @@ export type ClanActivity = {
   totalMatches: number;
   totalPlayers: number;
   dailyMatches: { date: string; matchCount: number }[];
+  sideWinRates: Record<'blue' | 'red', { win: number; winRate: number }>;
 };

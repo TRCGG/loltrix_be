@@ -136,12 +136,30 @@ describe('duos and activity', () => {
     expect(text).not.toContain('HAVING');
   });
 
+  test('side win rates judge each match once from all participants and exclude undecided matches', async () => {
+    execute.mockResolvedValue({ rows: [{}] });
+    await service.getActivity('guild-one');
+    const { sql: text } = query();
+    const sides = text.slice(text.indexOf('sides AS ('), text.indexOf('SELECT (SELECT COUNT(*)'));
+    expect(sides).toContain('GROUP BY scoped_matches.match_id');
+    expect(sides).not.toContain('participants');
+    expect(sides).not.toContain('guild_member');
+    expect(sides).toContain('"match_participant"."is_deleted" = false');
+    expect(text).toContain(
+      '"match_participant"."game_team" = \'blue\' AND "match_participant"."game_result" = \'승\'',
+    );
+    expect(text).toContain('COUNT(*) FILTER (WHERE blue_win AND NOT red_win)');
+    expect(text).toContain('COUNT(*) FILTER (WHERE red_win AND NOT blue_win)');
+    expect(text).toContain('NULLIF(COUNT(*) FILTER (WHERE blue_win <> red_win), 0)');
+  });
+
   test('activity has a stable empty response', async () => {
     execute.mockResolvedValue({ rows: [] });
     expect(await service.getActivity('guild-one')).toEqual({
       totalMatches: 0,
       totalPlayers: 0,
       dailyMatches: [],
+      sideWinRates: { blue: { win: 0, winRate: 0 }, red: { win: 0, winRate: 0 } },
     });
   });
 });
