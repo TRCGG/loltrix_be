@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql, SQL } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql, SQL } from 'drizzle-orm';
 import { AnyPgColumn, alias } from 'drizzle-orm/pg-core';
 import { db, DbOrTx } from './connectionPool.js';
 import { guildMember } from './schema.js';
@@ -18,20 +18,35 @@ import { guildMember } from './schema.js';
  *   db.select({ code: link.effectivePlayerCode })
  *     .from(matchParticipant)
  *     .leftJoin(link.table, link.on)
- *     .where(eq(link.effectivePlayerCode, mePlayerCode));
+ *     .where(link.isPlayer(mePlayerCode));
  *
  * 같은 쿼리에서 두 참가자를 각각 매핑하면(alias 조인 등) aliasName 을 다르게 준다.
  */
 export function subAccountLink(aliasName: string, guildId: string, playerCode: AnyPgColumn) {
   const table = alias(guildMember, aliasName);
-  const on = and(
-    eq(table.guildId, guildId),
-    eq(table.account, playerCode),
-    eq(table.isMain, false),
-    eq(table.isDeleted, false),
-  ) as SQL;
+  // 링크 행 판정은 on과 isPlayer가 이 조건을 함께 써야 둘의 결과가 같다.
+  const linkRowOf = (t: { guildId: AnyPgColumn; isMain: AnyPgColumn; isDeleted: AnyPgColumn }) => [
+    eq(t.guildId, guildId),
+    eq(t.isMain, false),
+    eq(t.isDeleted, false),
+  ];
+  const on = and(...linkRowOf(table), eq(table.account, playerCode)) as SQL;
   const effectivePlayerCode = sql<string>`COALESCE(${table.mainAccount}, ${playerCode})`;
-  return { table, on, effectivePlayerCode };
+  // effectivePlayerCode = target과 같은 행을 player_code 조건으로 바꿔 인덱스를 태운다.
+  // (guild_id, account) 유니크로 계정당 링크가 하나라는 전제에서만 둘이 같다.
+  // COALESCE 비교를 함께 걸면 선택도가 곱해져 과소추정되고, IN (서브쿼리)는 조인이 많은 쿼리에서
+  // semi join이 맨 뒤로 밀려 전체를 읽는다. ARRAY()는 먼저 한 번 계산돼 인덱스 조건으로 쓰인다.
+  const isPlayer = (target: string) =>
+    sql`${playerCode} = ANY(ARRAY(
+      SELECT ${guildMember.account} FROM ${guildMember}
+      WHERE ${and(...linkRowOf(guildMember), eq(guildMember.mainAccount, target))}
+      UNION ALL
+      SELECT ${target} WHERE NOT EXISTS (
+        SELECT 1 FROM ${guildMember}
+        WHERE ${and(...linkRowOf(guildMember), eq(guildMember.account, target), isNotNull(guildMember.mainAccount))}
+      )
+    ))`;
+  return { table, on, effectivePlayerCode, isPlayer };
 }
 
 /**
