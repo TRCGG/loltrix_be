@@ -297,10 +297,9 @@ export class MatchParticipantService {
       .select(statColumns)
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .leftJoin(link.table, link.on)
       .where(
         and(
-          eq(link.effectivePlayerCode, playerCode),
+          link.isPlayer(playerCode),
           eq(customMatch.guildId, guildId),
           eq(matchParticipant.isDeleted, false),
           eq(customMatch.isDeleted, false),
@@ -337,10 +336,9 @@ export class MatchParticipantService {
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .leftJoin(link.table, link.on)
       .where(
         and(
-          eq(link.effectivePlayerCode, playerCode),
+          link.isPlayer(playerCode),
           eq(matchParticipant.isDeleted, false),
           eq(customMatch.isDeleted, false),
           eq(customMatch.guildId, guildId),
@@ -384,7 +382,7 @@ export class MatchParticipantService {
     const link = subAccountLink('mp_sub_link', guildId, matchParticipant.playerCode);
 
     const whereCondition = and(
-      eq(link.effectivePlayerCode, playerCode),
+      link.isPlayer(playerCode),
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       eq(customMatch.guildId, guildId),
@@ -401,7 +399,6 @@ export class MatchParticipantService {
       .from(matchParticipant)
       .innerJoin(champion, eq(matchParticipant.championId, champion.id))
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .leftJoin(link.table, link.on)
       .where(whereCondition)
       .groupBy(champion.champName, champion.champNameEng)
       .orderBy(desc(sql`count(*)`))
@@ -414,7 +411,6 @@ export class MatchParticipantService {
       })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .leftJoin(link.table, link.on)
       .where(whereCondition);
 
     const [mostPicks, countResult] = await Promise.all([picksQuery, countQuery]);
@@ -452,7 +448,7 @@ export class MatchParticipantService {
     const opponentTeam = alias(competitionTeam, 'ct_opp');
 
     const whereCondition = and(
-      eq(link.effectivePlayerCode, playerCode),
+      link.isPlayer(playerCode),
       eq(matchParticipant.isDeleted, false),
       eq(customMatch.isDeleted, false),
       eq(customMatch.guildId, guildId),
@@ -557,7 +553,6 @@ export class MatchParticipantService {
       .select({ count: sql<number>`count(*)::integer` })
       .from(matchParticipant)
       .innerJoin(customMatch, eq(matchParticipant.customMatchId, customMatch.id))
-      .leftJoin(link.table, link.on)
       .where(whereCondition);
 
     const [games, countResult] = await Promise.all([gamesQuery, countQuery]);
@@ -710,7 +705,6 @@ export class MatchParticipantService {
           eq(mpTeammate.gameTeam, mpMe.gameTeam), // 같은 팀
         ),
       )
-      .leftJoin(linkMe.table, linkMe.on)
       .leftJoin(linkTeammate.table, linkTeammate.on)
       .innerJoin(riotAccount, eq(riotAccount.playerCode, linkTeammate.effectivePlayerCode))
       .innerJoin(customMatch, eq(mpTeammate.customMatchId, customMatch.id))
@@ -719,7 +713,7 @@ export class MatchParticipantService {
       .where(
         and(
           // 조건 1: 나는 '나'여야 함 (부캐 포함)
-          eq(linkMe.effectivePlayerCode, playerCode),
+          linkMe.isPlayer(playerCode),
           // 조건 2: 팀원은 '나'가 아니어야 함 (내 부캐도 제외)
           ne(linkTeammate.effectivePlayerCode, playerCode),
           // 조건 3: 유형·시즌(또는 대회) 필터

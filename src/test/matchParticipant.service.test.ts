@@ -11,7 +11,7 @@ let written: unknown[] = [];
 let statements: string[] = [];
 let wheres: unknown[] = [];
 
-const CHAIN_METHODS = ['from', 'limit', 'returning', 'orderBy', 'innerJoin', 'leftJoin'];
+const CHAIN_METHODS = ['from', 'limit', 'offset', 'returning', 'orderBy', 'innerJoin', 'leftJoin'];
 
 const makeBuilder = (): Record<string, unknown> => {
   const builder: Record<string, unknown> = {};
@@ -79,6 +79,18 @@ describe('공개 경기 상세 길드 격리', () => {
     expect(whereQuery.sql).toContain('"custom_match"."guild_id" = $2');
     expect(whereQuery.sql).toContain('"custom_match"."is_deleted" = $4');
     expect(whereQuery.params).toEqual([GAME, GUILD, false, false]);
+  });
+});
+
+describe('부캐 합산 선수 필터', () => {
+  test('COALESCE 비교가 아니라 player_code 인덱스를 탈 수 있는 조건으로 건다', async () => {
+    queue = [[], [{ count: 0 }]];
+
+    await matchParticipantService.getRecentGamesByRiotName('player-1', '2026', GUILD);
+
+    const whereQuery = dialect.sqlToQuery(wheres[0] as SQL);
+    expect(whereQuery.sql).toContain('"match_participant"."player_code" = ANY(ARRAY(');
+    expect(whereQuery.sql).not.toContain('COALESCE');
   });
 });
 
