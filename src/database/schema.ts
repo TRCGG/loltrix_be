@@ -94,8 +94,6 @@ export const replay = pgTable('replay', {
   updateDate: timestamp('update_date').notNull().defaultNow(),
   isDeleted: boolean('is_deleted').notNull().default(false),
 }, (t) => [
-  // 중복검사(checkDuplicateByHash: hash_data = ? AND guild_id = ?) 풀스캔 방지
-  index('idx_replay_hash_guild').on(t.hashData, t.guildId),
   // 동시 업로드가 사전 중복검사를 나란히 통과하는 것을 DB에서 막는다
   uniqueIndex('uq_replay_hash_guild_active')
     .on(t.hashData, t.guildId)
@@ -103,6 +101,9 @@ export const replay = pgTable('replay', {
   index('idx_replay_competition')
     .on(t.competitionId)
     .where(sql`${t.competitionId} IS NOT NULL`),
+  index('idx_replay_guild_created_active')
+    .on(t.guildId, t.createDate.desc())
+    .where(sql`${t.isDeleted} = false`),
 ]);
 
 export type Guild = typeof guild.$inferSelect;
@@ -416,7 +417,13 @@ export const matchParticipant = pgTable('match_participant', {
     .notNull()
     .$onUpdate(() => new Date()),
   isDeleted: boolean('is_deleted').notNull().default(false),
-});
+}, (t) => [
+  index('idx_match_participant_custom_match').on(t.customMatchId),
+  // 선수 필터가 subAccountLink의 COALESCE(main_account, player_code)면 이 인덱스를 못 탄다
+  index('idx_match_participant_active_player_match')
+    .on(t.playerCode, t.customMatchId)
+    .where(sql`${t.isDeleted} = false`),
+]);
 
 export type MatchParticipant = typeof matchParticipant.$inferSelect;
 export type InsertMatchParticipant = typeof matchParticipant.$inferInsert;
@@ -438,8 +445,8 @@ export const guildMember = pgTable('guild_member', {
   isDeleted: boolean('is_deleted').notNull().default(false),
 }, (t) => [
   // 리플 저장의 select-then-insert가 동시 업로드에서 서로를 못 보므로,
-  // 중복 등록의 최종 방어선은 이 제약이다 (insertGuildMember의 ON CONFLICT target).
-  unique('uq_guild_member_guild_account').on(t.guildId, t.account),
+  // 중복 등록의 최종 방어선은 이 유니크 인덱스다 (insertGuildMember의 ON CONFLICT target).
+  uniqueIndex('uq_guild_member_guild_account').on(t.guildId, t.account),
 ]);
 
 export type GuildMember = typeof guildMember.$inferSelect;

@@ -146,23 +146,48 @@ export class ClanLeaderboardService {
   }
 
   /**
-   * @desc 선택한 기간의 일반내전 경기 수와 본캐 참여자 수, 일별 경기 수를 집계합니다.
+   * @desc 선택한 기간의 일반내전 경기 수와 본캐 참여자 수, 일별 경기 수, 진영 승률을 집계합니다.
    */
   public async getActivity(
     guildId: string,
     options: ClanLeaderboardPeriod = {},
   ): Promise<ClanActivity> {
     const source = await this.source(guildId, options);
+    // 진영 승률은 경기 수처럼 멤버 가입 상태와 무관해야 하므로 participants가 아닌 전체 참가 기록으로 판정한다.
+    // 승리 진영이 없거나 양쪽 모두 승리로 기록된 경기는 분모에서 빼야 두 진영 승률의 합이 100이 된다.
+    const decided = sql`COUNT(*) FILTER (WHERE blue_win <> red_win)`;
+    const sideRecord = (win: SQL) =>
+      sql`jsonb_build_object('win', (${win})::integer,
+        'winRate', COALESCE(ROUND((${win}) * 100.0 / NULLIF(${decided}, 0), 2), 0)::float8)`;
     const response = await db.execute<ClanActivity>(sql`
       WITH ${source}, daily AS (
         SELECT to_char(registered_at, 'YYYY-MM-DD') AS date, COUNT(*)::integer AS "matchCount"
         FROM scoped_matches GROUP BY to_char(registered_at, 'YYYY-MM-DD')
+      ), sides AS (
+        SELECT
+          bool_or(${matchParticipant.gameTeam} = 'blue' AND ${matchParticipant.gameResult} = '승') AS blue_win,
+          bool_or(${matchParticipant.gameTeam} = 'red' AND ${matchParticipant.gameResult} = '승') AS red_win
+        FROM scoped_matches
+        INNER JOIN ${matchParticipant} ON ${matchParticipant.customMatchId} = scoped_matches.match_id
+        WHERE ${matchParticipant.isDeleted} = false
+        GROUP BY scoped_matches.match_id
       )
       SELECT (SELECT COUNT(*)::integer FROM scoped_matches) AS "totalMatches",
         (SELECT COUNT(DISTINCT player_code)::integer FROM participants) AS "totalPlayers",
-        COALESCE((SELECT jsonb_agg(to_jsonb(daily) ORDER BY date) FROM daily), '[]'::jsonb) AS "dailyMatches"
+        COALESCE((SELECT jsonb_agg(to_jsonb(daily) ORDER BY date) FROM daily), '[]'::jsonb) AS "dailyMatches",
+        (SELECT jsonb_build_object(
+          'blue', ${sideRecord(sql`COUNT(*) FILTER (WHERE blue_win AND NOT red_win)`)},
+          'red', ${sideRecord(sql`COUNT(*) FILTER (WHERE red_win AND NOT blue_win)`)}
+        ) FROM sides) AS "sideWinRates"
     `);
-    return response.rows[0] ?? { totalMatches: 0, totalPlayers: 0, dailyMatches: [] };
+    return (
+      response.rows[0] ?? {
+        totalMatches: 0,
+        totalPlayers: 0,
+        dailyMatches: [],
+        sideWinRates: { blue: { win: 0, winRate: 0 }, red: { win: 0, winRate: 0 } },
+      }
+    );
   }
 }
 

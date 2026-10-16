@@ -395,7 +395,7 @@ router.get(
   /* #swagger.auto = false
     #swagger.tags = ['Statistics']
     #swagger.summary = '내전 집계 규모와 일별 경기 수'
-    #swagger.description = '등록일 기준 일반내전 경기 수, 본캐 기준 참여자 수, 날짜별 경기 수. 포지션 필터는 적용하지 않습니다. data는 {totalMatches,totalPlayers,dailyMatches:[{date,matchCount}]} 객체입니다. date는 YYYY-MM-DD이며 경기 없는 날짜는 배열에 포함하지 않습니다.'
+    #swagger.description = '등록일 기준 일반내전 경기 수, 본캐 기준 참여자 수, 날짜별 경기 수. 포지션 필터는 적용하지 않습니다. data는 {totalMatches,totalPlayers,dailyMatches:[{date,matchCount}],sideWinRates:{blue:{win,winRate},red:{win,winRate}}} 객체입니다. date는 YYYY-MM-DD이며 경기 없는 날짜는 배열에 포함하지 않습니다. sideWinRates는 멤버 가입 상태와 무관한 경기 단위 진영 승률이며, 승리 진영이 판정되지 않은 경기는 분모에서 제외합니다.'
     #swagger.parameters['guildId'] = { in: 'path', required: true, type: 'string' }
     #swagger.parameters['datePreset'] = { in: 'query', type: 'string', enum: ['recent', 'season', 'range'], description: '기본 recent=최근 30일' }
     #swagger.parameters['fromMonth'] = { in: 'query', type: 'string', description: 'range 시작 월 (1~12)' }
