@@ -21,10 +21,23 @@ import {
   matchListSchema,
 } from './matchParticipant.routes.js';
 import { userFilterSchema, championFilterSchema } from './statistics.route.js';
-import { clanUserFilterSchema, clanChampionFilterSchema } from './clanLeaderboard.query.js';
+import {
+  clanUserFilterSchema,
+  clanChampionFilterSchema,
+  combinationFilterSchema,
+  duoFilterSchema,
+  activityFilterSchema,
+  metricFilterSchema,
+} from './clanLeaderboard.query.js';
 import {
   getClanLeaderboardUsers,
   getClanLeaderboardChampions,
+  getChampionCombinations,
+  getDuos,
+  getActivity,
+  getRisingStars,
+  getHighlights,
+  getWinStreaks,
 } from '../controllers/clanLeaderboard.controller.js';
 import { frequentSchema, detailSchema } from './h2h.routes.js';
 
@@ -172,6 +185,48 @@ router.get(
   decodeGuildIdMiddleware,
   validateRequest(clanChampionFilterSchema),
   getClanLeaderboardChampions,
+);
+router.get(
+  '/statistics/:guildId/champion-combinations',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(combinationFilterSchema),
+  getChampionCombinations,
+);
+router.get(
+  '/statistics/:guildId/duos',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(duoFilterSchema),
+  getDuos,
+);
+router.get(
+  '/statistics/:guildId/activity',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(activityFilterSchema),
+  getActivity,
+);
+router.get(
+  '/statistics/:guildId/rising-stars',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(metricFilterSchema),
+  getRisingStars,
+);
+router.get(
+  '/statistics/:guildId/highlights',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(metricFilterSchema),
+  getHighlights,
+);
+router.get(
+  '/statistics/:guildId/win-streaks',
+  requirePublicGuild,
+  decodeGuildIdMiddleware,
+  validateRequest(metricFilterSchema),
+  getWinStreaks,
 );
 
 router.get(
