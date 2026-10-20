@@ -150,6 +150,12 @@ describe('공개 길드 조회 라우터 경계', () => {
     `/statistics/${ENCODED_GUILD_ID}/champions`,
     `/statistics/${ENCODED_GUILD_ID}/leaderboard/users`,
     `/statistics/${ENCODED_GUILD_ID}/leaderboard/champions`,
+    `/statistics/${ENCODED_GUILD_ID}/champion-combinations?combination=ADCSUP`,
+    `/statistics/${ENCODED_GUILD_ID}/duos`,
+    `/statistics/${ENCODED_GUILD_ID}/activity`,
+    `/statistics/${ENCODED_GUILD_ID}/rising-stars`,
+    `/statistics/${ENCODED_GUILD_ID}/highlights`,
+    `/statistics/${ENCODED_GUILD_ID}/win-streaks`,
     `/h2h/${ENCODED_GUILD_ID}?riotName1=Alice&riotName2=Bob`,
     `/h2h/${ENCODED_GUILD_ID}/frequent?riotName=Alice`,
   ];
