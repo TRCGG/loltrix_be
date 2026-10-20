@@ -107,6 +107,7 @@ jest.unstable_mockModule('../services/errorLog.service.js', () => ({
 
 const { default: apiRoutes } = await import('../routes/index.js');
 const { errorHandler } = await import('../middlewares/errorHandler.js');
+const { clanLeaderboardCache } = await import('../controllers/clanLeaderboard.controller.js');
 
 const app = express();
 app.use(express.json());
@@ -191,6 +192,7 @@ const inject = (url: string, options: InjectOptions = {}) =>
   });
 
 beforeEach(() => {
+  clanLeaderboardCache.clear();
   findAllGuilds.mockReset().mockResolvedValue({
     result: [
       { id: GUILD_ID, isPublic: true },
@@ -360,7 +362,7 @@ describe('실제 API 라우터의 공개 길드 인증 경계', () => {
       expect(
         (await inject(url, { headers: { cookie: `session_uid=${VALID_SESSION}` } })).status,
       ).toBe(200);
-      expect(service).toHaveBeenCalledTimes(2);
+      expect(service).toHaveBeenCalledTimes(1);
       expect(service.mock.calls[0][0]).toBe(GUILD_ID);
     },
   );
@@ -384,7 +386,7 @@ describe('실제 API 라우터의 공개 길드 인증 경계', () => {
       });
       expect(privateResponse.status).toBe(200);
       expect(privateResponse.headers['x-total-pages']).toBe('4');
-      expect(service).toHaveBeenCalledTimes(2);
+      expect(service).toHaveBeenCalledTimes(1);
       expect(service).toHaveBeenCalledWith(
         GUILD_ID,
         expect.objectContaining({ sortBy: defaultSort, position: 'ALL', page: 2, limit: 3 }),
