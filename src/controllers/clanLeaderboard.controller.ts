@@ -3,6 +3,12 @@ import { clanLeaderboardService } from '../services/clanLeaderboard.service.js';
 import { clanLeaderboardMetricsService } from '../services/clanLeaderboardMetrics.service.js';
 import { LeaderboardDatePreset } from '../database/clanLeaderboardPeriod.js';
 import { statisticsService } from '../services/statistics.service.js';
+import { DailyCache } from '../utils/dailyCache.js';
+
+export const clanLeaderboardCache = new DailyCache(12, 1000);
+
+const cached = <T>(resource: string, guildId: string, options: unknown, load: () => Promise<T>) =>
+  clanLeaderboardCache.get(JSON.stringify([resource, guildId, options]), load);
 
 const periodOptions = (req: Request) => ({
   datePreset: req.query.datePreset as LeaderboardDatePreset | undefined,
@@ -35,9 +41,9 @@ export const getClanLeaderboardUsers = async (req: Request, res: Response, next:
       championName: req.query.championName as string | undefined,
       sortBy: (req.query.sortBy || 'totalCount') as 'totalCount' | 'wilsonScore',
     };
-    const { result, totalCount } = await statisticsService.getClanLeaderboardUserStatistics(
-      req.params.guildId,
-      options,
+    const { guildId } = req.params;
+    const { result, totalCount } = await cached('users', guildId, options, () =>
+      statisticsService.getClanLeaderboardUserStatistics(guildId, options),
     );
     setPagination(res, totalCount, options.page, options.limit);
     return res.status(200).json({
@@ -65,9 +71,9 @@ export const getClanLeaderboardChampions = async (
       position: req.query.position as string | undefined,
       sortBy: (req.query.sortBy || 'pickRate') as 'pickRate' | 'wilsonScore',
     };
-    const { result, totalCount } = await statisticsService.getClanLeaderboardChampionStatistics(
-      req.params.guildId,
-      options,
+    const { guildId } = req.params;
+    const { result, totalCount } = await cached('champions', guildId, options, () =>
+      statisticsService.getClanLeaderboardChampionStatistics(guildId, options),
     );
     setPagination(res, totalCount, options.page, options.limit);
     return res.status(200).json({
@@ -86,14 +92,15 @@ export const getClanLeaderboardChampions = async (
 export const getChampionCombinations = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { page, limit } = paginationOptions(req);
-    const { result, totalCount } = await clanLeaderboardService.getChampionCombinations(
-      req.params.guildId,
-      {
-        ...periodOptions(req),
-        page,
-        limit,
-        combination: req.query.combination as 'ADCSUP' | 'MIDJUG',
-      },
+    const { guildId } = req.params;
+    const options = {
+      ...periodOptions(req),
+      page,
+      limit,
+      combination: req.query.combination as 'ADCSUP' | 'MIDJUG',
+    };
+    const { result, totalCount } = await cached('combinations', guildId, options, () =>
+      clanLeaderboardService.getChampionCombinations(guildId, options),
     );
     setPagination(res, totalCount, page, limit);
     return res.status(200).json({
@@ -112,11 +119,11 @@ export const getChampionCombinations = async (req: Request, res: Response, next:
 export const getDuos = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { page, limit } = paginationOptions(req);
-    const { result, totalCount } = await clanLeaderboardService.getDuos(req.params.guildId, {
-      ...periodOptions(req),
-      page,
-      limit,
-    });
+    const { guildId } = req.params;
+    const options = { ...periodOptions(req), page, limit };
+    const { result, totalCount } = await cached('duos', guildId, options, () =>
+      clanLeaderboardService.getDuos(guildId, options),
+    );
     setPagination(res, totalCount, page, limit);
     return res
       .status(200)
@@ -131,7 +138,11 @@ export const getDuos = async (req: Request, res: Response, next: NextFunction) =
  */
 export const getActivity = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await clanLeaderboardService.getActivity(req.params.guildId, periodOptions(req));
+    const { guildId } = req.params;
+    const options = periodOptions(req);
+    const data = await cached('activity', guildId, options, () =>
+      clanLeaderboardService.getActivity(guildId, options),
+    );
     return res
       .status(200)
       .json({ status: 'success', message: 'Clan activity retrieved successfully', data });
@@ -145,9 +156,10 @@ export const getActivity = async (req: Request, res: Response, next: NextFunctio
  */
 export const getRisingStars = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await clanLeaderboardMetricsService.getRisingStars(
-      req.params.guildId,
-      req.query.season as string | undefined,
+    const { guildId } = req.params;
+    const season = req.query.season as string | undefined;
+    const data = await cached('rising-stars', guildId, { season }, () =>
+      clanLeaderboardMetricsService.getRisingStars(guildId, season),
     );
     return res.status(200).json({
       status: 'success',
@@ -164,9 +176,10 @@ export const getRisingStars = async (req: Request, res: Response, next: NextFunc
  */
 export const getHighlights = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await clanLeaderboardMetricsService.getHighlights(
-      req.params.guildId,
-      req.query.season as string | undefined,
+    const { guildId } = req.params;
+    const season = req.query.season as string | undefined;
+    const data = await cached('highlights', guildId, { season }, () =>
+      clanLeaderboardMetricsService.getHighlights(guildId, season),
     );
     return res.status(200).json({
       status: 'success',
@@ -183,9 +196,10 @@ export const getHighlights = async (req: Request, res: Response, next: NextFunct
  */
 export const getWinStreaks = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await clanLeaderboardMetricsService.getWinStreaks(
-      req.params.guildId,
-      req.query.season as string | undefined,
+    const { guildId } = req.params;
+    const season = req.query.season as string | undefined;
+    const data = await cached('win-streaks', guildId, { season }, () =>
+      clanLeaderboardMetricsService.getWinStreaks(guildId, season),
     );
     return res.status(200).json({
       status: 'success',
