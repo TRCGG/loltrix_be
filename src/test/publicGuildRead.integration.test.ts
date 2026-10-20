@@ -30,6 +30,11 @@ const getClanLeaderboardChampionStatistics =
 const getRisingStars = jest.fn<(_guildId: string, _season?: string) => Promise<unknown[]>>();
 const getHighlights = jest.fn<(_guildId: string, _season?: string) => Promise<unknown>>();
 const getWinStreaks = jest.fn<(_guildId: string, _season?: string) => Promise<unknown[]>>();
+const getChampionCombinations =
+  jest.fn<(...args: unknown[]) => Promise<{ result: unknown[]; totalCount: number }>>();
+const getDuos =
+  jest.fn<(...args: unknown[]) => Promise<{ result: unknown[]; totalCount: number }>>();
+const getActivity = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const findAuthSessionByUid =
   jest.fn<(sessionUid: string) => Promise<{ discordMemberId: string } | undefined>>();
 const getValidAccessToken = jest.fn<(memberId: string) => Promise<string>>();
@@ -74,6 +79,9 @@ jest.unstable_mockModule('../services/statistics.service.js', () => ({
 jest.unstable_mockModule('../services/clanLeaderboardMetrics.service.js', () => ({
   clanLeaderboardMetricsService: { getRisingStars, getHighlights, getWinStreaks },
 }));
+jest.unstable_mockModule('../services/clanLeaderboard.service.js', () => ({
+  clanLeaderboardService: { getChampionCombinations, getDuos, getActivity },
+}));
 jest.unstable_mockModule('../services/discordAuth.service.js', () => ({
   DiscordAuthService: class {
     findAuthSessionByUid = findAuthSessionByUid;
@@ -99,6 +107,7 @@ jest.unstable_mockModule('../services/errorLog.service.js', () => ({
 
 const { default: apiRoutes } = await import('../routes/index.js');
 const { errorHandler } = await import('../middlewares/errorHandler.js');
+const { clanLeaderboardCache } = await import('../controllers/clanLeaderboard.controller.js');
 
 const app = express();
 app.use(express.json());
@@ -183,6 +192,7 @@ const inject = (url: string, options: InjectOptions = {}) =>
   });
 
 beforeEach(() => {
+  clanLeaderboardCache.clear();
   findAllGuilds.mockReset().mockResolvedValue({
     result: [
       { id: GUILD_ID, isPublic: true },
@@ -201,6 +211,9 @@ beforeEach(() => {
   getRisingStars.mockReset().mockResolvedValue([]);
   getHighlights.mockReset().mockResolvedValue({ kills: { value: null, entries: [] } });
   getWinStreaks.mockReset().mockResolvedValue([]);
+  getChampionCombinations.mockReset().mockResolvedValue({ result: [], totalCount: 0 });
+  getDuos.mockReset().mockResolvedValue({ result: [], totalCount: 0 });
+  getActivity.mockReset().mockResolvedValue({ totalMatches: 0 });
   findAuthSessionByUid.mockReset().mockResolvedValue({ discordMemberId: 'member-1' });
   getValidAccessToken.mockReset().mockResolvedValue('access-token');
   getActiveRoles.mockReset().mockResolvedValue([{ role: 'userNormal' }]);
@@ -297,18 +310,62 @@ describe('Session-free guild list', () => {
 
 describe('실제 API 라우터의 공개 길드 인증 경계', () => {
   test.each([
-    { resource: 'rising-stars', service: getRisingStars },
-    { resource: 'highlights', service: getHighlights },
-    { resource: 'win-streaks', service: getWinStreaks },
-  ])('새 $resource 경로는 공개 길드에서도 세션 인증을 요구한다', async ({ resource, service }) => {
-    const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?season=2025`;
-    expect((await inject(url)).status).toBe(401);
-    expect(service).not.toHaveBeenCalled();
-    expect(
-      (await inject(url, { headers: { cookie: `session_uid=${VALID_SESSION}` } })).status,
-    ).toBe(200);
-    expect(service).toHaveBeenCalledWith(GUILD_ID, '2025');
-  });
+    {
+      resource: 'rising-stars',
+      query: 'season=2025',
+      invalidQuery: 'datePreset=recent',
+      service: getRisingStars,
+    },
+    {
+      resource: 'highlights',
+      query: 'season=2025',
+      invalidQuery: 'datePreset=recent',
+      service: getHighlights,
+    },
+    {
+      resource: 'win-streaks',
+      query: 'season=2025',
+      invalidQuery: 'datePreset=recent',
+      service: getWinStreaks,
+    },
+    {
+      resource: 'champion-combinations',
+      query: 'combination=ADCSUP',
+      invalidQuery: 'combination=TOPJUG',
+      service: getChampionCombinations,
+    },
+    {
+      resource: 'duos',
+      query: 'datePreset=recent',
+      invalidQuery: 'datePreset=recent30',
+      service: getDuos,
+    },
+    {
+      resource: 'activity',
+      query: 'datePreset=recent',
+      invalidQuery: 'datePreset=recent30',
+      service: getActivity,
+    },
+  ])(
+    '클랜 $resource는 공개 길드 익명 조회, 비공개 길드 세션 조회를 허용한다',
+    async ({ resource, query, invalidQuery, service }) => {
+      const url = `/api/statistics/${ENCODED_GUILD_ID}/${resource}?${query}`;
+      const publicResponse = await inject(url);
+      expect(publicResponse.status).toBe(200);
+      expect(publicResponse.headers['cache-control']).toBe('no-store');
+      expect(
+        (await inject(`/api/statistics/${ENCODED_GUILD_ID}/${resource}?${invalidQuery}`)).status,
+      ).toBe(400);
+
+      isPublicGuild.mockResolvedValue(false);
+      expect((await inject(url)).status).toBe(401);
+      expect(
+        (await inject(url, { headers: { cookie: `session_uid=${VALID_SESSION}` } })).status,
+      ).toBe(200);
+      expect(service).toHaveBeenCalledTimes(1);
+      expect(service.mock.calls[0][0]).toBe(GUILD_ID);
+    },
+  );
 
   test.each([
     { resource: 'users', service: getClanLeaderboardUserStatistics, defaultSort: 'totalCount' },
@@ -329,7 +386,7 @@ describe('실제 API 라우터의 공개 길드 인증 경계', () => {
       });
       expect(privateResponse.status).toBe(200);
       expect(privateResponse.headers['x-total-pages']).toBe('4');
-      expect(service).toHaveBeenCalledTimes(2);
+      expect(service).toHaveBeenCalledTimes(1);
       expect(service).toHaveBeenCalledWith(
         GUILD_ID,
         expect.objectContaining({ sortBy: defaultSort, position: 'ALL', page: 2, limit: 3 }),

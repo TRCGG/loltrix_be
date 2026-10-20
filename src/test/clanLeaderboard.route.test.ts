@@ -30,6 +30,7 @@ jest.unstable_mockModule('../services/clanLeaderboardMetrics.service.js', () => 
   clanLeaderboardMetricsService: { getRisingStars, getHighlights, getWinStreaks },
 }));
 const { default: router } = await import('../routes/statistics.route.js');
+const { clanLeaderboardCache } = await import('../controllers/clanLeaderboard.controller.js');
 const app = express();
 app.use('/statistics', router);
 const server = createServer(app);
@@ -49,6 +50,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  clanLeaderboardCache.clear();
   for (const service of [
     getChampionCombinations,
     getDuos,
@@ -70,6 +72,55 @@ beforeEach(() => {
 });
 
 describe('클랜 리더보드 HTTP 계약', () => {
+  test.each([
+    {
+      path: '/leaderboard/users',
+      other: 'sortBy=wilsonScore',
+      service: getClanLeaderboardUserStatistics,
+    },
+    {
+      path: '/leaderboard/champions',
+      other: 'position=TOP',
+      service: getClanLeaderboardChampionStatistics,
+    },
+    {
+      path: '/champion-combinations',
+      other: 'combination=MIDJUG',
+      service: getChampionCombinations,
+      query: 'combination=ADCSUP',
+    },
+    { path: '/duos', other: 'page=2', service: getDuos },
+    { path: '/activity', other: 'datePreset=season', service: getActivity },
+    { path: '/rising-stars', other: 'season=2025', service: getRisingStars },
+    { path: '/highlights', other: 'season=2025', service: getHighlights },
+    { path: '/win-streaks', other: 'season=2025', service: getWinStreaks },
+  ])(
+    '$path는 같은 조회 조건의 결과를 재사용하고 조건이 다르면 새로 계산한다',
+    async ({ path, other, service, query = '' }) => {
+      const url = `${baseUrl}${path}?${query}`;
+      const first = await fetch(url);
+      const second = await fetch(url);
+      expect(second.status).toBe(200);
+      expect(await second.json()).toEqual(await first.json());
+      expect(second.headers.get('x-total-pages')).toBe(first.headers.get('x-total-pages'));
+      expect(service).toHaveBeenCalledTimes(1);
+
+      await fetch(`${baseUrl}${path}?${other}`);
+      expect(service).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  test('같은 조회 조건이라도 길드가 다르면 따로 계산한다', async () => {
+    const otherGuild = baseUrl.replace(
+      Buffer.from('guild-1').toString('base64'),
+      Buffer.from('guild-2').toString('base64'),
+    );
+    await fetch(`${baseUrl}/activity`);
+    await fetch(`${otherGuild}/activity`);
+    expect(getActivity).toHaveBeenCalledTimes(2);
+    expect(getActivity.mock.calls.map(([guildId]) => guildId)).toEqual(['guild-1', 'guild-2']);
+  });
+
   test.each([
     { path: '/rising-stars', service: getRisingStars },
     { path: '/highlights', service: getHighlights },
