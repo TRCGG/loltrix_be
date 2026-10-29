@@ -93,8 +93,10 @@ const allowAllUploadsSchema = z.object({
   }),
   body: z.object({
     allowAllUploads: z.boolean({
-      required_error: 'allowAllUploads is required',
-      invalid_type_error: 'allowAllUploads must be a boolean',
+      error: (issue) =>
+        issue.input === undefined
+          ? 'allowAllUploads is required'
+          : 'allowAllUploads must be a boolean',
     }),
   }),
 });

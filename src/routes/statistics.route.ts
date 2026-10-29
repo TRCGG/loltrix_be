@@ -76,6 +76,23 @@ router.get(
   getClanLeaderboardChampions,
 );
 
+// zod 4는 refine이 걸린 객체의 .extend()를 막으므로, 확장용 원형은 refine 없이 따로 둔다.
+const filterQuery = z.object({
+  datePreset: z.enum(['recent', 'recent30', 'season', 'range']).optional(),
+  fromMonth: monthSchema.optional(),
+  toMonth: monthSchema.optional(),
+  championName: z.string().max(32, 'championName must be less than 32 characters').optional(),
+  position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
+  season: z.string().min(1).max(32, 'season must be less than 32 characters').optional(),
+  page: z.string().regex(/^\d+$/).transform(Number).optional(),
+  limit: z.string().regex(/^\d+$/).transform(Number).optional(),
+  sortBy: z.enum(['totalCount', 'winRate']).optional(),
+  gameType: z
+    .string()
+    .regex(/^[1234](,[1234])*$/, 'gameType must be 1|2|3|4 (comma separated)')
+    .optional(),
+});
+
 export const filterSchema = z.object({
   params: z.object({
     guildId: z
@@ -83,28 +100,11 @@ export const filterSchema = z.object({
       .min(1, 'Guild ID is required')
       .max(128, 'Guild ID must be less than 128 characters'),
   }),
-  query: z
-    .object({
-      datePreset: z.enum(['recent', 'recent30', 'season', 'range']).optional(),
-      fromMonth: monthSchema.optional(),
-      toMonth: monthSchema.optional(),
-      championName: z.string().max(32, 'championName must be less than 32 characters').optional(),
-      position: z.enum(['ALL', 'TOP', 'JUG', 'MID', 'ADC', 'SUP']).optional(),
-      season: z.string().min(1).max(32, 'season must be less than 32 characters').optional(),
-      page: z.string().regex(/^\d+$/).transform(Number).optional(),
-      limit: z.string().regex(/^\d+$/).transform(Number).optional(),
-      sortBy: z.enum(['totalCount', 'winRate']).optional(),
-      gameType: z
-        .string()
-        .regex(/^[1234](,[1234])*$/, 'gameType must be 1|2|3|4 (comma separated)')
-        .optional(),
-    })
-    .superRefine(rangeRequiresMonths),
+  query: filterQuery.superRefine(rangeRequiresMonths),
 });
 
 export const championFilterSchema = filterSchema.extend({
-  query: filterSchema.shape.query
-    .innerType()
+  query: filterQuery
     .extend({
       sortBy: z.enum(['totalCount', 'winRate', 'pickRate', 'wilsonScore']).optional(),
     })
@@ -136,8 +136,7 @@ export const championFilterSchema = filterSchema.extend({
 });
 
 export const userFilterSchema = filterSchema.extend({
-  query: filterSchema.shape.query
-    .innerType()
+  query: filterQuery
     .extend({
       sortBy: z.enum(['totalCount', 'winRate', 'wilsonScore']).optional(),
     })
