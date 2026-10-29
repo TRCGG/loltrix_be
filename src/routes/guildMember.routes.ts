@@ -106,7 +106,7 @@ const updateMemberRoleSchema = z.object({
   }),
   body: z.object({
     role: z.enum(['userNormal', 'userUploader'], {
-      errorMap: () => ({ message: "Role must be 'userNormal' or 'userUploader'" }),
+      error: "Role must be 'userNormal' or 'userUploader'",
     }),
   }),
 });
@@ -144,7 +144,7 @@ const updateMemberStatusSchema = z.object({
     riotName: z.string().min(1, 'Riot Name is required').max(128),
     riotNameTag: z.string().min(1, 'Riot Tag is required').max(128),
     status: z.enum(['1', '2'], {
-      errorMap: () => ({ message: "Status must be '1' (Active) or '2' (Withdrawn)" }),
+      error: "Status must be '1' (Active) or '2' (Withdrawn)",
     }),
   }),
 });

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AnyZodObject, ZodError } from 'zod';
+import { ZodError, ZodObject } from 'zod';
 import { ProblemDetails } from '../types/error.js';
 
 type ParsedRequest = {
@@ -9,7 +9,7 @@ type ParsedRequest = {
 };
 
 export const validateRequest =
-  (schema: AnyZodObject) =>
+  (schema: ZodObject) =>
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const parsed = (await schema.parseAsync({
@@ -39,11 +39,10 @@ export const validateRequest =
           status: 400,
           detail: 'The request payload failed validation',
           instance: req.originalUrl,
-          errors: error.errors.map((err) => ({
-            code: err.code,
-            path: err.path.join('.'),
-            message: err.message,
-            value: 'received' in err ? err.received : undefined,
+          errors: error.issues.map((issue) => ({
+            code: issue.code,
+            path: issue.path.join('.'),
+            message: issue.message,
           })),
         };
 

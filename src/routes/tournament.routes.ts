@@ -14,14 +14,17 @@ const issueCodesSchema = z.object({
     // 봇 발급 시에만 필요(다음 코드 게시 채널). 웹 발급은 생략.
     channelId: z.string().min(1).max(128).optional(),
     count: z
-      .number({ invalid_type_error: 'count must be a number' })
+      // 값이 없을 때는 undefined를 반환해 zod 기본 문구로 넘긴다
+      .number({
+        error: (issue) => (issue.input === undefined ? undefined : 'count must be a number'),
+      })
       .int()
       .min(1, 'count must be 1 or greater')
       .max(50, 'count must be 50 or less'),
     // 경기 유형. 생략 시 서비스에서 '1'(일반내전) 적용.
     gameType: z
       .enum(['1', '2', '3', '4'], {
-        errorMap: () => ({ message: '게임 타입은 1(일반내전)/2(스크림)/3(예선)/4(본선) 중 하나여야 합니다.' }),
+        error: '게임 타입은 1(일반내전)/2(스크림)/3(예선)/4(본선) 중 하나여야 합니다.',
       })
       .optional(),
   }),
