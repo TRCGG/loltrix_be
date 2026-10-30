@@ -466,7 +466,7 @@ const changeMatchGameTypeSchema = z.object({
       .max(100, 'customMatchIds must be 100 or fewer')
       .refine((ids) => new Set(ids).size === ids.length, 'customMatchIds must be unique'),
     gameType: z.enum(COMPETITION_GAME_TYPES, {
-      errorMap: () => ({ message: '경기 유형은 2(스크림)/3(예선)/4(본선) 중 하나여야 합니다.' }),
+      error: '경기 유형은 2(스크림)/3(예선)/4(본선) 중 하나여야 합니다.',
     }),
     actorMemberId: z.string().min(1).max(64).optional(),
   }),
