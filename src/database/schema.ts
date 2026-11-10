@@ -954,3 +954,23 @@ export const matchV5Raw = pgTable(
 
 export type MatchV5Raw = typeof matchV5Raw.$inferSelect;
 export type InsertMatchV5Raw = typeof matchV5Raw.$inferInsert;
+
+export const post = pgTable('post', {
+  id: serial('id').primaryKey(),
+  category: varchar('category', { length: 16 }).notNull(),
+  title: varchar('title', { length: 200 }).notNull(),
+  content: text('content').notNull(),
+  isPublished: boolean('is_published').notNull().default(false),
+  publishDate: timestamp('publish_date', { withTimezone: true }),
+  sortOrder: integer('sort_order'),
+  authorId: varchar('author_id', { length: 64 }).notNull(),
+  createDate: timestamp('create_date', { withTimezone: true }).notNull().defaultNow(),
+  updateDate: timestamp('update_date', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+});
+
+export type Post = typeof post.$inferSelect;
+export type InsertPost = typeof post.$inferInsert;

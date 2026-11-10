@@ -15,6 +15,8 @@ import tournamentRoutes from './tournament.routes.js';
 import competitionRoutes from './competition.routes.js';
 import championRoutes from './champion.routes.js';
 import publicGuildReadRouter from './publicGuildRead.routes.js';
+import postRoutes from './post.routes.js';
+import adminPostRoutes from './adminPost.routes.js';
 
 const router: Router = Router();
 
@@ -31,6 +33,9 @@ router.use(restrictBotToLocalhost);
 
 // 공개 길드의 승인된 조회만 기존 URL에서 세션 없이 처리한다.
 router.use(publicGuildReadRouter);
+
+// 개발자 게시판 읽기는 비로그인 공개 — 작성·수정·삭제(/admin/posts)만 세션 검증 아래에 둔다.
+router.use('/posts', postRoutes);
 
 // --- 아래 API 부터는 모두 세션 검증 ---
 router.use(verifyAuth);
@@ -62,6 +67,8 @@ router.use('/competitions', competitionRoutes);
 
 // 챔피언 목록 (대회 신청의 champions id 선택용)
 router.use('/champions', championRoutes);
+
+router.use('/admin/posts', adminPostRoutes);
 
 // Test routes for error logging (개발 환경에서만)
 if (process.env.NODE_ENV === 'development') {
