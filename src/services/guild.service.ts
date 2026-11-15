@@ -102,9 +102,11 @@ export class GuildService {
    * @desc ID로 길드 정보 수정
    */
   public async updateGuild(id: string, updateData: UpdateGuildRequest) {
+    // 요청 키는 guildName, 컬럼은 name이다. drizzle은 컬럼이 아닌 키를 에러 없이 버린다.
+    const { guildName, ...rest } = updateData;
     const result = await db
       .update(guild)
-      .set(updateData)
+      .set({ ...rest, ...(guildName !== undefined && { name: guildName }) })
       .where(and(eq(guild.id, id), eq(guild.isDeleted, false)))
       .returning();
     return result[0];

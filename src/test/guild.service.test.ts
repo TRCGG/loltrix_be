@@ -27,12 +27,22 @@ builder.offset = (value: unknown) => {
 builder.orderBy = () => builder;
 builder.then = (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve);
 
+let updatedValues: unknown;
+const updateBuilder: Record<string, unknown> = {};
+updateBuilder.set = (values: unknown) => {
+  updatedValues = values;
+  return updateBuilder;
+};
+updateBuilder.where = () => updateBuilder;
+updateBuilder.returning = () => Promise.resolve(rows);
+
 jest.unstable_mockModule('../database/connectionPool.js', () => ({
   db: {
     select: (fields: unknown) => {
       selected = fields;
       return builder;
     },
+    update: () => updateBuilder,
   },
 }));
 
@@ -49,6 +59,19 @@ beforeEach(() => {
   conditions = [];
   rowLimit = undefined;
   rowOffset = undefined;
+  updatedValues = undefined;
+});
+
+describe('길드 수정', () => {
+  test('guildName은 name 컬럼으로 저장된다', async () => {
+    await service.updateGuild('guild-1', { guildName: '새이름', isPublic: true });
+    expect(updatedValues).toEqual({ name: '새이름', isPublic: true });
+  });
+
+  test('guildName이 없으면 name을 건드리지 않는다', async () => {
+    await service.updateGuild('guild-1', { languageCode: 'en' });
+    expect(updatedValues).toEqual({ languageCode: 'en' });
+  });
 });
 
 describe('길드 공개 판정', () => {
