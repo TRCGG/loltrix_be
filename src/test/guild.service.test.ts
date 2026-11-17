@@ -1,52 +1,164 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
-let insertResult: unknown[] = [];
-let selectResult: unknown[] = [];
-let selectCalls = 0;
+let selected: unknown;
+let whereCondition: unknown;
+let rows: unknown[] = [];
+let conditions: unknown[] = [];
+let rowLimit: unknown;
+let rowOffset: unknown;
 
-const thenable = (value: () => unknown[]) => ({
-  then: (resolve: (v: unknown) => unknown) => Promise.resolve(value()).then(resolve),
+const builder: Record<string, unknown> = {};
+builder.from = () => builder;
+builder.where = (condition: unknown) => {
+  whereCondition = condition;
+  conditions.push(condition);
+  return builder;
+};
+builder.limit = (value: unknown) => {
+  rowLimit = value;
+  return builder;
+};
+builder.offset = (value: unknown) => {
+  rowOffset = value;
+  return builder;
+};
+builder.orderBy = () => builder;
+builder.then = (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve);
+
+let updatedValues: unknown;
+const updateBuilder: Record<string, unknown> = {};
+updateBuilder.set = (values: unknown) => {
+  updatedValues = values;
+  return updateBuilder;
+};
+updateBuilder.where = () => updateBuilder;
+updateBuilder.returning = () => Promise.resolve(rows);
+
+let insertedRows: unknown[] = [];
+const insertBuilder: Record<string, unknown> = {};
+insertBuilder.values = () => insertBuilder;
+insertBuilder.onConflictDoNothing = () => insertBuilder;
+insertBuilder.returning = () => Promise.resolve(insertedRows);
+
+jest.unstable_mockModule('../database/connectionPool.js', () => ({
+  db: {
+    select: (fields: unknown) => {
+      selected = fields;
+      return builder;
+    },
+    update: () => updateBuilder,
+    insert: () => insertBuilder,
+  },
+}));
+
+const { GuildService } = await import('../services/guild.service.js');
+const { guild } = await import('../database/schema.js');
+
+const service = new GuildService();
+const dialect = new PgDialect();
+
+beforeEach(() => {
+  selected = undefined;
+  whereCondition = undefined;
+  rows = [];
+  conditions = [];
+  rowLimit = undefined;
+  rowOffset = undefined;
+  updatedValues = undefined;
+  insertedRows = [];
 });
 
-const executor = {
-  insert: () => ({
-    values: () => ({
-      onConflictDoNothing: () => ({ returning: () => thenable(() => insertResult) }),
-    }),
-  }),
-  select: () => {
-    selectCalls += 1;
-    return { from: () => ({ where: () => ({ limit: () => thenable(() => selectResult) }) }) };
-  },
-};
-
-jest.unstable_mockModule('../database/connectionPool.js', () => ({ db: executor }));
-
-const { guildService } = await import('../services/guild.service.js');
-
-const row = (isDeleted: boolean) => ({ id: '1', name: '길드', isDeleted });
-
-describe('guildService.insertGuild', () => {
-  beforeEach(() => {
-    insertResult = [];
-    selectResult = [];
-    selectCalls = 0;
-  });
-
+describe('길드 등록', () => {
   test('새 길드면 삽입한 행을 created로 반환하고 다시 조회하지 않는다', async () => {
-    insertResult = [row(false)];
+    insertedRows = [{ id: 'guild-1', isDeleted: false }];
 
-    const result = await guildService.insertGuild({ id: '1', name: '길드' });
+    const result = await service.insertGuild({ id: 'guild-1', name: '길드' });
 
-    expect(result).toEqual({ guild: row(false), created: true });
-    expect(selectCalls).toBe(0);
+    expect(result).toEqual({ guild: { id: 'guild-1', isDeleted: false }, created: true });
+    expect(selected).toBeUndefined();
   });
 
   test('이미 있으면 삭제된 행이라도 되살리지 않고 그대로 반환한다', async () => {
-    selectResult = [row(true)];
+    rows = [{ id: 'guild-1', isDeleted: true }];
 
-    const result = await guildService.insertGuild({ id: '1', name: '길드' });
+    const result = await service.insertGuild({ id: 'guild-1', name: '길드' });
 
-    expect(result).toEqual({ guild: row(true), created: false });
+    expect(result).toEqual({ guild: { id: 'guild-1', isDeleted: true }, created: false });
+    const query = dialect.sqlToQuery(whereCondition as SQL);
+    expect(query.sql).not.toContain('is_deleted');
+  });
+});
+
+describe('길드 수정', () => {
+  test('guildName은 name 컬럼으로 저장된다', async () => {
+    await service.updateGuild('guild-1', { guildName: '새이름', isPublic: true });
+    expect(updatedValues).toEqual({ name: '새이름', isPublic: true });
+  });
+
+  test('guildName이 없으면 name을 건드리지 않는다', async () => {
+    await service.updateGuild('guild-1', { languageCode: 'en' });
+    expect(updatedValues).toEqual({ languageCode: 'en' });
+  });
+});
+
+describe('길드 공개 판정', () => {
+  test('id가 같고 공개이며 삭제되지 않은 길드만 최소 projection으로 확인한다', async () => {
+    rows = [{ id: 'guild-1' }];
+
+    await expect(service.isPublicGuild('guild-1')).resolves.toBe(true);
+
+    expect(Object.keys(selected as Record<string, unknown>)).toEqual(['id']);
+    const query = dialect.sqlToQuery(whereCondition as SQL);
+    expect(query.sql).toContain('"guild"."id" = $1');
+    expect(query.sql).toContain('"guild"."is_public" = $2');
+    expect(query.sql).toContain('"guild"."is_deleted" = $3');
+    expect(query.params).toEqual(['guild-1', true, false]);
+  });
+
+  test('일치 행이 없으면 공개하지 않는다', async () => {
+    await expect(service.isPublicGuild('private-or-deleted')).resolves.toBe(false);
+  });
+
+  test('스키마 기본값은 기존·신규 길드를 비공개로 유지한다', () => {
+    expect(guild.isPublic.notNull).toBe(true);
+    expect(guild.isPublic.hasDefault).toBe(true);
+    expect(guild.isPublic.default).toBe(false);
+  });
+});
+
+describe('Guild list filters', () => {
+  test.each([undefined, 'Public'])(
+    'rows and count share non-deleted filtering without public filtering and search %s',
+    async (search) => {
+      await service.findAllGuilds({ page: 2, limit: 3, search });
+      expect(conditions).toHaveLength(2);
+      const queries = conditions.map((condition) => dialect.sqlToQuery(condition as SQL));
+      expect(queries[0]).toEqual(queries[1]);
+      expect(queries[0].sql).toContain('"guild"."is_deleted" = $1');
+      expect(queries[0].sql).not.toContain('is_public');
+      expect(queries[0].params).toEqual(search ? [false, '%Public%'] : [false]);
+      if (search) expect(queries[0].sql).toContain('"guild"."name" ilike $2');
+      expect(rowLimit).toBe(3);
+      expect(rowOffset).toBe(3);
+    },
+  );
+  test('internal callers retain private guilds and larger limits', async () => {
+    await service.findAllGuilds({ limit: 1000 });
+    const query = dialect.sqlToQuery(conditions[0] as SQL);
+    expect(query.sql).not.toContain('is_public');
+    expect(query.params).toEqual([false]);
+    expect(rowLimit).toBe(1000);
+  });
+  test.each([undefined, false, true])('isPublic=%s filters rows and count consistently', async (isPublic) => {
+    await service.findAllGuilds({ isPublic, search: 'Public' });
+    const queries = conditions.map((condition) => dialect.sqlToQuery(condition as SQL));
+    expect(queries).toHaveLength(2);
+    expect(queries[0]).toEqual(queries[1]);
+    expect(queries[0].sql.includes('"guild"."is_public"')).toBe(isPublic === true);
+    expect(queries[0].params).toEqual(
+      isPublic === true ? [false, true, '%Public%'] : [false, '%Public%'],
+    );
   });
 });
