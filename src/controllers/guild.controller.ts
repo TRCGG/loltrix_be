@@ -19,16 +19,16 @@ export const createGuild = async (
   try {
     const { guildId, guildName, languageCode } = req.body;
 
-    const newGuild = await guildService.insertGuild({
+    const { guild, created } = await guildService.insertGuild({
       id: guildId,
       name: guildName,
       languageCode,
     });
 
-    res.status(201).json({
+    res.status(created ? 201 : 200).json({
       status: 'success',
-      message: 'Guild created successfully',
-      data: newGuild,
+      message: created ? 'Guild created successfully' : 'Guild already exists',
+      data: guild,
     });
   } catch (error) {
     console.error('Error creating guild:', error);

@@ -36,6 +36,12 @@ updateBuilder.set = (values: unknown) => {
 updateBuilder.where = () => updateBuilder;
 updateBuilder.returning = () => Promise.resolve(rows);
 
+let insertedRows: unknown[] = [];
+const insertBuilder: Record<string, unknown> = {};
+insertBuilder.values = () => insertBuilder;
+insertBuilder.onConflictDoNothing = () => insertBuilder;
+insertBuilder.returning = () => Promise.resolve(insertedRows);
+
 jest.unstable_mockModule('../database/connectionPool.js', () => ({
   db: {
     select: (fields: unknown) => {
@@ -43,6 +49,7 @@ jest.unstable_mockModule('../database/connectionPool.js', () => ({
       return builder;
     },
     update: () => updateBuilder,
+    insert: () => insertBuilder,
   },
 }));
 
@@ -60,6 +67,28 @@ beforeEach(() => {
   rowLimit = undefined;
   rowOffset = undefined;
   updatedValues = undefined;
+  insertedRows = [];
+});
+
+describe('길드 등록', () => {
+  test('새 길드면 삽입한 행을 created로 반환하고 다시 조회하지 않는다', async () => {
+    insertedRows = [{ id: 'guild-1', isDeleted: false }];
+
+    const result = await service.insertGuild({ id: 'guild-1', name: '길드' });
+
+    expect(result).toEqual({ guild: { id: 'guild-1', isDeleted: false }, created: true });
+    expect(selected).toBeUndefined();
+  });
+
+  test('이미 있으면 삭제된 행이라도 되살리지 않고 그대로 반환한다', async () => {
+    rows = [{ id: 'guild-1', isDeleted: true }];
+
+    const result = await service.insertGuild({ id: 'guild-1', name: '길드' });
+
+    expect(result).toEqual({ guild: { id: 'guild-1', isDeleted: true }, created: false });
+    const query = dialect.sqlToQuery(whereCondition as SQL);
+    expect(query.sql).not.toContain('is_deleted');
+  });
 });
 
 describe('길드 수정', () => {

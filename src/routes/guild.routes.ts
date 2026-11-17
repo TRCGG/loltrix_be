@@ -110,7 +110,7 @@ router.post(
   '/',
   /* #swagger.tags = ['Guild']
     #swagger.summary = '새 길드 생성'
-    #swagger.description = '새로운 길드를 등록합니다. (adminNormal 이상 권한 필요)'
+    #swagger.description = '새로운 길드를 등록합니다. 이미 있는 길드면 생성하지 않고 기존 행을 200으로 반환합니다(삭제된 길드도 되살리지 않고 isDeleted 그대로 반환). (adminNormal 이상 권한 필요)'
     #swagger.security = [{ "session": [] }]
     #swagger.parameters['body'] = {
       in: 'body',
