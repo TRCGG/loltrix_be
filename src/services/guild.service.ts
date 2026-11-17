@@ -10,11 +10,15 @@ import { SystemError } from '../types/error.js';
  */
 export class GuildService {
   /**
-   * @desc 새로운 길드를 데이터베이스에 생성
+   * @desc 새로운 길드를 생성하고, 이미 있으면 기존 행을 반환
    */
   public async insertGuild(newGuildData: InsertGuild) {
-    const result = await db.insert(guild).values(newGuildData).returning();
-    return result[0];
+    const [created] = await db.insert(guild).values(newGuildData).onConflictDoNothing().returning();
+    if (created) return { guild: created, created: true };
+
+    // 삭제된 길드도 그대로 돌려준다. 되살릴지는 관리자가 판단한다.
+    const [existing] = await db.select().from(guild).where(eq(guild.id, newGuildData.id)).limit(1);
+    return { guild: existing, created: false };
   }
 
   /**
