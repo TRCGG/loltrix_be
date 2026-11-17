@@ -15,6 +15,7 @@ import tournamentRoutes from './tournament.routes.js';
 import competitionRoutes from './competition.routes.js';
 import championRoutes from './champion.routes.js';
 import publicGuildReadRouter from './publicGuildRead.routes.js';
+import siteStatisticsRouter from './siteStatistics.routes.js';
 import postRoutes from './post.routes.js';
 import adminPostRoutes from './adminPost.routes.js';
 
@@ -30,6 +31,8 @@ router.use('/auth', authRouter);
 router.use('/callback', riotCallbackRoutes);
 
 router.use(restrictBotToLocalhost);
+
+router.use(siteStatisticsRouter);
 
 // 공개 길드의 승인된 조회만 기존 URL에서 세션 없이 처리한다.
 router.use(publicGuildReadRouter);
