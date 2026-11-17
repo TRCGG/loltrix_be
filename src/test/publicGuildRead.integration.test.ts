@@ -35,6 +35,7 @@ const getChampionCombinations =
 const getDuos =
   jest.fn<(...args: unknown[]) => Promise<{ result: unknown[]; totalCount: number }>>();
 const getActivity = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const getOverview = jest.fn<() => Promise<unknown>>();
 const findAuthSessionByUid =
   jest.fn<(sessionUid: string) => Promise<{ discordMemberId: string } | undefined>>();
 const getValidAccessToken = jest.fn<(memberId: string) => Promise<string>>();
@@ -82,6 +83,9 @@ jest.unstable_mockModule('../services/clanLeaderboardMetrics.service.js', () => 
 jest.unstable_mockModule('../services/clanLeaderboard.service.js', () => ({
   clanLeaderboardService: { getChampionCombinations, getDuos, getActivity },
 }));
+jest.unstable_mockModule('../services/siteStatistics.service.js', () => ({
+  siteStatisticsService: { getOverview },
+}));
 jest.unstable_mockModule('../services/discordAuth.service.js', () => ({
   DiscordAuthService: class {
     findAuthSessionByUid = findAuthSessionByUid;
@@ -108,6 +112,7 @@ jest.unstable_mockModule('../services/errorLog.service.js', () => ({
 const { default: apiRoutes } = await import('../routes/index.js');
 const { errorHandler } = await import('../middlewares/errorHandler.js');
 const { clanLeaderboardCache } = await import('../controllers/clanLeaderboard.controller.js');
+const { siteOverviewCache } = await import('../controllers/siteStatistics.controller.js');
 
 const app = express();
 app.use(express.json());
@@ -193,6 +198,7 @@ const inject = (url: string, options: InjectOptions = {}) =>
 
 beforeEach(() => {
   clanLeaderboardCache.clear();
+  siteOverviewCache.clear();
   findAllGuilds.mockReset().mockResolvedValue({
     result: [
       { id: GUILD_ID, isPublic: true },
@@ -483,6 +489,17 @@ describe('실제 API 라우터의 공개 길드 인증 경계', () => {
       GUILD_ID,
       expect.objectContaining({ page: 2, limit: 5 }),
     );
+    expect(findAuthSessionByUid).not.toHaveBeenCalled();
+  });
+
+  test('사이트 이용현황은 길드 공개 여부와 무관하게 익명으로 조회된다', async () => {
+    getOverview.mockResolvedValue({ clanCount: 1 });
+
+    const response = await inject('/api/statistics/overview');
+
+    expect(response.status).toBe(200);
+    expect(response.json).toMatchObject({ data: { clanCount: 1 } });
+    expect(isPublicGuild).not.toHaveBeenCalled();
     expect(findAuthSessionByUid).not.toHaveBeenCalled();
   });
 
