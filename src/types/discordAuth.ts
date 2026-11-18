@@ -32,6 +32,9 @@ export interface DiscordTokenAPI {
   token_type: string;
 }
 
+/** Discord가 액세스 토큰을 거부(401)했을 때 SystemError.code */
+export const DISCORD_TOKEN_REJECTED = 'discord_token_rejected';
+
 // Discord API Guild 응답 타입
 export interface DiscordGuildAPI {
   id: string;

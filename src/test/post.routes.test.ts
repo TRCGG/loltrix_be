@@ -29,6 +29,9 @@ jest.unstable_mockModule('../services/discordMemberRole.service.js', () => ({
   discordMemberRoleService: { getActiveRoles },
 }));
 jest.unstable_mockModule('../services/guild.service.js', () => ({ guildService: {} }));
+jest.unstable_mockModule('../services/discordGuildAccess.service.js', () => ({
+  discordGuildAccessService: {},
+}));
 
 const { default: postRoutes } = await import('../routes/post.routes.js');
 const { default: adminPostRoutes } = await import('../routes/adminPost.routes.js');
