@@ -10,6 +10,9 @@ const isPublicGuild = jest.fn<(guildId: string) => Promise<boolean>>();
 jest.unstable_mockModule('../services/guild.service.js', () => ({
   guildService: { isPublicGuild },
 }));
+jest.unstable_mockModule('../services/discordGuildAccess.service.js', () => ({
+  discordGuildAccessService: {},
+}));
 
 jest.unstable_mockModule('../controllers/guild.controller.js', () => ({
   getAllGuilds: terminalHandler,
