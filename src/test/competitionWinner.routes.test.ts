@@ -31,6 +31,9 @@ jest.unstable_mockModule('../services/discordMemberRole.service.js', () => ({
   discordMemberRoleService: { getActiveRolesByGuild: getRoles },
 }));
 jest.unstable_mockModule('../services/guild.service.js', () => ({ guildService: {} }));
+jest.unstable_mockModule('../services/discordGuildAccess.service.js', () => ({
+  discordGuildAccessService: {},
+}));
 
 const { default: router } = await import('../routes/competition.routes.js');
 let server: Server;

@@ -1,9 +1,12 @@
 import { Response, NextFunction } from 'express';
 import { Role, ADMIN_ROLES, hasMinRole } from '../types/role.js';
-import { BusinessError } from '../types/error.js';
+import { BusinessError, SystemError } from '../types/error.js';
 import { AuthRequest } from './authHandler.js';
 import { discordMemberRoleService } from '../services/discordMemberRole.service.js';
+import { discordGuildAccessService } from '../services/discordGuildAccess.service.js';
 import { guildService } from '../services/guild.service.js';
+import { DiscordMemberRole } from '../database/schema.js';
+import { DISCORD_TOKEN_REJECTED } from '../types/discordAuth.js';
 
 type GuildIdSource = { from: 'body' | 'params' | 'query'; key: string };
 
@@ -47,6 +50,51 @@ export const requireAdmin =
   };
 
 /**
+ * Discord 장애로 확인할 수 없으면 DB 역할을 믿는다 — 장애가 모든 길드의 관리 기능을 막지 않게 한다.
+ * 토큰 거부는 장애가 아니다: 앱 승인을 해제하면 로컬 만료 전까지 폐기된 토큰이 그대로 오므로, 통과시키면 우회로가 된다.
+ */
+const confirmDiscordGuildManager = async (
+  req: AuthRequest,
+  memberId: string,
+  guildId: string,
+  roles: DiscordMemberRole[],
+): Promise<boolean> => {
+  if (!req.accessToken) {
+    console.warn(`[roleRecheck] 액세스 토큰 없음, DB 역할로 통과 member=${memberId} guild=${guildId}`);
+    return true;
+  }
+
+  let isManager: boolean;
+  try {
+    isManager = await discordGuildAccessService.isDiscordGuildManagerNow(
+      memberId,
+      req.accessToken,
+      guildId,
+    );
+  } catch (error) {
+    if (error instanceof SystemError && error.code === DISCORD_TOKEN_REJECTED) {
+      console.warn(`[roleRecheck] Discord 토큰 거부로 접근 거부 member=${memberId} guild=${guildId}`);
+      return false;
+    }
+    console.warn(
+      `[roleRecheck] Discord 확인 실패, DB 역할로 통과 member=${memberId} guild=${guildId}`,
+      error,
+    );
+    return true;
+  }
+
+  if (isManager) return true;
+
+  await discordMemberRoleService
+    .syncGuildManagerRoles(memberId, [{ guildId, isDiscordManager: false }], roles)
+    .catch((error) =>
+      console.error(`[roleRecheck] 강등 실패 member=${memberId} guild=${guildId}`, error),
+    );
+
+  return false;
+};
+
+/**
  * Guild 스코프 권한 판정. 미들웨어가 아니라 결과가 필요한 곳에서 쓴다 —
  * 권한에 따라 막는 대신 보여줄 범위를 좁히는 조회(신청 목록)는 403으로 끊으면 안 된다.
  * 봇은 미들웨어와 같은 이유로 통과: 권한 검사는 봇이 책임진다.
@@ -69,7 +117,14 @@ export const hasGuildRole = async (
     .some((r) => hasMinRole(r.role as Role, 'adminNormal'));
   if (isAdmin) return true;
 
-  return roles.some((r) => hasMinRole(r.role as Role, minRole));
+  if (!roles.some((r) => hasMinRole(r.role as Role, minRole))) return false;
+
+  // DB의 guildManager는 마지막 웹 접속 때 값이라 그 뒤의 강퇴·탈퇴·권한 상실을 모른다.
+  if (minRole === 'guildManager' && roles.some((r) => r.role === 'guildManager')) {
+    return confirmDiscordGuildManager(req, memberId, guildId, roles);
+  }
+
+  return true;
 };
 
 /**

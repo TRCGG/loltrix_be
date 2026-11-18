@@ -4,9 +4,14 @@ import { discordGuildNicknameService } from './discordGuildNickname.service.js';
 import { Role, ADMIN_ROLES } from '../types/role.js';
 import { DiscordMemberRole } from '../database/schema.js';
 import { SystemError } from '../types/error.js';
-import { DiscordGuildAPI, DiscordGuildWithoutRole } from '../types/discordAuth.js';
+import {
+  DISCORD_TOKEN_REJECTED,
+  DiscordGuildAPI,
+  DiscordGuildWithoutRole,
+} from '../types/discordAuth.js';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 import { isDiscordGuildManager } from '../utils/discordPermission.js';
+import { createPromiseCache } from '../utils/promiseCache.js';
 
 const guildService = new GuildService();
 
@@ -27,10 +32,18 @@ const discordApiBaseUrl = 'https://discord.com/api';
 const GUILD_LIST_TTL_MS = 60 * 1000;
 
 const NICK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const guildListCache = new Map<
-  string,
-  { promise: Promise<DiscordGuildWithoutRole[]>; expiresAt: number }
->();
+const guildListCache = createPromiseCache<DiscordGuildWithoutRole[]>(GUILD_LIST_TTL_MS, (guilds) =>
+  guilds.some((g) => g.nick === undefined),
+);
+
+type DiscordUserGuild = Omit<DiscordGuildAPI, 'role' | 'nick'>;
+
+// 관리 API 재검증 전용. guildListCache는 별명 조회가 실패하면 비워지므로 그것만 쓰면
+// 별명 장애 동안 관리 요청마다 Discord를 다시 부른다.
+const userGuildsCache = createPromiseCache<DiscordUserGuild[]>(GUILD_LIST_TTL_MS);
+
+// 장애 때 관리 요청마다 기본 10초를 기다린 뒤에야 fail-open되지 않게 짧게 끊는다.
+const RECHECK_TIMEOUT_MS = 3000;
 
 /**
  * @desc 유저가 접근 가능한 Gmok 길드 조회 서비스 (Discord API + 권한 조합)
@@ -40,14 +53,18 @@ export class DiscordGuildAccessService {
   /**
    * @desc Discord API로 사용자의 길드 목록 조회
    */
-  public async fetchUserGuilds(accessToken: string): Promise<Omit<DiscordGuildAPI, 'role' | 'nick'>[]> {
+  public async fetchUserGuilds(accessToken: string, timeout?: number): Promise<DiscordUserGuild[]> {
     try {
-      const result = await fetchWithTimeout(`${discordApiBaseUrl}/users/@me/guilds`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const result = await fetchWithTimeout(
+        `${discordApiBaseUrl}/users/@me/guilds`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+        timeout,
+      );
 
       if (!result.ok) {
-        throw new SystemError('Failed to fetch Discord guilds', 500);
+        throw new SystemError('Failed to fetch Discord guilds', 500, {
+          code: result.status === 401 ? DISCORD_TOKEN_REJECTED : undefined,
+        });
       }
 
       const fullGuilds: any[] = await result.json();
@@ -110,39 +127,9 @@ export class DiscordGuildAccessService {
     accessToken: string,
     memberId?: string,
   ): Promise<DiscordGuildWithoutRole[]> {
-    if (memberId) {
-      const cached = guildListCache.get(memberId);
-      if (cached && cached.expiresAt > Date.now()) return cached.promise;
-    }
+    if (!memberId) return this.fetchJoinedGmokGuilds(accessToken);
 
-    const promise = this.fetchJoinedGmokGuilds(accessToken, memberId);
-
-    if (memberId) {
-      const key = memberId;
-      // 만료 항목이 쌓이지 않도록 커지면 한 번 훑어 정리 (프로세스 로컬, 경량)
-      if (guildListCache.size > 1000) {
-        const now = Date.now();
-        for (const [k, value] of guildListCache) {
-          if (value.expiresAt <= now) guildListCache.delete(k);
-        }
-      }
-
-      const entry = { promise, expiresAt: Date.now() + GUILD_LIST_TTL_MS };
-      guildListCache.set(key, entry);
-
-      // reject 또는 nick 조회 실패(429/timeout)가 섞인 열화 결과는 캐시에서 제거해 다음 요청이
-      // 재시도하게 한다. 그 사이 새 항목이 들어왔으면 건드리지 않도록 동일 entry일 때만 삭제.
-      const evict = () => {
-        if (guildListCache.get(key) === entry) guildListCache.delete(key);
-      };
-      promise
-        .then((enriched) => {
-          if (enriched.some((g) => g.nick === undefined)) evict();
-        })
-        .catch(evict);
-    }
-
-    return promise;
+    return guildListCache.get(memberId, () => this.fetchJoinedGmokGuilds(accessToken, memberId));
   }
 
   /** nick은 저장값 우선, 미보유·TTL 경과분만 Discord 조회 (길드 수만큼 외부 호출이 나가던 구간) */
@@ -259,6 +246,27 @@ export class DiscordGuildAccessService {
     // 별명 저장은 fetchJoinedGmokGuilds가 새로 받아온 건만 처리한다
     // (여기서 전건 upsert하면 update_date가 매번 갱신돼 재조회 TTL이 리셋된다).
     return this.applyRolesToGuilds(joinedGmokGuilds, syncedRoles);
+  }
+
+  /**
+   * @desc 지금 이 길드의 Discord 관리자(ManageGuild|Administrator)인지 확인한다. 탈퇴·강퇴했으면 false.
+   */
+  public async isDiscordGuildManagerNow(
+    memberId: string,
+    accessToken: string,
+    guildId: string,
+  ): Promise<boolean> {
+    // 길드 목록 캐시엔 gmok 등록 길드만 있어, 없다고 바로 탈퇴로 보면 방금 등록된 길드의 관리자를 강등한다.
+    const listed = await guildListCache.peek(memberId)?.catch(() => undefined);
+    const guild =
+      listed?.find((g) => g.id === guildId) ??
+      (
+        await userGuildsCache.get(memberId, () =>
+          this.fetchUserGuilds(accessToken, RECHECK_TIMEOUT_MS),
+        )
+      ).find((g) => g.id === guildId);
+
+    return !!guild && isDiscordGuildManager(guild.permissions);
   }
 }
 
