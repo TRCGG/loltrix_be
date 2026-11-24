@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
-import { post } from '../database/schema.js';
+import { discordMember, post } from '../database/schema.js';
 import {
   AdminPostDetail,
   AdminPostListItem,
+  AdminPostWriteResult,
   LIST_WITH_CONTENT_CATEGORIES,
   PostCategory,
   PostCreateInput,
@@ -24,11 +25,13 @@ const detailFields = {
   updateDate: post.updateDate,
 };
 
-const adminDetailFields = {
+const adminDetailColumns = {
   ...detailFields,
   isPublished: post.isPublished,
   createDate: post.createDate,
 };
+
+const adminDetailFields = { ...adminDetailColumns, authorName: discordMember.displayName };
 
 const listFields = (category: PostCategory | undefined, admin: boolean) => ({
   id: post.id,
@@ -37,8 +40,16 @@ const listFields = (category: PostCategory | undefined, admin: boolean) => ({
   sortOrder: post.sortOrder,
   publishDate: post.publishDate,
   ...(category && LIST_WITH_CONTENT_CATEGORIES.includes(category) ? { content: post.content } : {}),
-  ...(admin ? { isPublished: post.isPublished, updateDate: post.updateDate } : {}),
+  ...(admin
+    ? {
+        isPublished: post.isPublished,
+        updateDate: post.updateDate,
+        authorName: discordMember.displayName,
+      }
+    : {}),
 });
+
+const authorJoin = eq(discordMember.id, post.authorId);
 
 // 초안은 publish_date가 NULL이라 NULLS FIRST로 관리 목록 맨 위에 온다. 공개 목록에는 NULL이 없다.
 const listOrder = (category: PostCategory | undefined) =>
@@ -52,14 +63,23 @@ const activeById = (id: number) => and(eq(post.id, id), eq(post.isDeleted, false
  * @desc 개발자 게시판 서비스
  */
 export class PostService {
+  /**
+   * @desc 공개된 글 목록 조회 (페이지네이션)
+   */
   public async listPublished(query: PostListQuery) {
     return this.findPage<PostListItem>(query, false);
   }
 
+  /**
+   * @desc 관리용 글 목록 조회 (초안 포함, 작성자 표시명 포함)
+   */
   public async listForAdmin(query: PostListQuery) {
     return this.findPage<AdminPostListItem>(query, true);
   }
 
+  /**
+   * @desc 공개된 글 상세 조회. 초안·삭제 글은 null
+   */
   public async getPublished(id: number): Promise<PostDetail | null> {
     const [row] = await db
       .select(detailFields)
@@ -68,12 +88,22 @@ export class PostService {
     return row ?? null;
   }
 
+  /**
+   * @desc 관리용 글 상세 조회 (초안 포함, 작성자 표시명 포함). 삭제 글은 null
+   */
   public async getForAdmin(id: number): Promise<AdminPostDetail | null> {
-    const [row] = await db.select(adminDetailFields).from(post).where(activeById(id));
+    const [row] = await db
+      .select(adminDetailFields)
+      .from(post)
+      .leftJoin(discordMember, authorJoin)
+      .where(activeById(id));
     return row ?? null;
   }
 
-  public async create(input: PostCreateInput, authorId: string): Promise<AdminPostDetail> {
+  /**
+   * @desc 글 작성
+   */
+  public async create(input: PostCreateInput, authorId: string): Promise<AdminPostWriteResult> {
     const [row] = await db
       .insert(post)
       .values({
@@ -85,11 +115,14 @@ export class PostService {
         publishDate: input.isPublished ? sql`NOW()` : null,
         authorId,
       })
-      .returning(adminDetailFields);
+      .returning(adminDetailColumns);
     return row;
   }
 
-  public async update(id: number, input: PostUpdateInput): Promise<AdminPostDetail | null> {
+  /**
+   * @desc 글 수정·공개 전환. 없거나 삭제된 글이면 null
+   */
+  public async update(id: number, input: PostUpdateInput): Promise<AdminPostWriteResult | null> {
     const [row] = await db
       .update(post)
       .set({
@@ -98,10 +131,13 @@ export class PostService {
         ...(input.isPublished ? { publishDate: sql`COALESCE(${post.publishDate}, NOW())` } : {}),
       })
       .where(activeById(id))
-      .returning(adminDetailFields);
+      .returning(adminDetailColumns);
     return row ?? null;
   }
 
+  /**
+   * @desc 글 논리적 삭제. 없거나 이미 삭제된 글이면 false
+   */
   public async remove(id: number): Promise<boolean> {
     const rows = await db
       .update(post)
@@ -111,6 +147,9 @@ export class PostService {
     return rows.length > 0;
   }
 
+  /**
+   * @desc 목록 한 페이지와 전체 개수 조회. admin이면 초안을 포함하고 작성자 표시명을 조인한다
+   */
   private async findPage<T>({ category, page, limit }: PostListQuery, admin: boolean) {
     const where = and(
       eq(post.isDeleted, false),
@@ -118,9 +157,8 @@ export class PostService {
       category ? eq(post.category, category) : undefined,
     );
 
-    const items = (await db
-      .select(listFields(category, admin))
-      .from(post)
+    const base = db.select(listFields(category, admin)).from(post);
+    const items = (await (admin ? base.leftJoin(discordMember, authorJoin) : base)
       .where(where)
       .orderBy(...listOrder(category))
       .limit(limit)

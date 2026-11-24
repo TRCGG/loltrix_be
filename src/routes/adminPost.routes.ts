@@ -34,7 +34,7 @@ router.get(
   '/',
   /* #swagger.tags = ['Post']
     #swagger.summary = '게시판 글 관리 목록'
-    #swagger.description = '초안을 포함해 조회합니다 (adminNormal 이상). 정렬·본문 포함 규칙은 공개 목록과 같고, 초안은 최신순 카테고리에서 맨 위에 옵니다. isPublished·updateDate가 추가됩니다.'
+    #swagger.description = '초안을 포함해 조회합니다 (adminNormal 이상). 정렬·본문 포함 규칙은 공개 목록과 같고, 초안은 최신순 카테고리에서 맨 위에 옵니다. isPublished·updateDate·authorName(작성자 디스코드 표시명, 없으면 null)이 추가됩니다.'
     #swagger.security = [{ "cookieAuth": [] }]
     #swagger.parameters['category'] = { in: 'query', type: 'string', enum: ['devlog', 'faq', 'guide', 'etc'], description: '카테고리 (생략 시 전체)' }
     #swagger.parameters['page'] = { in: 'query', type: 'integer', minimum: 1, default: 1 }
@@ -54,7 +54,7 @@ router.get(
   '/:id',
   /* #swagger.tags = ['Post']
     #swagger.summary = '게시판 글 관리 상세'
-    #swagger.description = '초안을 포함해 조회합니다 (adminNormal 이상). 삭제된 글은 404입니다.'
+    #swagger.description = '초안을 포함해 조회합니다 (adminNormal 이상). 삭제된 글은 404입니다. authorName은 작성자 디스코드 표시명(없으면 null)입니다. 작성·수정 응답은 같은 형태에서 authorName만 없습니다.'
     #swagger.security = [{ "cookieAuth": [] }]
     #swagger.responses[404] = { description: '없거나 삭제된 글', schema: { status: 'error', message: 'Post not found', data: null } }
   */
