@@ -1,5 +1,10 @@
 // 토너먼트코드(TRC-225) API·콜백 타입.
 import { GameType } from './matchScope.js';
+import type { TournamentSpectatorType } from '../clients/riot/types.js';
+
+export type { TournamentSpectatorType } from '../clients/riot/types.js';
+
+export type TournamentCodeStatus = 'PENDING' | 'COMPLETED' | 'INVALID';
 
 /** 발급 주체. BOT=디스코드 봇(localhost), WEB=웹 세션 유저(guildManager 이상). */
 export type IssueSource = 'BOT' | 'WEB';
@@ -7,9 +12,8 @@ export type IssueSource = 'BOT' | 'WEB';
 /** 경기 유형. replay·custom_match·tournament_code.game_type 공통 값 체계. */
 export type { GameType } from './matchScope.js';
 
-/** POST /tournament/codes 요청 바디 (봇/웹 공용). */
+/** POST /tournament/:guildId/codes 요청 바디 (봇/웹 공용). guildId는 경로. */
 export interface IssueCodesRequest {
-  guildId: string;
   /**
    * 코드를 게시할 디스코드 채널 id (봇 발급 시). metadata에 저장되어
    * 콜백 시 다음 코드 게시 대상이 된다. 웹 발급은 게시 채널이 없으므로 생략.
@@ -19,6 +23,8 @@ export interface IssueCodesRequest {
   count: number;
   /** 경기 유형(1=일반내전/2=스크림/3=예선/4=본선). 생략 시 일반내전. */
   gameType?: GameType;
+  /** 관전 설정. 생략 시 ALL. */
+  spectatorType?: TournamentSpectatorType;
 }
 
 /** tournament_code.metadata(jsonb)에 저장하는 자체 메타. */
@@ -30,6 +36,8 @@ export interface TournamentCodeMetadata {
   source?: IssueSource;
   /** 웹 발급 시 세션 유저의 discordMemberId (감사 추적용). */
   issuedBy?: string;
+  /** 미존재 = 이 값이 생기기 전 행. 그때는 전부 ALL로 발급됐다. */
+  spectatorType?: TournamentSpectatorType;
 }
 
 /** 발급된 코드 1건(응답용). */
@@ -41,8 +49,10 @@ export interface IssuedCode {
   source: IssueSource;
   /** 경기 유형(1=일반내전/2=스크림/3=예선/4=본선). */
   gameType: string;
-  status: string;
+  spectatorType: TournamentSpectatorType;
+  status: TournamentCodeStatus;
   issuedDate: Date;
+  usedDate: Date | null;
 }
 
 /**
