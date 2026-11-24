@@ -4,6 +4,7 @@ import { postService } from '../services/post.service.js';
 import {
   AdminPostDetail,
   AdminPostListItem,
+  AdminPostWriteResult,
   PostCategory,
   PostCreateInput,
   PostDetail,
@@ -129,7 +130,7 @@ export const getAdminPost = async (
  */
 export const createPost = async (
   req: AuthRequest,
-  res: Response<PostResponse<AdminPostDetail>>,
+  res: Response<PostResponse<AdminPostWriteResult>>,
   next: NextFunction,
 ) => {
   try {
@@ -149,7 +150,7 @@ export const createPost = async (
  */
 export const updatePost = async (
   req: AuthRequest,
-  res: Response<PostResponse<AdminPostDetail>>,
+  res: Response<PostResponse<AdminPostWriteResult>>,
   next: NextFunction,
 ) => {
   try {

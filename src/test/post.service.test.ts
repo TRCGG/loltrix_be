@@ -7,7 +7,17 @@ type Call = { op: string; args: Record<string, unknown[]> };
 let queue: unknown[] = [];
 let calls: Call[] = [];
 
-const CHAIN_METHODS = ['from', 'where', 'orderBy', 'limit', 'offset', 'values', 'set', 'returning'];
+const CHAIN_METHODS = [
+  'from',
+  'leftJoin',
+  'where',
+  'orderBy',
+  'limit',
+  'offset',
+  'values',
+  'set',
+  'returning',
+];
 
 const start = (op: string) => (first?: unknown) => {
   const args: Record<string, unknown[]> = { [op]: [first] };
@@ -121,8 +131,8 @@ describe('PostService 작성·수정', () => {
     await service.update(4, { isPublished: false });
     await service.update(4, { title: '새 제목' });
 
-    expect(calls[0].args.set[0]).toEqual({ isPublished: false });
-    expect(calls[1].args.set[0]).toEqual({ title: '새 제목' });
+    const sets = calls.filter((call) => call.op === 'update').map((call) => call.args.set[0]);
+    expect(sets).toEqual([{ isPublished: false }, { title: '새 제목' }]);
   });
 
   test('수정·삭제 대상이 없으면 null·false', async () => {
@@ -175,5 +185,43 @@ describe('PostService 공개 범위', () => {
     await service.remove(4);
 
     expect(render(calls[0].args.where[0])).toContain('"is_deleted" = $');
+  });
+});
+
+describe('PostService 작성자 표시명', () => {
+  test('관리 목록·상세는 작성자를 조인해 표시명을 담는다', async () => {
+    queue = [[], [{ count: 0 }], []];
+
+    await service.listForAdmin({ category: 'devlog', page: 1, limit: 20 });
+    await service.getForAdmin(4);
+
+    const [list, count, detail] = calls;
+    [list, detail].forEach((call) => {
+      expect(call.args.select[0]).toHaveProperty('authorName');
+      expect(render(call.args.leftJoin[1])).toBe('"discord_member"."id" = "post"."author_id"');
+    });
+    expect(count.args.leftJoin).toBeUndefined();
+  });
+
+  test('공개 목록·상세는 작성자를 조회하지 않는다', async () => {
+    queue = [[], [{ count: 0 }], []];
+
+    await service.listPublished({ category: 'devlog', page: 1, limit: 20 });
+    await service.getPublished(4);
+
+    calls.forEach((call) => {
+      expect(call.args.select[0]).not.toHaveProperty('authorName');
+      expect(call.args.leftJoin).toBeUndefined();
+    });
+  });
+
+  test('작성·수정은 저장 결과만 돌려주고 작성자를 따로 조회하지 않는다', async () => {
+    queue = [[{ id: 1 }], [{ id: 1 }]];
+
+    await service.create({ category: 'devlog', title: 't', content: 'c' }, 'admin-1');
+    await service.update(1, { title: 't' });
+
+    expect(calls.map((call) => call.op)).toEqual(['insert', 'update']);
+    calls.forEach((call) => expect(call.args.returning[0]).not.toHaveProperty('authorName'));
   });
 });

@@ -29,6 +29,7 @@ export interface PostListItem {
 export interface AdminPostListItem extends PostListItem {
   isPublished: boolean;
   updateDate: Date;
+  authorName: string | null;
 }
 
 export interface PostDetail {
@@ -44,7 +45,11 @@ export interface PostDetail {
 export interface AdminPostDetail extends PostDetail {
   isPublished: boolean;
   createDate: Date;
+  authorName: string | null;
 }
+
+/** 작성·수정 응답. 저장 결과(RETURNING)라 조인이 필요한 작성자 표시명은 없다. */
+export type AdminPostWriteResult = Omit<AdminPostDetail, 'authorName'>;
 
 export interface PostCreateInput {
   category: PostCategory;
