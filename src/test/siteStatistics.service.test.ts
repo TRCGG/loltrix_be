@@ -23,6 +23,15 @@ describe('site overview scope', () => {
     expect(text).not.toContain('is_public');
   });
 
+  test('클랜 수는 경기 기록과 무관하게 삭제되지 않은 길드를 모두 센다', async () => {
+    await service.getOverview();
+    const { sql: text } = query();
+
+    expect(text).toContain(
+      '(SELECT COUNT(*)::integer FROM "guild" WHERE "guild"."is_deleted" = false) AS "clanCount"',
+    );
+  });
+
   test('플레이어는 본캐로 묶지 않고 player_code 그대로 센다', async () => {
     await service.getOverview();
     const { sql: text } = query();
