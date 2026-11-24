@@ -1,23 +1,25 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from '../middlewares/authHandler.js';
 import { tournamentService } from '../services/tournament.service.js';
-import { IssueCodesRequest } from '../types/tournament.js';
+import { IssueCodesRequest, TournamentCodeStatus } from '../types/tournament.js';
+
+type GuildParams = { guildId: string };
 
 /**
  * @desc 토너먼트 코드 발급 (봇/웹 공용). count개 선발급 → tournament_code INSERT(PENDING).
  * 봇(localhost)은 channelId를 보내 콜백 시 다음 코드 게시 대상을 지정하고,
  * 웹 세션(guildManager 이상)은 channelId 없이 발급 — issuedBy로 발급자를 남긴다.
- * @route POST /api/tournament/codes
+ * @route POST /api/tournament/:guildId/codes
  */
 export const issueCodes = async (
-  req: Request<unknown, unknown, IssueCodesRequest>,
+  req: Request<GuildParams, unknown, IssueCodesRequest>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const { guildId, channelId, count, gameType } = req.body;
-    const auth = req as AuthRequest;
-
+    const { guildId } = req.params;
+    const { channelId, count, gameType, spectatorType } = req.body;
+    const auth = req as unknown as AuthRequest;
     const codes = await tournamentService.issueCodes({
       guildId,
       channelId,
@@ -25,8 +27,8 @@ export const issueCodes = async (
       source: auth.isBot ? 'BOT' : 'WEB',
       issuedBy: auth.discordMemberId,
       gameType,
+      spectatorType,
     });
-
     return res.status(201).json({
       status: 'success',
       message: 'Tournament codes issued successfully',
@@ -38,19 +40,33 @@ export const issueCodes = async (
 };
 
 /**
- * @desc 미사용 다음 코드 조회 (봇 !다음코드 용). PENDING 중 issued_date 오름차순 첫 코드.
- * @route GET /api/tournament/next-code?guildId=...
+ * @desc 발급한 코드 목록 (최신 발급 먼저). status로 거를 수 있다.
+ * @route GET /api/tournament/:guildId/codes
  */
-export const getNextCode = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
+export const listCodes = async (req: Request<GuildParams>, res: Response, next: NextFunction) => {
   try {
-    const guildId = req.query.guildId as string;
+    const { guildId } = req.params;
+    const status = req.query.status as TournamentCodeStatus | undefined;
+    const limit = Number(req.query.limit);
+    const codes = await tournamentService.listCodes(guildId, { status, limit });
+    return res.status(200).json({
+      status: 'success',
+      message: 'Tournament codes retrieved successfully',
+      data: { codes },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
 
+/**
+ * @desc 미사용 다음 코드 조회. PENDING 중 issued_date 오름차순 첫 코드.
+ * @route GET /api/tournament/:guildId/next-code
+ */
+export const getNextCode = async (req: Request<GuildParams>, res: Response, next: NextFunction) => {
+  try {
+    const { guildId } = req.params;
     const code = await tournamentService.getNextCode(guildId);
-
     if (!code) {
       return res.status(404).json({
         status: 'error',
@@ -58,7 +74,6 @@ export const getNextCode = async (
         data: null,
       });
     }
-
     return res.status(200).json({
       status: 'success',
       message: 'Next tournament code retrieved successfully',

@@ -48,7 +48,7 @@ jest.unstable_mockModule('../controllers/replay.controller.js', () =>
   controllerExports(['createReplay', 'getReplayList', 'webCreateReplay']),
 );
 jest.unstable_mockModule('../controllers/tournament.controller.js', () =>
-  controllerExports(['issueCodes', 'getNextCode']),
+  controllerExports(['issueCodes', 'listCodes', 'getNextCode']),
 );
 jest.unstable_mockModule('../controllers/matchParticipant.controller.js', () =>
   controllerExports([
@@ -191,7 +191,10 @@ describe('예선·본선 경기 유형 HTTP 검증', () => {
           competitionId: 7,
         },
       ],
-      ['/tournament/codes', { guildId: 'g1', count: 1, gameType: '4' }],
+      [
+        `/tournament/${Buffer.from('123456789012345678').toString('base64')}/codes`,
+        { count: 1, gameType: '4' },
+      ],
     ] as const) {
       const response = await fetch(`${baseUrl}${path}`, {
         method: 'POST',
