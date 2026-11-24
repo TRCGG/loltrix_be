@@ -19,7 +19,7 @@ export class SiteStatisticsService {
     // 길드 삭제는 guild.is_deleted만 세우고 경기는 남기므로 조인으로 거른다.
     const response = await db.execute<SiteOverview>(sql`
       WITH matches AS (
-        SELECT ${customMatch.id} AS id, ${customMatch.guildId} AS guild_id,
+        SELECT ${customMatch.id} AS id,
           ${customMatch.gameType} = '1' AS is_normal,
           ${inArray(customMatch.gameType, [...COMPETITION_GAME_TYPES])} AS is_competition,
           ${customMatch.createDate} AS create_date
@@ -28,7 +28,7 @@ export class SiteStatisticsService {
         WHERE ${customMatch.isDeleted} = false
       )
       SELECT
-        COUNT(DISTINCT guild_id)::integer AS "clanCount",
+        (SELECT COUNT(*)::integer FROM ${guild} WHERE ${guild.isDeleted} = false) AS "clanCount",
         COUNT(*)::integer AS "matchCount",
         (SELECT COUNT(DISTINCT ${matchParticipant.playerCode})::integer
           FROM ${matchParticipant}
