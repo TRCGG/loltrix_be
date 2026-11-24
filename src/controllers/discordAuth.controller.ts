@@ -77,25 +77,18 @@ export const callback = async (
 export const logout = async (req: Request, res: Response<void>) => {
   try {
     const sessionUid = req.cookies.session_uid;
-    const [frontendUrl, cookieOptions] = await Promise.all([
-      getFrontendUrl(),
-      getClearCookieOptions(),
-    ]);
-    res.clearCookie('session_uid', cookieOptions);
+    res.clearCookie('session_uid', await getClearCookieOptions());
 
     if (sessionUid) {
       await discordAuthService.revokeAndDeactivateSession(sessionUid);
     }
 
-    return res.redirect(frontendUrl);
+    return res.status(204).end();
   } catch (error) {
     console.error('error during logout process', error);
-    const [frontendUrl, cookieOptions] = await Promise.all([
-      getFrontendUrl(),
-      getClearCookieOptions(),
-    ]);
-    res.clearCookie('session_uid', cookieOptions);
-    return res.redirect(frontendUrl);
+    // 세션 폐기가 실패해도 쿠키만 지우면 클라이언트 입장에선 로그아웃이 끝난 것이다.
+    res.clearCookie('session_uid', await getClearCookieOptions());
+    return res.status(204).end();
   }
 };
 
