@@ -12,7 +12,9 @@ jest.unstable_mockModule('../database/connectionPool.js', () => ({
   db: { insert },
 }));
 
-const { getGmokGuilds } = await import('../controllers/discordAuth.controller.js');
+const { getGmokGuilds, logout } = await import('../controllers/discordAuth.controller.js');
+const { DiscordAuthService } = await import('../services/discordAuth.service.js');
+const { systemConfigService } = await import('../services/systemConfig.service.js');
 
 // 컨트롤러가 res.status(...).json(...) 으로 체이닝하므로 status 는 json 을 가진 객체를 돌려준다
 const makeRes = () => {
@@ -73,6 +75,67 @@ describe('getGmokGuilds - 에러 로깅 실패 시 응답 보장', () => {
     expect(logged).toContain('42P01');
 
     consoleError.mockRestore();
+  });
+});
+
+describe('logout', () => {
+  const makeLogoutRes = () => {
+    const end = jest.fn();
+    const status = jest.fn<(code: number) => { end: typeof end }>(() => ({ end }));
+    return { status, end, clearCookie: jest.fn(), redirect: jest.fn() };
+  };
+  const makeLogoutReq = (cookies: Record<string, string>) => ({ cookies }) as unknown as Request;
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    jest
+      .spyOn(systemConfigService, 'getConfigOrDefault')
+      .mockImplementation(async (_key, fallback) => fallback);
+    jest
+      .spyOn(systemConfigService, 'getNumberConfig')
+      .mockImplementation(async (_key, fallback) => fallback);
+  });
+
+  test('세션을 폐기하고 쿠키를 지운 뒤 204로 응답한다', async () => {
+    const revoke = jest
+      .spyOn(DiscordAuthService.prototype, 'revokeAndDeactivateSession')
+      .mockResolvedValue(undefined);
+    const res = makeLogoutRes();
+
+    await logout(makeLogoutReq({ session_uid: 'sid' }), res as any);
+
+    expect(revoke).toHaveBeenCalledWith('sid');
+    expect(res.clearCookie).toHaveBeenCalledWith('session_uid', expect.any(Object));
+    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.end).toHaveBeenCalled();
+    expect(res.redirect).not.toHaveBeenCalled();
+  });
+
+  test('세션 폐기가 실패해도 쿠키를 지우고 204로 응답한다', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest
+      .spyOn(DiscordAuthService.prototype, 'revokeAndDeactivateSession')
+      .mockRejectedValue(new Error('discord revoke failed'));
+    const res = makeLogoutRes();
+
+    await logout(makeLogoutReq({ session_uid: 'sid' }), res as any);
+
+    expect(res.clearCookie).toHaveBeenCalledWith('session_uid', expect.any(Object));
+    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.end).toHaveBeenCalled();
+    expect(res.redirect).not.toHaveBeenCalled();
+  });
+
+  test('세션 쿠키가 없어도 204로 응답한다', async () => {
+    const revoke = jest
+      .spyOn(DiscordAuthService.prototype, 'revokeAndDeactivateSession')
+      .mockResolvedValue(undefined);
+    const res = makeLogoutRes();
+
+    await logout(makeLogoutReq({}), res as any);
+
+    expect(revoke).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(204);
   });
 });
 

@@ -112,8 +112,8 @@
         "summary": "로그아웃",
         "description": "세션 쿠키를 제거하여 로그아웃 처리합니다.",
         "responses": {
-          "default": {
-            "description": ""
+          "204": {
+            "description": "로그아웃 완료 (세션 폐기에 실패해도 204)"
           }
         },
         "security": []
