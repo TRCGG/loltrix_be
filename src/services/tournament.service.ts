@@ -8,7 +8,14 @@ import {
   TournamentCodeParams,
 } from '../clients/riot/index.js';
 import { SystemError } from '../types/error.js';
-import { GameType, IssuedCode, IssueSource, TournamentCodeMetadata } from '../types/tournament.js';
+import {
+  GameType,
+  IssuedCode,
+  IssueSource,
+  TournamentCodeMetadata,
+  TournamentCodeStatus,
+  TournamentSpectatorType,
+} from '../types/tournament.js';
 
 // 코드 발급 기본 파라미터(기획 문서 §발급). 5v5 토너먼트 드래프트, 소환사의 협곡, 전체 관전.
 const DEFAULT_CODE_PARAMS = {
@@ -108,14 +115,24 @@ export class TournamentService {
     source: IssueSource;
     issuedBy?: string;
     gameType?: GameType;
+    spectatorType?: TournamentSpectatorType;
   }): Promise<IssuedCode[]> {
-    const { guildId, channelId, count, source, issuedBy, gameType = '1' } = params;
+    const {
+      guildId,
+      channelId,
+      count,
+      source,
+      issuedBy,
+      gameType = '1',
+      spectatorType = DEFAULT_CODE_PARAMS.spectatorType,
+    } = params;
 
     const { tournamentId } = await this.ensureProviderAndTournament();
 
     const metadata: TournamentCodeMetadata = {
       guildId,
       source,
+      spectatorType,
       ...(channelId ? { channelId } : {}),
       ...(issuedBy ? { issuedBy } : {}),
     };
@@ -123,6 +140,7 @@ export class TournamentService {
     // Riot 코드 임베드 metadata는 문자열. 콜백에서 반환되나 신뢰하지 않으므로 참고용.
     const codeParams: TournamentCodeParams = {
       ...DEFAULT_CODE_PARAMS,
+      spectatorType,
       count,
       metadata: JSON.stringify(metadata),
     };
@@ -169,6 +187,29 @@ export class TournamentService {
       .limit(1);
 
     return rows.length > 0 ? this.toIssuedCode(rows[0]) : null;
+  }
+
+  /**
+   * @desc 길드가 발급한 코드 목록 — issued_date 내림차순(최신 발급 먼저).
+   */
+  public async listCodes(
+    guildId: string,
+    opts: { status?: TournamentCodeStatus; limit: number },
+  ): Promise<IssuedCode[]> {
+    const rows = await db
+      .select()
+      .from(tournamentCode)
+      .where(
+        and(
+          eq(tournamentCode.guildId, guildId),
+          eq(tournamentCode.isDeleted, false),
+          ...(opts.status ? [eq(tournamentCode.status, opts.status)] : []),
+        ),
+      )
+      .orderBy(desc(tournamentCode.issuedDate), asc(tournamentCode.code))
+      .limit(opts.limit);
+
+    return rows.map(this.toIssuedCode);
   }
 
   /**
@@ -261,8 +302,10 @@ export class TournamentService {
       channelId: meta?.channelId ?? null,
       source: meta?.source ?? 'BOT',
       gameType: row.gameType,
-      status: row.status,
+      spectatorType: meta?.spectatorType ?? 'ALL',
+      status: row.status as TournamentCodeStatus,
       issuedDate: row.issuedDate,
+      usedDate: row.usedDate ?? null,
     };
   }
 }

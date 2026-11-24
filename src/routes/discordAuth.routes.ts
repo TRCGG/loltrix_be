@@ -53,6 +53,7 @@ router.post(
     #swagger.summary = '로그아웃'
     #swagger.description = '세션 쿠키를 제거하여 로그아웃 처리합니다.'
     #swagger.security = []
+    #swagger.responses[204] = { description: '로그아웃 완료 (세션 폐기에 실패해도 204)' }
   */
   logout,
 );

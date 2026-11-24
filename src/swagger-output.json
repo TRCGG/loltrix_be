@@ -112,8 +112,8 @@
         "summary": "로그아웃",
         "description": "세션 쿠키를 제거하여 로그아웃 처리합니다.",
         "responses": {
-          "default": {
-            "description": ""
+          "204": {
+            "description": "로그아웃 완료 (세션 폐기에 실패해도 204)"
           }
         },
         "security": []
@@ -367,14 +367,30 @@
         }
       }
     },
-    "/api/tournament/codes": {
+    "/api/tournament/{guildId}/codes": {
       "post": {
         "tags": [
           "Tournament"
         ],
         "summary": "토너먼트 코드 발급 (봇/웹 공용)",
-        "description": "count개 코드를 선발급하여 tournament_code(PENDING)로 저장합니다. 봇 발급은 channelId가 metadata에 저장되어 콜백 시 다음 코드 게시 대상이 되고, 웹 발급(guildManager 이상)은 channelId 없이 발급자(issuedBy)가 기록됩니다.",
+        "description": "count개 코드를 선발급하여 tournament_code(PENDING)로 저장합니다. 봇 발급은 channelId가 metadata에 저장되어 콜백 시 다음 코드 게시 대상이 되고, 웹 발급(guildManager 이상)은 channelId 없이 발급자(issuedBy)가 기록됩니다. gameType은 1(일반내전)/2(스크림)/3(예선)/4(본선), 생략 시 1 — 코드 행에 기록됩니다(적재는 match_v5_raw 원본 저장만 — MVP raw-only). spectatorType은 ALL(전체 허용)/LOBBYONLY(로비에서만)/NONE(관전 불가), 생략 시 ALL. guildId는 Base64.",
         "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "길드 ID (Base64)"
+          },
+          {
+            "name": "guildId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "body",
             "in": "body",
@@ -382,25 +398,153 @@
             "schema": {
               "type": "object",
               "properties": {
-                "guildId": {
+                "count": {
+                  "type": "number",
+                  "example": 3
+                },
+                "gameType": {
                   "type": "string",
-                  "example": "123"
+                  "example": "1"
+                },
+                "spectatorType": {
+                  "type": "string",
+                  "example": "ALL"
                 },
                 "channelId": {
                   "type": "string",
                   "example": "456"
-                },
-                "count": {
-                  "type": "number",
-                  "example": 3
                 }
               }
             }
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "201": {
+            "description": "발급 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Tournament codes issued successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "codes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "example": "KR05130-1f8e2c4a-7b3d-4e9a-a6c1-2d5f80e9b713"
+                              },
+                              "guildId": {
+                                "type": "string",
+                                "example": "987654321098765432"
+                              },
+                              "channelId": {},
+                              "source": {
+                                "type": "string",
+                                "example": "WEB"
+                              },
+                              "gameType": {
+                                "type": "string",
+                                "example": "1"
+                              },
+                              "spectatorType": {
+                                "type": "string",
+                                "example": "ALL"
+                              },
+                              "status": {
+                                "type": "string",
+                                "example": "PENDING"
+                              },
+                              "issuedDate": {
+                                "type": "string",
+                                "example": "2026-11-24T11:02:00.000Z"
+                              },
+                              "usedDate": {}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Tournament codes issued successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "codes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "example": "KR05130-1f8e2c4a-7b3d-4e9a-a6c1-2d5f80e9b713"
+                              },
+                              "guildId": {
+                                "type": "string",
+                                "example": "987654321098765432"
+                              },
+                              "channelId": {},
+                              "source": {
+                                "type": "string",
+                                "example": "WEB"
+                              },
+                              "gameType": {
+                                "type": "string",
+                                "example": "1"
+                              },
+                              "spectatorType": {
+                                "type": "string",
+                                "example": "ALL"
+                              },
+                              "status": {
+                                "type": "string",
+                                "example": "PENDING"
+                              },
+                              "issuedDate": {
+                                "type": "string",
+                                "example": "2026-11-24T11:02:00.000Z"
+                              },
+                              "usedDate": {}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -414,13 +558,16 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "guildId": {
-                    "example": "any"
-                  },
                   "channelId": {
                     "example": "any"
                   },
                   "count": {
+                    "example": "any"
+                  },
+                  "gameType": {
+                    "example": "any"
+                  },
+                  "spectatorType": {
                     "example": "any"
                   }
                 }
@@ -428,21 +575,213 @@
             }
           }
         }
+      },
+      "get": {
+        "tags": [
+          "Tournament"
+        ],
+        "summary": "발급한 토너먼트 코드 목록",
+        "description": "길드가 발급한 코드를 issued_date 내림차순으로 반환합니다. status(PENDING=대기/COMPLETED=기록 완료/INVALID=만료)로 거를 수 있고, limit은 1~100(기본 50). 과거에 관전 설정 없이 발급된 코드는 spectatorType ALL로 표시됩니다. 길드 멤버(userNormal) 이상이면 조회할 수 있습니다. guildId는 Base64.",
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "길드 ID (Base64)"
+          },
+          {
+            "name": "guildId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "enum": [
+              "PENDING",
+              "COMPLETED",
+              "INVALID"
+            ],
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "1~100, 기본 50",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Tournament codes retrieved successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "codes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "example": "KR05130-1f8e2c4a-7b3d-4e9a-a6c1-2d5f80e9b713"
+                              },
+                              "guildId": {
+                                "type": "string",
+                                "example": "987654321098765432"
+                              },
+                              "channelId": {},
+                              "source": {
+                                "type": "string",
+                                "example": "WEB"
+                              },
+                              "gameType": {
+                                "type": "string",
+                                "example": "1"
+                              },
+                              "spectatorType": {
+                                "type": "string",
+                                "example": "ALL"
+                              },
+                              "status": {
+                                "type": "string",
+                                "example": "COMPLETED"
+                              },
+                              "issuedDate": {
+                                "type": "string",
+                                "example": "2026-11-24T11:02:00.000Z"
+                              },
+                              "usedDate": {
+                                "type": "string",
+                                "example": "2026-11-24T11:41:00.000Z"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Tournament codes retrieved successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "codes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "example": "KR05130-1f8e2c4a-7b3d-4e9a-a6c1-2d5f80e9b713"
+                              },
+                              "guildId": {
+                                "type": "string",
+                                "example": "987654321098765432"
+                              },
+                              "channelId": {},
+                              "source": {
+                                "type": "string",
+                                "example": "WEB"
+                              },
+                              "gameType": {
+                                "type": "string",
+                                "example": "1"
+                              },
+                              "spectatorType": {
+                                "type": "string",
+                                "example": "ALL"
+                              },
+                              "status": {
+                                "type": "string",
+                                "example": "COMPLETED"
+                              },
+                              "issuedDate": {
+                                "type": "string",
+                                "example": "2026-11-24T11:02:00.000Z"
+                              },
+                              "usedDate": {
+                                "type": "string",
+                                "example": "2026-11-24T11:41:00.000Z"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
       }
     },
-    "/api/tournament/next-code": {
+    "/api/tournament/{guildId}/next-code": {
       "get": {
         "tags": [
           "Tournament"
         ],
         "summary": "미사용 다음 코드 조회",
-        "description": "PENDING 코드 중 issued_date 오름차순 첫 코드를 반환합니다.",
+        "description": "PENDING 코드 중 issued_date 오름차순 첫 코드를 반환합니다. 없으면 404. guildId는 Base64.",
         "parameters": [
           {
             "name": "guildId",
-            "in": "query",
-            "description": "길드 ID",
+            "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "길드 ID (Base64)"
+          },
+          {
+            "name": "guildId",
+            "in": "query",
             "schema": {
               "type": "string"
             }
