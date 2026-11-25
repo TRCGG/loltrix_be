@@ -1,6 +1,7 @@
 import { NextFunction, Response } from 'express';
 import { AuthRequest } from '../middlewares/authHandler.js';
 import { postService } from '../services/post.service.js';
+import { ImageConfirmError } from '../types/imageUpload.js';
 import {
   AdminPostDetail,
   AdminPostListItem,
@@ -36,6 +37,10 @@ const postId = (req: AuthRequest) => (req.params as unknown as { id: number }).i
 
 const notFound = <T>(res: Response<PostResponse<T>>) =>
   res.status(404).json({ status: 'error', message: 'Post not found', data: null });
+
+// 프론트는 에러 본문의 message를 읽는다. 오류 처리기의 ProblemDetails에는 message가 없다.
+const imageConfirmFailed = <T>(res: Response<PostResponse<T>>, error: ImageConfirmError) =>
+  res.status(error.status).json({ status: 'error', message: error.message, data: null });
 
 /**
  * @desc 공개 글 목록 조회
@@ -139,6 +144,7 @@ export const createPost = async (
     const data = await postService.create(req.body as PostCreateInput, authorId);
     return res.status(201).json({ status: 'success', message: 'Post created successfully', data });
   } catch (error) {
+    if (error instanceof ImageConfirmError) return imageConfirmFailed(res, error);
     return next(error);
   }
 };
@@ -158,6 +164,7 @@ export const updatePost = async (
     if (!data) return notFound(res);
     return res.status(200).json({ status: 'success', message: 'Post updated successfully', data });
   } catch (error) {
+    if (error instanceof ImageConfirmError) return imageConfirmFailed(res, error);
     return next(error);
   }
 };

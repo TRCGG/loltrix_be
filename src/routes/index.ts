@@ -18,6 +18,7 @@ import publicGuildReadRouter from './publicGuildRead.routes.js';
 import siteStatisticsRouter from './siteStatistics.routes.js';
 import postRoutes from './post.routes.js';
 import adminPostRoutes from './adminPost.routes.js';
+import adminUploadRoutes from './adminUpload.routes.js';
 
 const router: Router = Router();
 
@@ -73,6 +74,8 @@ router.use('/competitions', competitionRoutes);
 router.use('/champions', championRoutes);
 
 router.use('/admin/posts', adminPostRoutes);
+
+router.use('/admin/uploads', adminUploadRoutes);
 
 // Test routes for error logging (개발 환경에서만)
 if (process.env.NODE_ENV === 'development') {
