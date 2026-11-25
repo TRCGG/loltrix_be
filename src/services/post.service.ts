@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../database/connectionPool.js';
 import { discordMember, post } from '../database/schema.js';
+import { imageUploadService } from './imageUpload.service.js';
 import {
   AdminPostDetail,
   AdminPostListItem,
@@ -104,6 +105,8 @@ export class PostService {
    * @desc 글 작성
    */
   public async create(input: PostCreateInput, authorId: string): Promise<AdminPostWriteResult> {
+    // 저장보다 먼저 확정한다. 저장 뒤에 실패하면 이미지가 수명 주기 규칙에 지워져 글이 깨진다.
+    await imageUploadService.confirmImages(input.content);
     const [row] = await db
       .insert(post)
       .values({
@@ -123,6 +126,7 @@ export class PostService {
    * @desc 글 수정·공개 전환. 없거나 삭제된 글이면 null
    */
   public async update(id: number, input: PostUpdateInput): Promise<AdminPostWriteResult | null> {
+    if (input.content !== undefined) await imageUploadService.confirmImages(input.content);
     const [row] = await db
       .update(post)
       .set({

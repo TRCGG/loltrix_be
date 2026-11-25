@@ -38,6 +38,15 @@ jest.unstable_mockModule('../database/connectionPool.js', () => ({
   db: { select: start('select'), insert: start('insert'), update: start('update') },
 }));
 
+// 확정 시점에 이미 실행된 DB 호출 수 — 0이어야 저장보다 먼저 확정한 것이다.
+let dbCallsAtConfirm: number[] = [];
+const confirmImages = jest.fn<(content: string) => Promise<void>>().mockImplementation(async () => {
+  dbCallsAtConfirm.push(calls.length);
+});
+jest.unstable_mockModule('../services/imageUpload.service.js', () => ({
+  imageUploadService: { confirmImages },
+}));
+
 const { PostService } = await import('../services/post.service.js');
 
 const service = new PostService();
@@ -47,6 +56,7 @@ const render = (chunk: unknown) => dialect.sqlToQuery(sql`${chunk as SQL}`).sql;
 beforeEach(() => {
   queue = [];
   calls = [];
+  dbCallsAtConfirm = [];
 });
 
 describe('PostService 목록', () => {
@@ -223,5 +233,35 @@ describe('PostService 작성자 표시명', () => {
 
     expect(calls.map((call) => call.op)).toEqual(['insert', 'update']);
     calls.forEach((call) => expect(call.args.returning[0]).not.toHaveProperty('authorName'));
+  });
+});
+
+describe('PostService 업로드 이미지 확정', () => {
+  const input = { category: 'devlog' as const, title: 't', content: '![a](https://img.gmok.kr/x)' };
+
+  test('작성·본문 수정은 DB에 쓰기 전에 본문 이미지를 확정한다', async () => {
+    queue = [[{ id: 1 }], [{ id: 1 }]];
+
+    await service.create(input, 'admin-1');
+    await service.update(1, { content: '새 본문' });
+
+    expect(confirmImages.mock.calls).toEqual([[input.content], ['새 본문']]);
+    expect(dbCallsAtConfirm).toEqual([0, 1]);
+  });
+
+  test('본문을 바꾸지 않는 수정은 확정하지 않는다', async () => {
+    queue = [[{ id: 1 }]];
+
+    await service.update(1, { isPublished: true });
+
+    expect(confirmImages).not.toHaveBeenCalled();
+  });
+
+  test('확정에 실패하면 글을 저장하지 않는다', async () => {
+    confirmImages.mockRejectedValueOnce(new Error('s3 down'));
+
+    await expect(service.create(input, 'admin-1')).rejects.toThrow('s3 down');
+
+    expect(calls).toEqual([]);
   });
 });

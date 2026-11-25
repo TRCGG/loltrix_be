@@ -273,3 +273,29 @@ describe('관리 API', () => {
     expect(listPublished).not.toHaveBeenCalled();
   });
 });
+
+describe('관리 API 업로드 이미지 확정 실패', () => {
+  test('작성·수정이 이미지 확정에서 실패하면 그 상태와 message로 응답한다', async () => {
+    const { ImageConfirmError } = await import('../types/imageUpload.js');
+    create.mockRejectedValue(
+      new ImageConfirmError('Failed to confirm uploaded images. Try saving again.', 502),
+    );
+    update.mockRejectedValue(
+      new ImageConfirmError('Uploaded image expired. Paste it again: k', 400),
+    );
+
+    const created = await send('POST', '/admin/posts', validPost);
+    const updated = await send('PATCH', '/admin/posts/4', { content: '새 본문' });
+
+    expect(created.status).toBe(502);
+    expect(await created.json()).toEqual({
+      status: 'error',
+      message: 'Failed to confirm uploaded images. Try saving again.',
+      data: null,
+    });
+    expect(updated.status).toBe(400);
+    expect(await updated.json()).toMatchObject({
+      message: 'Uploaded image expired. Paste it again: k',
+    });
+  });
+});
