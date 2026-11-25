@@ -146,11 +146,12 @@ export class ImageUploadService {
         message: error?.message,
       })),
     );
-    // ListBucket 권한이 없으면 S3가 없는 객체를 404 대신 403으로 줄 수 있어, 그 경우에도
-    // 어떤 이미지를 다시 붙여넣어야 하는지 알 수 있게 키를 함께 알린다.
+    // IAM에 ListBucket이 없어 없는 객체에도 NoSuchKey가 오지 않는다(dev에서 확인, 403으로 추정). 그래서
+    // 만료와 다른 실패를 가를 수 없으니, 다시 붙여넣을 이미지를 알 수 있게 키를 함께 알린다.
+    // 502는 Cloudflare가 자기 오류 페이지로 바꿔 CORS 헤더와 message가 사라지므로 쓰지 않는다.
     throw new ImageConfirmError(
       `Failed to confirm uploaded images. Try saving again, or paste these again: ${failed.map(({ key }) => key).join(', ')}`,
-      502,
+      500,
     );
   }
 }

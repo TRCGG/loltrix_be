@@ -155,7 +155,7 @@ describe('저장 시 이미지 확정', () => {
     expect((error as Error).message).toContain(`dev/board/2026/11/${UUID}.webp`);
   });
 
-  test('그 밖의 S3 실패는 502로 다시 저장하게 한다', async () => {
+  test('그 밖의 S3 실패는 500으로 다시 저장하게 한다', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
     send
       .mockResolvedValueOnce({})
@@ -166,7 +166,7 @@ describe('저장 시 이미지 확정', () => {
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ImageConfirmError);
-    expect(error).toMatchObject({ status: 502 });
+    expect(error).toMatchObject({ status: 500 });
     // 실패한 키만 알려 다시 붙여넣을 이미지를 찾게 한다
     expect((error as Error).message).toContain(`dev/board/2026/11/${UUID2}.webp`);
     expect((error as Error).message).not.toContain(`dev/board/2026/11/${UUID}.webp`);
