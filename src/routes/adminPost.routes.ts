@@ -1,7 +1,7 @@
-import { NextFunction, Response, Router } from 'express';
-import { AuthRequest } from '../middlewares/authHandler.js';
+import { Router } from 'express';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { requireAdmin } from '../middlewares/requireRole.js';
+import { rejectBot } from '../middlewares/rejectBot.js';
 import {
   createPost,
   deletePost,
@@ -13,17 +13,7 @@ import { postCreateSchema, postIdSchema, postListSchema, postUpdateSchema } from
 
 const router: Router = Router();
 
-// requireAdmin은 봇 요청을 그대로 통과시키므로(다른 라우트가 기대하는 동작) 여기서 먼저 끊는다.
-const rejectBot = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (req.isBot) {
-    return res
-      .status(403)
-      .json({ status: 'error', message: 'Bot cannot manage posts', data: null });
-  }
-  return next();
-};
-
-router.use(rejectBot, requireAdmin('adminNormal'));
+router.use(rejectBot('Bot cannot manage posts'), requireAdmin('adminNormal'));
 
 /**
  * @route GET /api/admin/posts

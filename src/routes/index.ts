@@ -11,13 +11,14 @@ import matchParticipantRoutes from './matchParticipant.routes.js';
 import statisticsRoutes from './statistics.route.js';
 import h2hRoutes from './h2h.routes.js';
 import riotCallbackRoutes from './riotCallback.routes.js';
-import tournamentRoutes from './tournament.routes.js';
+import tournamentRoutes, { publicTournamentRoutes } from './tournament.routes.js';
 import competitionRoutes from './competition.routes.js';
 import championRoutes from './champion.routes.js';
 import publicGuildReadRouter from './publicGuildRead.routes.js';
 import siteStatisticsRouter from './siteStatistics.routes.js';
 import postRoutes from './post.routes.js';
 import adminPostRoutes from './adminPost.routes.js';
+import adminUploadRoutes from './adminUpload.routes.js';
 
 const router: Router = Router();
 
@@ -37,13 +38,14 @@ router.use(siteStatisticsRouter);
 // 공개 길드의 승인된 조회만 기존 URL에서 세션 없이 처리한다.
 router.use(publicGuildReadRouter);
 
+router.use('/tournament', publicTournamentRoutes);
+
 // 개발자 게시판 읽기는 비로그인 공개 — 작성·수정·삭제(/admin/posts)만 세션 검증 아래에 둔다.
 router.use('/posts', postRoutes);
 
 // --- 아래 API 부터는 모두 세션 검증 ---
 router.use(verifyAuth);
 
-// 토너먼트 코드 발급/조회 — 봇 전용(localhost 제한). 인증 체인 아래.
 router.use('/tournament', tournamentRoutes);
 
 // Example routes with Zod validation
@@ -72,6 +74,8 @@ router.use('/competitions', competitionRoutes);
 router.use('/champions', championRoutes);
 
 router.use('/admin/posts', adminPostRoutes);
+
+router.use('/admin/uploads', adminUploadRoutes);
 
 // Test routes for error logging (개발 환경에서만)
 if (process.env.NODE_ENV === 'development') {
