@@ -6,6 +6,9 @@ import { decodeGuildIdMiddleware } from '../middlewares/decodeGuildId.js';
 import { issueCodes, listCodes, getNextCode } from '../controllers/tournament.controller.js';
 
 const router: Router = Router();
+// Riot 심사 동안만 세션 검증 위에 마운트하는 임시 공개 라우터.
+// 실사용 전에 발급을 router로 되돌리고 guildManager 게이트를 다시 건다 — 그대로 두면 누구나 Riot 코드를 발급한다.
+export const publicTournamentRoutes: Router = Router();
 
 // --- Schemas ---
 
@@ -63,7 +66,6 @@ const nextCodeSchema = z.object({
   params: guildParams,
 });
 
-const manager = requireGuildRole('guildManager', { from: 'params', key: 'guildId' });
 const member = requireGuildRole('userNormal', { from: 'params', key: 'guildId' });
 
 // --- Routes ---
@@ -71,14 +73,14 @@ const member = requireGuildRole('userNormal', { from: 'params', key: 'guildId' }
 
 /**
  * @route POST /api/tournament/:guildId/codes
- * @desc 토너먼트 코드 발급 (봇/웹 공용). 기존 인증 체인(restrictBotToLocalhost, verifyAuth) 아래 구역.
- * @access 봇은 requireGuildRole 바이패스, 웹 세션은 guildManager 이상 (admin bypass)
+ * @desc 토너먼트 코드 발급. Riot 심사 동안 비로그인 공개(세션 검증 위에 마운트).
+ * @access 공개 — 권한 검사 없음
  */
-router.post(
+publicTournamentRoutes.post(
   '/:guildId/codes',
   /* #swagger.tags = ['Tournament']
-    #swagger.summary = '토너먼트 코드 발급 (봇/웹 공용)'
-    #swagger.description = 'count개 코드를 선발급하여 tournament_code(PENDING)로 저장합니다. 봇 발급은 channelId가 metadata에 저장되어 콜백 시 다음 코드 게시 대상이 되고, 웹 발급(guildManager 이상)은 channelId 없이 발급자(issuedBy)가 기록됩니다. gameType은 1(일반내전)/2(스크림)/3(예선)/4(본선), 생략 시 1 — 코드 행에 기록됩니다(적재는 match_v5_raw 원본 저장만 — MVP raw-only). spectatorType은 ALL(전체 허용)/LOBBYONLY(로비에서만)/NONE(관전 불가), 생략 시 ALL. guildId는 Base64.'
+    #swagger.summary = '토너먼트 코드 발급 (심사용 비로그인 공개)'
+    #swagger.description = 'count개 코드를 선발급하여 tournament_code(PENDING)로 저장합니다. Riot 심사 동안 로그인 없이 호출할 수 있으며, 실사용 전 guildManager 이상으로 되돌립니다. 공개 동안은 세션을 읽지 않으므로 발급자(issuedBy)가 기록되지 않습니다. gameType은 1(일반내전)/2(스크림)/3(예선)/4(본선), 생략 시 1 — 코드 행에 기록됩니다(적재는 match_v5_raw 원본 저장만 — MVP raw-only). spectatorType은 ALL(전체 허용)/LOBBYONLY(로비에서만)/NONE(관전 불가), 생략 시 ALL. guildId는 Base64.'
     #swagger.parameters['guildId'] = { in: 'path', description: '길드 ID (Base64)', required: true, type: 'string' }
     #swagger.parameters['body'] = {
       in: 'body',
@@ -93,10 +95,8 @@ router.post(
         data: { codes: [{ code: 'KR05130-1f8e2c4a-7b3d-4e9a-a6c1-2d5f80e9b713', guildId: '987654321098765432', channelId: null, source: 'WEB', gameType: '1', spectatorType: 'ALL', status: 'PENDING', issuedDate: '2026-11-24T11:02:00.000Z', usedDate: null }] }
       }
     }
-    #swagger.security = [{ "session": [] }]
   */
   decodeGuildIdMiddleware,
-  manager,
   validateRequest(issueCodesSchema),
   issueCodes,
 );

@@ -24,7 +24,7 @@ jest.unstable_mockModule('../middlewares/requireRole.js', () => ({
   },
 }));
 
-const { default: router } = await import('../routes/tournament.routes.js');
+const { default: router, publicTournamentRoutes } = await import('../routes/tournament.routes.js');
 
 const RAW_GUILD = '987654321098765432';
 const ENCODED_GUILD = Buffer.from(RAW_GUILD).toString('base64');
@@ -35,6 +35,7 @@ let baseUrl: string;
 beforeAll(async () => {
   const app = express();
   app.use(express.json());
+  app.use('/api/tournament', publicTournamentRoutes);
   app.use('/api/tournament', router);
   // Express는 인자 네 개로 오류 처리 미들웨어를 구분한다.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -65,11 +66,22 @@ const post = (path: string, body: unknown) =>
     body: JSON.stringify(body),
   });
 
-test('발급은 guildManager, 목록은 userNormal 이상 — 둘 다 경로 guildId 기준', () => {
-  expect(roleConfigs).toEqual([
-    ['guildManager', { from: 'params', key: 'guildId' }],
-    ['userNormal', { from: 'params', key: 'guildId' }],
-  ]);
+test('길드 역할 검사는 목록의 userNormal 하나뿐 — 발급은 심사 동안 공개', () => {
+  expect(roleConfigs).toEqual([['userNormal', { from: 'params', key: 'guildId' }]]);
+});
+
+test('발급만 공개 라우터에 있고 목록·다음 코드는 세션 검증 아래 라우터에 남는다', () => {
+  const routesOf = (r: typeof router) =>
+    r.stack.flatMap((layer) =>
+      layer.route
+        ? Object.keys((layer.route as unknown as { methods: Record<string, boolean> }).methods).map(
+            (method) => `${method.toUpperCase()} ${layer.route?.path}`,
+          )
+        : [],
+    );
+
+  expect(routesOf(publicTournamentRoutes)).toEqual(['POST /:guildId/codes']);
+  expect(routesOf(router)).toEqual(['GET /:guildId/codes', 'GET /:guildId/next-code']);
 });
 
 describe('POST /:guildId/codes', () => {
@@ -84,14 +96,14 @@ describe('POST /:guildId/codes', () => {
     expect(issueCodes).not.toHaveBeenCalled();
   });
 
-  test('Base64 guildId를 디코딩해 권한 확인과 발급에 넘긴다', async () => {
+  test('Base64 guildId를 디코딩해 권한 검사 없이 발급에 넘긴다', async () => {
     const response = await post(`/${ENCODED_GUILD}/codes`, {
       count: 3,
       spectatorType: 'LOBBYONLY',
     });
 
     expect(response.status).toBe(201);
-    expect(roleCheckedGuildIds).toEqual([RAW_GUILD]);
+    expect(roleCheckedGuildIds).toEqual([]);
     expect(issueCodes).toHaveBeenCalledWith(
       expect.objectContaining({ guildId: RAW_GUILD, count: 3, spectatorType: 'LOBBYONLY' }),
     );

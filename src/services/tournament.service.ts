@@ -183,7 +183,7 @@ export class TournamentService {
           eq(tournamentCode.isDeleted, false),
         ),
       )
-      .orderBy(asc(tournamentCode.issuedDate))
+      .orderBy(asc(tournamentCode.issuedDate), asc(tournamentCode.code))
       .limit(1);
 
     return rows.length > 0 ? this.toIssuedCode(rows[0]) : null;
