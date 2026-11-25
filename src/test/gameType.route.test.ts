@@ -88,6 +88,8 @@ jest.unstable_mockModule('../services/competition.service.js', () => ({
 
 const app = express();
 app.use(express.json());
+const { publicTournamentRoutes } = await import('../routes/tournament.routes.js');
+app.use('/tournament', publicTournamentRoutes);
 for (const [mount, module] of [
   ['competitions', 'competition.routes'],
   ['replays', 'replay.routes'],

@@ -372,8 +372,8 @@
         "tags": [
           "Tournament"
         ],
-        "summary": "토너먼트 코드 발급 (봇/웹 공용)",
-        "description": "count개 코드를 선발급하여 tournament_code(PENDING)로 저장합니다. 봇 발급은 channelId가 metadata에 저장되어 콜백 시 다음 코드 게시 대상이 되고, 웹 발급(guildManager 이상)은 channelId 없이 발급자(issuedBy)가 기록됩니다. gameType은 1(일반내전)/2(스크림)/3(예선)/4(본선), 생략 시 1 — 코드 행에 기록됩니다(적재는 match_v5_raw 원본 저장만 — MVP raw-only). spectatorType은 ALL(전체 허용)/LOBBYONLY(로비에서만)/NONE(관전 불가), 생략 시 ALL. guildId는 Base64.",
+        "summary": "토너먼트 코드 발급 (심사용 비로그인 공개)",
+        "description": "count개 코드를 선발급하여 tournament_code(PENDING)로 저장합니다. Riot 심사 동안 로그인 없이 호출할 수 있으며, 실사용 전 guildManager 이상으로 되돌립니다. 공개 동안은 세션을 읽지 않으므로 발급자(issuedBy)가 기록되지 않습니다. gameType은 1(일반내전)/2(스크림)/3(예선)/4(본선), 생략 시 1 — 코드 행에 기록됩니다(적재는 match_v5_raw 원본 저장만 — MVP raw-only). spectatorType은 ALL(전체 허용)/LOBBYONLY(로비에서만)/NONE(관전 불가), 생략 시 ALL. guildId는 Base64.",
         "parameters": [
           {
             "name": "guildId",
@@ -547,11 +547,6 @@
             }
           }
         },
-        "security": [
-          {
-            "session": []
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
