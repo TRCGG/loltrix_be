@@ -974,3 +974,130 @@ export const post = pgTable('post', {
 
 export type Post = typeof post.$inferSelect;
 export type InsertPost = typeof post.$inferInsert;
+
+// ── MMR ──
+// mmr_match_results · mmr_user_summary · mmr_baselines는 gmok_mmr 레포의 마이그레이션이 관리한다.
+// 여기 정의는 백엔드가 읽고 쓰기 위한 것이라 이 레포 migrations에서 만들거나 바꾸지 않는다.
+const mmrNumber = (name: string) => numeric(name, { mode: 'number' });
+
+export const mmrMatchResult = pgTable(
+  'mmr_match_results',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    season: varchar('season', { length: 64 }).notNull(),
+    replayCode: varchar('replay_code', { length: 128 }).notNull(),
+    playerCode: varchar('player_code', { length: 64 }),
+    championId: varchar('champion_id', { length: 16 }),
+    team: varchar('team', { length: 8 }),
+    position: varchar('position', { length: 16 }).notNull(),
+    // 타임존 없는 컬럼에 UTC 벽시계 시각으로 저장한다(gmok_mmr 전체 계산과 같은 규칙).
+    playedAt: timestamp('played_at', { withTimezone: false }),
+    gameResult: integer('game_result').notNull(),
+    kills: integer('kills'),
+    deaths: integer('deaths'),
+    assists: integer('assists'),
+    gold: integer('gold'),
+    ccTime: integer('cc_time'),
+    gameDuration: mmrNumber('game_duration'),
+    damageToChampions: integer('damage_to_champions'),
+    damageTaken: integer('damage_taken'),
+    visionScore: integer('vision_score'),
+    visionBought: integer('vision_bought'),
+    pentaKills: integer('penta_kills'),
+    goldPerMin: mmrNumber('gold_per_min'),
+    dpm: mmrNumber('dpm'),
+    damageTakenPerMin: mmrNumber('damage_taken_per_min'),
+    ccTimePerMin: mmrNumber('cc_time_per_min'),
+    kda: mmrNumber('kda'),
+    damageTakenPerDeath: mmrNumber('damage_taken_per_death'),
+    damageDealtPerDeath: mmrNumber('damage_dealt_per_death'),
+    rawGameImpact: mmrNumber('raw_game_impact'),
+    gameImpact: mmrNumber('game_impact'),
+    gameImpactWinlossNorm: mmrNumber('game_impact_winloss_norm'),
+    gameNPersonContribution: mmrNumber('game_n_person_contribution'),
+    gameImpactVsOpponent: mmrNumber('game_impact_vs_opponent'),
+    preGamePosMmr: integer('pre_game_pos_mmr'),
+    expectedScore: mmrNumber('expected_score'),
+    actualScore: mmrNumber('actual_score'),
+    relativeFactor: mmrNumber('relative_factor'),
+    personalFactor: mmrNumber('personal_factor'),
+    finalFactor: mmrNumber('final_factor'),
+    mmrChange: integer('mmr_change'),
+    posCumulativeMmr: integer('pos_cumulative_mmr'),
+    totalMmr: integer('total_mmr'),
+    baselineSeason: varchar('baseline_season', { length: 64 }),
+    baselineVersion: varchar('baseline_version', { length: 64 }),
+    calculatedAt: timestamp('calculated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('uq_mmr_match_results_game_player').on(t.guildId, t.replayCode, t.playerCode),
+  ],
+);
+
+export const mmrUserSummary = pgTable(
+  'mmr_user_summary',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: varchar('guild_id', { length: 128 }).notNull(),
+    season: varchar('season', { length: 64 }).notNull(),
+    playerCode: varchar('player_code', { length: 64 }).notNull(),
+    totalMmr: mmrNumber('total_mmr'),
+    totalGames: integer('total_games'),
+    overallWinrate: mmrNumber('overall_winrate'),
+    topMmr: mmrNumber('top_mmr'),
+    topWinrate: mmrNumber('top_winrate'),
+    topGames: integer('top_games'),
+    jugMmr: mmrNumber('jug_mmr'),
+    jugWinrate: mmrNumber('jug_winrate'),
+    jugGames: integer('jug_games'),
+    midMmr: mmrNumber('mid_mmr'),
+    midWinrate: mmrNumber('mid_winrate'),
+    midGames: integer('mid_games'),
+    adcMmr: mmrNumber('adc_mmr'),
+    adcWinrate: mmrNumber('adc_winrate'),
+    adcGames: integer('adc_games'),
+    supMmr: mmrNumber('sup_mmr'),
+    supWinrate: mmrNumber('sup_winrate'),
+    supGames: integer('sup_games'),
+    positionReport: jsonb('position_report').notNull().default({}),
+    calculatedAt: timestamp('calculated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('uq_mmr_user_summary_guild_player_season').on(t.guildId, t.playerCode, t.season),
+  ],
+);
+
+export const mmrBaselines = pgTable('mmr_baselines', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  season: varchar('season', { length: 64 }).notNull(),
+  baselineVersion: varchar('baseline_version', { length: 64 }).notNull(),
+  isActive: boolean('is_active').notNull().default(false),
+  mmrBaseline: jsonb('mmr_baseline').notNull(),
+  gameImpactBaseline: jsonb('game_impact_baseline').notNull(),
+  metadata: jsonb('metadata').notNull().default({}),
+  matchCount: integer('match_count'),
+  playerGameRowCount: integer('player_game_row_count'),
+  calculatedAt: timestamp('calculated_at', { withTimezone: true }),
+  savedAt: timestamp('saved_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** MMR 일일 배치 실행 기록. 마지막 done 행의 cutoff_to가 다음 구간의 시작이다. */
+export const mmrBatchRun = pgTable(
+  'mmr_batch_run',
+  {
+    id: serial('id').primaryKey(),
+    cutoffFrom: timestamp('cutoff_from', { withTimezone: true }).notNull(),
+    cutoffTo: timestamp('cutoff_to', { withTimezone: true }).notNull(),
+    status: varchar('status', { length: 16 }).notNull(), // running / done / aborted / seed
+    guildSeasons: integer('guild_seasons').notNull().default(0),
+    processedMatches: integer('processed_matches').notNull().default(0),
+    skippedMatches: jsonb('skipped_matches').notNull().default([]),
+    error: text('error'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (t) => [index('idx_mmr_batch_run_status_cutoff').on(t.status, t.cutoffTo)],
+);
+
+export type MmrBatchRun = typeof mmrBatchRun.$inferSelect;

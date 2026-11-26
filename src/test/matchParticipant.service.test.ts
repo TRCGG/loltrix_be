@@ -59,6 +59,10 @@ const { matchParticipantService } = await import('../services/matchParticipant.s
 const GAME = 'KR_1234';
 const GUILD = 'guild-1';
 const ACTOR = { memberId: 'member-1', source: 'bot' as const };
+// 2026-11-20 22:00 KST 업로드 → 삭제 마감은 다음 날 10:00 KST
+const UPLOADED_AT = new Date('2026-11-20T13:00:00Z');
+const BEFORE_DEADLINE = new Date('2026-11-21T00:59:59Z');
+const AT_DEADLINE = new Date('2026-11-21T01:00:00Z');
 const dialect = new PgDialect();
 
 beforeEach(() => {
@@ -96,8 +100,8 @@ describe('부캐 합산 선수 필터', () => {
 
 describe('경기 삭제(!drop)', () => {
   test('참가자·MMR 지표·리플·팀 귀속까지 한 트랜잭션에서 함께 내린다', async () => {
-    queue = [[{ id: GAME, guildId: GUILD }]];
-    const result = await matchParticipantService.deleteMatch(GAME, GUILD, ACTOR);
+    queue = [[{ id: GAME, guildId: GUILD, gameType: '1', createDate: UPLOADED_AT }]];
+    const result = await matchParticipantService.deleteMatch(GAME, GUILD, ACTOR, BEFORE_DEADLINE);
 
     expect(statements).toEqual([
       'update custom_match',
@@ -114,8 +118,8 @@ describe('경기 삭제(!drop)', () => {
   });
 
   test('삭제 감사 로그를 한 줄 남긴다', async () => {
-    queue = [[{ id: GAME, guildId: GUILD }]];
-    await matchParticipantService.deleteMatch(GAME, GUILD, ACTOR);
+    queue = [[{ id: GAME, guildId: GUILD, gameType: '1', createDate: UPLOADED_AT }]];
+    await matchParticipantService.deleteMatch(GAME, GUILD, ACTOR, BEFORE_DEADLINE);
 
     expect(written[4]).toEqual({
       guildId: GUILD,
@@ -132,5 +136,23 @@ describe('경기 삭제(!drop)', () => {
     expect(result).toBeNull();
     expect(statements).toEqual(['update custom_match']);
     expect(written).toEqual([{ isDeleted: true, updateDate: expect.any(Date) }]);
+  });
+
+  test('업로드 후 첫 06:00 KST + 4시간부터는 409로 거부하고 감사 로그를 남기지 않는다', async () => {
+    queue = [[{ id: GAME, guildId: GUILD, gameType: '1', createDate: UPLOADED_AT }]];
+
+    await expect(
+      matchParticipantService.deleteMatch(GAME, GUILD, ACTOR, AT_DEADLINE),
+    ).rejects.toMatchObject({ status: 409, type: 'replay-delete-window-closed' });
+    expect(statements).not.toContain('insert guild_audit_log');
+  });
+
+  test('스크림·대회 경기는 마감이 지나도 지울 수 있다', async () => {
+    queue = [[{ id: GAME, guildId: GUILD, gameType: '3', createDate: UPLOADED_AT }]];
+
+    await expect(
+      matchParticipantService.deleteMatch(GAME, GUILD, ACTOR, AT_DEADLINE),
+    ).resolves.toMatchObject({ id: GAME });
+    expect(statements).toContain('insert guild_audit_log');
   });
 });
