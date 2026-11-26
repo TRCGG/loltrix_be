@@ -14,6 +14,7 @@ import { guildMemberService } from '../services/guildMember.service.js';
 import { systemConfigService } from '../services/systemConfig.service.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
 import { scopeFromQuery } from '../types/matchScope.js';
+import { BusinessError } from '../types/error.js';
 
 const formatMember = (members: any[]) => {
   return members.map((member) => ({
@@ -325,6 +326,10 @@ export const deleteMatch = async (req: AuthRequest, res: Response<MatchResponse<
       data: deletedMatch,
     });
   } catch (error) {
+    // 봇·프론트는 에러 본문의 message를 그대로 보여준다.
+    if (error instanceof BusinessError) {
+      return res.status(error.status).json({ status: 'error', message: error.message, data: null });
+    }
     console.error('Error deleting match:', error);
     return res.status(500).json({
       status: 'error',

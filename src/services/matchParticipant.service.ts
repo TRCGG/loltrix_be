@@ -18,7 +18,7 @@ import {
 } from '../database/schema.js'; // 스키마 import 추가
 import { subAccountLink } from '../database/subAccountLink.js';
 import { scopeConditions } from '../database/matchScope.js';
-import { SystemError } from '../types/error.js';
+import { BusinessError, SystemError } from '../types/error.js';
 import {
   MatchScope,
   NORMAL_MATCH_SCOPE,
@@ -27,6 +27,11 @@ import {
   isCompetitionScope,
 } from '../types/matchScope.js';
 import { softDeleteMatches } from './matchSoftDelete.js';
+import { replayDeleteDeadline } from './mmr/mmrSchedule.js';
+
+// TODO: 임시 문구 — 확정 문구로 교체
+export const REPLAY_DELETE_CLOSED_MESSAGE =
+  '업로드 다음 날 오전 10시가 지난 리플은 삭제할 수 없습니다.';
 
 const MatchparticipantSchema = z.object({
   PUUID: z.string().max(64),
@@ -746,11 +751,21 @@ export class MatchParticipantService {
     gameId: string,
     guildId: string,
     actor: { memberId: string; source: 'web' | 'bot' },
+    now: Date = new Date(),
   ) {
     return db.transaction(async (tx) => {
       const [deletedMatch] = await softDeleteMatches([gameId], tx, guildId);
       if (!deletedMatch) {
         return null;
+      }
+
+      // MMR 배치가 이미 계산한 경기는 되돌리지 않으므로 그 전까지만 지울 수 있다. 던지면 위
+      // 캐스케이드까지 롤백된다. MMR은 일반내전만 계산하므로 스크림·대회 경기는 언제든 지울 수 있다.
+      if (deletedMatch.gameType === '1' && now >= replayDeleteDeadline(deletedMatch.createDate)) {
+        throw new BusinessError(REPLAY_DELETE_CLOSED_MESSAGE, 409, {
+          type: 'replay-delete-window-closed',
+          isLoggable: false,
+        });
       }
 
       await tx.insert(guildAuditLog).values({
