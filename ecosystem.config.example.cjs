@@ -55,5 +55,30 @@ module.exports = {
         BOT_CALLBACK_URL: "http://127.0.0.1:19902",
       },
     },
+    {
+      // MMR 일일 배치: API와 분리된 상주 프로세스. 매일 12:00 KST(코드에 Asia/Seoul 고정)에 하루치를 계산한다.
+      // 서버 시간대와 무관하다. 계산 여부는 system_config MMR_BATCH_ENABLED=1로 켠다.
+      // 처음 켜기 전 한 번: node dist/jobs/mmrBatch.cli.js --seed=<전체 계산 컷오프 C>
+      // 수동 실행: node dist/jobs/mmrBatch.cli.js --once
+      name: "gmok-mmr-batch",
+      script: "./dist/jobs/mmrBatch.cli.js",
+      autorestart: true,
+      watch: false,
+      out_file: "./logs/mmr-batch.out.log",
+      error_file: "./logs/mmr-batch.error.log",
+      merge_logs: true,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      env: {
+        NODE_ENV: "development",
+        // DB 접속 값은 위 API 앱과 같게 둔다.
+        DB_HOST: "your-db-host.example.com",
+        DB_PORT: "5432",
+        DB_NAME: "your_db_name",
+        DB_USER: "your_db_user",
+        DB_PASSWORD: "your_db_password",
+        DB_SSL: "true",
+        DB_SSL_REJECT_UNAUTHORIZED: false,
+      },
+    },
   ],
 };
