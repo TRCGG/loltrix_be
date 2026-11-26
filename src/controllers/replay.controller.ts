@@ -3,6 +3,7 @@ import { ReplayResponse, ReplayFileRequest, WebUploadResponse, WebUploadResult, 
 import { replaySaveFacade } from '../facade/replaySave.facade.js';
 import { ReplayService, replayService } from '../services/replay.service.js';
 import { competitionService } from '../services/competition.service.js';
+import { replayGameModeService } from '../services/replayGameMode.service.js';
 import { AuthRequest } from '../middlewares/authHandler.js';
 
 /**
@@ -119,6 +120,16 @@ export const webCreateReplay = async (
       } catch (error) {
         console.error('web replay parse failed:', { guildId, fileName }, error);
         failed.push({ fileName, reason: 'parse_failed' });
+        continue;
+      }
+
+      const gameMode = await replayGameModeService.check(
+        rawData,
+        () => replayGameModeService.lookupMatch(originalName, 'web.replayUpload'),
+        'web.replayUpload',
+      );
+      if (replayGameModeService.isRejected(gameMode)) {
+        failed.push({ fileName, reason: 'unsupported_game_mode' });
         continue;
       }
 

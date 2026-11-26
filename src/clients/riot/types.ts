@@ -155,6 +155,8 @@ export interface MatchV5Info {
   gameStartTimestamp?: number;
   gameDuration?: number;
   gameId?: number;
+  /** 'MATCHED_GAME'(랭크·일반·칼바람 등 매칭) | 'CUSTOM_GAME'(사용자 설정·토너먼트 코드) */
+  gameType?: string;
   tournamentCode?: string;
   participants: MatchV5Participant[];
   teams: MatchV5Team[];

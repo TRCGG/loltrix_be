@@ -12,8 +12,10 @@ export interface RiotRequestOptions {
   method?: string;
   /** JSON 직렬화되어 전송된다. */
   body?: unknown;
-  /** 밀리초 타임아웃(기본 10000). */
+  /** 밀리초 타임아웃(기본 10000). 429 재시도마다 새로 걸린다. */
   timeout?: number;
+  /** 429 재시도 횟수(기본 2). 재시도 대기가 응답 지연에 그대로 더해진다. */
+  maxRateLimitRetry?: number;
   /**
    * 집계용 경로. 실제 id가 아니라 `/matches/{matchId}` 형태의 템플릿을 넘긴다.
    * id가 그대로 들어오면 호출 1건마다 값이 달라져 route별 집계가 불가능해진다.
@@ -56,7 +58,8 @@ function logRiotCall(event: RiotCallEvent): void {
 /**
  * @desc Riot API 전용 fetch.
  * - X-Riot-Token 헤더로 인증한다.
- * - 429면 Retry-After만큼 대기 후 재시도(최대 2회). 그 외 4xx/5xx는 SystemError로 던진다.
+ * - 429면 Retry-After만큼 대기 후 재시도(기본 최대 2회). 그 외 4xx/5xx는 SystemError로 던지고,
+ *   code에 `riot_upstream_<status>`를 싣는다.
  * - 타임아웃 초과 시 abort → 504 SystemError.
  * - HTTP 시도마다 riot.call 이벤트를 남긴다. 재시도도 쿼터를 차감하므로 호출량 집계의
  *   단위는 riotRequest 호출이 아니라 시도다.
@@ -66,7 +69,14 @@ export async function riotRequest<T>(
   apiKey: string,
   options: RiotRequestOptions,
 ): Promise<T> {
-  const { method = 'GET', body, timeout = DEFAULT_TIMEOUT, route, caller } = options;
+  const {
+    method = 'GET',
+    body,
+    timeout = DEFAULT_TIMEOUT,
+    maxRateLimitRetry = MAX_RATE_LIMIT_RETRY,
+    route,
+    caller,
+  } = options;
   const hasBody = body !== undefined;
 
   let attempt = 0;
@@ -115,7 +125,7 @@ export async function riotRequest<T>(
       rateLimitCount = response.headers.get('X-App-Rate-Limit-Count');
 
       // rate limit: Retry-After(초) 만큼 대기 후 재시도.
-      if (response.status === 429 && attempt < MAX_RATE_LIMIT_RETRY) {
+      if (response.status === 429 && attempt < maxRateLimitRetry) {
         const retryAfterSec =
           Number(response.headers.get('Retry-After')) || DEFAULT_RETRY_AFTER_SEC;
         attempt += 1;
@@ -125,6 +135,7 @@ export async function riotRequest<T>(
         throw new SystemError(
           `Riot API 요청 실패 (upstream ${response.status}): ${method} ${fullUrl} ${errorBody}`.trim(),
           502,
+          { code: `riot_upstream_${response.status}` },
         );
       } else {
         // 204 No Content 등 빈 바디 대응.
