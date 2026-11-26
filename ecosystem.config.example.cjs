@@ -5,6 +5,18 @@
 // 이 템플릿만 예외). 시크릿은 여기 평문으로 두지 말고 가능하면 서버의 .env.* 로 관리.
 // 환경변수 키 설명은 .env.example 참고.
 // =============================================================
+
+// API 앱과 MMR 배치 앱이 같은 DB를 쓰므로 한 곳에서 정의한다.
+const DB_ENV = {
+  DB_HOST: "your-db-host.example.com",
+  DB_PORT: "5432",
+  DB_NAME: "your_db_name",
+  DB_USER: "your_db_user",
+  DB_PASSWORD: "your_db_password",
+  DB_SSL: "true",
+  DB_SSL_REJECT_UNAUTHORIZED: false,
+};
+
 module.exports = {
   apps: [
     {
@@ -19,15 +31,7 @@ module.exports = {
       env: {
         PORT: 19901,
         NODE_ENV: "development",
-
-        // --- Database (PostgreSQL) ---
-        DB_HOST: "your-db-host.example.com",
-        DB_PORT: "5432",
-        DB_NAME: "your_db_name",
-        DB_USER: "your_db_user",
-        DB_PASSWORD: "your_db_password",
-        DB_SSL: "true",
-        DB_SSL_REJECT_UNAUTHORIZED: false,
+        ...DB_ENV,
 
         // --- Security ---
         COOKIE_SECRET: "change-me-random-string",
@@ -60,6 +64,7 @@ module.exports = {
       // 서버 시간대와 무관하다. 계산 여부는 system_config MMR_BATCH_ENABLED=1로 켠다.
       // 처음 켜기 전 한 번: node dist/jobs/mmrBatch.cli.js --seed=<전체 계산 컷오프 C>
       // 수동 실행: node dist/jobs/mmrBatch.cli.js --once
+      // 처음 등록: pm2 start ecosystem.config.cjs --only gmok-mmr-batch (이후 배포의 pm2 reload가 함께 재시작한다)
       name: "gmok-mmr-batch",
       script: "./dist/jobs/mmrBatch.cli.js",
       autorestart: true,
@@ -70,14 +75,7 @@ module.exports = {
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
       env: {
         NODE_ENV: "development",
-        // DB 접속 값은 위 API 앱과 같게 둔다.
-        DB_HOST: "your-db-host.example.com",
-        DB_PORT: "5432",
-        DB_NAME: "your_db_name",
-        DB_USER: "your_db_user",
-        DB_PASSWORD: "your_db_password",
-        DB_SSL: "true",
-        DB_SSL_REJECT_UNAUTHORIZED: false,
+        ...DB_ENV,
       },
     },
   ],
