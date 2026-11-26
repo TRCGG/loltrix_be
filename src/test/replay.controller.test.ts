@@ -22,6 +22,14 @@ jest.unstable_mockModule('../services/replay.service.js', () => ({
 jest.unstable_mockModule('../services/competition.service.js', () => ({
   competitionService: { resolveForSave },
 }));
+const gameModeCheck = jest.fn<AsyncFn>();
+jest.unstable_mockModule('../services/replayGameMode.service.js', () => ({
+  replayGameModeService: {
+    lookupMatch: jest.fn(),
+    check: gameModeCheck,
+    isRejected: (result: string) => result === 'aram' || result === 'matched',
+  },
+}));
 
 const { webCreateReplay } = await import('../controllers/replay.controller.js');
 
@@ -48,6 +56,7 @@ describe('webCreateReplay - succeeded 항목에 자동 팀 귀속 결과 동봉'
     resolveForSave.mockResolvedValue(null);
     parseReplayData.mockResolvedValue({ stats: [], patchVersion: '26.13' });
     checkDuplicateByHash.mockResolvedValue(false);
+    gameModeCheck.mockResolvedValue('not_matched');
   });
 
   test('대회 경기는 facade가 준 teamAssignment를 그대로 싣는다', async () => {
@@ -66,4 +75,30 @@ describe('webCreateReplay - succeeded 항목에 자동 팀 귀속 결과 동봉'
       { fileName: 'game1.rofl', replayCode: 'RPY-2', teamAssignment: null },
     ]);
   });
+});
+
+describe('webCreateReplay - 매칭 게임 거절', () => {
+  beforeEach(() => {
+    resolveForSave.mockResolvedValue(null);
+    parseReplayData.mockResolvedValue({ stats: [], patchVersion: '26.13' });
+    checkDuplicateByHash.mockResolvedValue(false);
+    webSave.mockReset();
+  });
+
+  test.each(['aram', 'matched'])(
+    '%s는 저장하지 않고 unsupported_game_mode로 실패 처리',
+    async (result) => {
+      gameModeCheck.mockResolvedValue(result);
+      const res = makeRes();
+      await webCreateReplay(makeReq('1'), res as any, jest.fn());
+
+      const { data } = res.json.mock.calls[0][0] as {
+        data: { succeeded: unknown[]; failed: unknown[] };
+      };
+      expect(data.failed).toEqual([{ fileName: 'game1.rofl', reason: 'unsupported_game_mode' }]);
+      expect(data.succeeded).toEqual([]);
+      expect(webSave).not.toHaveBeenCalled();
+      expect(checkDuplicateByHash).not.toHaveBeenCalled();
+    },
+  );
 });
