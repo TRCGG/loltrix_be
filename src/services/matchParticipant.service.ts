@@ -29,9 +29,7 @@ import {
 import { softDeleteMatches } from './matchSoftDelete.js';
 import { replayDeleteDeadline } from './mmr/mmrSchedule.js';
 
-// TODO: 임시 문구 — 확정 문구로 교체
-export const REPLAY_DELETE_CLOSED_MESSAGE =
-  '업로드 다음 날 오전 10시가 지난 리플은 삭제할 수 없습니다.';
+export const REPLAY_DELETE_CLOSED_MESSAGE = '리플 삭제 기한이 지난 리플입니다.';
 
 const MatchparticipantSchema = z.object({
   PUUID: z.string().max(64),
